@@ -1,0 +1,15 @@
+name: Go foundation
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  linux-cgo-free:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Clean Linux amd64 build, test, vet and Linux arm64 cross-build
+        run: docker build --progress=plain -f ci/Dockerfile .
