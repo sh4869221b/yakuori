@@ -22,7 +22,7 @@ real MOD translation, hard real-time cancellation, or arm64 runtime support.
 | goinfer | `github.com/townsendmerino/goinfer v0.20.0`, tag commit `890ca565f982aa268c7c2f6f461dbf7fa7ad0e6c` | MIT |
 | aikit | `github.com/townsendmerino/aikit v1.51.1` | MIT |
 | x/text | `golang.org/x/text v0.40.0` | BSD-3-Clause |
-| x/sys | `golang.org/x/sys v0.47.0` | BSD-3-Clause |
+| x/sys | `golang.org/x/sys v0.48.0` (integrated SQLite dependency minimum; original isolated probe used v0.47.0) | BSD-3-Clause |
 | test model | Qwen's `Qwen2.5-Coder-0.5B-Instruct-GGUF`, revision `ebb2015119c907b064c512bf053e945850b5875f` | Apache-2.0 |
 
 `go.mod` / `go.sum` lock the library and transitive module checksums. The similarly
