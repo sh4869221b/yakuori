@@ -1,0 +1,22 @@
+name: CPU inference spike
+on:
+  pull_request:
+    paths:
+      - 'tools/cpuspike/**'
+      - 'ci/cpu-spike.Dockerfile'
+      - '.github/workflows/cpu-spike.yml'
+      - 'go.mod'
+      - 'go.sum'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux-cpu-gguf:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Build without native compiler and acquire checksum-pinned test fixture
+        run: docker build --progress=plain -f ci/cpu-spike.Dockerfile -t yakuori-cpu-spike .
+      - name: Real CPU generation and failure semantics without network
+        run: docker run --rm --network none --memory 4g --cpus 2 yakuori-cpu-spike
