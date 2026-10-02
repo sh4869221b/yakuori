@@ -1,0 +1,32 @@
+name: Linux publication probe
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  non-root-filesystems:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Build pinned CGO-free toolchain image
+        run: docker build --progress=plain -t yakuori-publication-probe -f ci/Dockerfile .
+      - name: Non-root host filesystem and separate-mount probes
+        run: |
+          mkdir -p "$RUNNER_TEMP/publication"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD:/src" -v "$RUNNER_TEMP/publication:/evidence" \
+            -e GOCACHE=/evidence/cache -e GOPATH=/evidence/gopath \
+            yakuori-publication-probe sh -ec '
+              test "$(id -u)" != 0
+              uname -sr
+              go version
+              stat -f -c "host filesystem: %T %t" /evidence
+              TMPDIR=/evidence go test -count=1 -v ./research/publication
+              TMPDIR=/tmp go test -count=1 -v ./research/publication
+              test -z "$(gofmt -l research/publication)"
+              go vet ./research/publication
+              GOOS=linux GOARCH=arm64 go test -c -o /evidence/publication-arm64.test ./research/publication
+            '
