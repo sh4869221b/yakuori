@@ -41,3 +41,8 @@ sh ci/verify.sh
 `doctor`はXDGのconfig/data/cache/stateディレクトリを表示するだけで、作成・config読込み・model検証は行いません。現在は設定file、TM、registry、model、staging、backupを作らないため、削除対象もありません。具体的な保存・復旧・削除手順は該当実装PRで追加します。
 
 CLIのexit code、stdout/stderr、設定のfallback、fake試験の入口、clean CIの再現方法・制限は[基盤契約](docs/foundation.md)を参照してください。Linux arm64はcross-buildのみで、実行対応は未検証です。詳細な非目標・依存関係・受入れ試験はissue indexを参照してください。
+
+## SQLite feasibility
+
+The test-only [SQLite storage gate](docs/sqlite-feasibility.md) records driver pin,
+rollback/corruption protection and finite-wait evidence for #4. It does not enable TM.
