@@ -23,7 +23,13 @@ done
 # Record, but do not hide, the independent crate's reproducible zero-key-count bug.
 printf ';meta[language=en]\n; id|key(hex)|key(str)|text\n1001|00000000||test\n' > "$work/zero.csv"
 "$W3STRINGS_ORACLE" encode "$work/zero.csv" "$work/zero.w3strings"
-if "$W3STRINGS_ORACLE" decode "$work/zero.w3strings" "$work/zero.decoded"; then
+# Header(10) + first count(1) + one ID record(12) puts key count at byte 23.
+[ "$(od -An -tu1 -j23 -N1 "$work/zero.w3strings" | tr -d '[:space:]')" = 128 ]
+if "$W3STRINGS_ORACLE" decode "$work/zero.w3strings" "$work/zero.decoded" 2> "$work/zero.stderr"; then
  echo 'Expected pinned oracle zero-count limitation changed; investigate' >&2; exit 1
+else
+ status=$?
+ [ "$status" -eq 1 ]
 fi
+grep -Fx 'Error: Io(Error { kind: UnexpectedEof, message: "failed to fill whole buffer" })' "$work/zero.stderr"
 echo 'Independent en/jp exact-byte and text/key checks passed; zero-key oracle limitation reproduced.'

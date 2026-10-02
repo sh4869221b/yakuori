@@ -149,3 +149,70 @@ func FuzzParse(f *testing.F) {
 		}
 	})
 }
+
+func TestCountBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		encoded []byte
+		want    uint32
+	}{
+		{[]byte{0}, 0}, {[]byte{1}, 1}, {[]byte{63}, 63}, {[]byte{64, 1}, 64},
+		{[]byte{127, 1}, 127}, {[]byte{64, 2}, 128}, {[]byte{127, 63}, 4095},
+	} {
+		p := 0
+		got, err := count(tc.encoded, &p)
+		if err != nil || got != tc.want || p != len(tc.encoded) {
+			t.Fatalf("%x: %d, %d, %v", tc.encoded, got, p, err)
+		}
+	}
+	for _, encoded := range [][]byte{{}, {64}, {64, 0}, {128}, {64, 64}} {
+		p := 0
+		if _, err := count(encoded, &p); err == nil {
+			t.Fatalf("accepted %x", encoded)
+		}
+	}
+}
+func TestLayoutPreservation(t *testing.T) {
+	original := fixture(t, "jp")
+	a, err := parse(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reordered := bytes.Clone(original)
+	// Swap records without changing the referenced string offsets or key relation.
+	x, y := a.Entries[0].table, a.Entries[len(a.Entries)-1].table
+	copy(reordered[x:x+12], original[y:y+12])
+	copy(reordered[y:y+12], original[x:x+12])
+	x, y = a.Keys[0].table, a.Keys[len(a.Keys)-1].table
+	copy(reordered[x:x+8], original[y:y+8])
+	copy(reordered[y:y+8], original[x:x+8])
+	// Append two opaque payload bytes, increasing only the aggregate payload count.
+	gap := append(bytes.Clone(original[:len(original)-2]), 0xa5, 0x5a)
+	gap = append(gap, original[len(original)-2:]...)
+	n := uint32((len(gap) - a.start - 2) / 2)
+	if original[a.start-2] < 64 || original[a.start-1] >= 64 || n >= 4096 {
+		t.Fatal("test requires two-byte payload count")
+	}
+	gap[a.start-2] = byte(n&63) | 64
+	gap[a.start-1] = byte(n >> 6)
+	for name, b := range map[string][]byte{"table-order": reordered, "opaque-payload-gap": gap} {
+		t.Run(name, func(t *testing.T) {
+			parsed, err := parse(b)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := map[uint32]string{}
+			for _, e := range a.Entries {
+				expected[e.ID] = e.Text
+			}
+			for _, e := range parsed.Entries {
+				if e.Text != expected[e.ID] {
+					t.Fatal("layout changed text")
+				}
+			}
+			out, err := parsed.roundtrip()
+			if err != nil || !bytes.Equal(out, b) {
+				t.Fatalf("layout normalized: %v", err)
+			}
+		})
+	}
+}

@@ -142,6 +142,7 @@ translated artifact.
 | Empty, 2,048-unit Japanese, supplementary character, whitespace and pipe | pass |
 | Bad header/version/language, duplicate ID/key, dangling key ID, range overflow, overlap, malformed UTF-16/NUL, terminator, trailing bytes | reject |
 | Every truncation of jp fixture, oversized input | reject |
+| Go-only Bit6 positive boundaries 0/1/63/64/127/128/4095, reordered tables and opaque payload gap preservation | pass |
 | Existing output and identical input/output protection | pass |
 | Fuzz, 10 seconds, two workers | pass; 41,340 executions in recorded local run |
 | CGO=0 build/test/vet, cgo guard, Linux arm64 cross-build | pass via ci/verify.sh |
@@ -150,8 +151,13 @@ translated artifact.
 **Reproduced oracle limitation:** a one-string CSV with no key mappings encodes
 successfully, but the pinned independent reader fails on its own output with
 `UnexpectedEof`. Its writer emits `0x80` for a zero table count; this is not
-accepted by the spike. The shell test reproduces the failure and requires it
-rather than silently skipping the case. The oracle must not become Yakuori's
+accepted by the spike. The shell test asserts the `0x80` key-count byte at offset 23, exit status 1
+and the exact `UnexpectedEof` diagnostic, rather than accepting any unrelated
+nonzero exit or silently skipping the case. The CSV API folds key records into an ID-key map, so it cannot independently
+prove multiple key mappings for the same ID or key-only record preservation.
+Our independent fixtures have at most one key per ID; wider relation/multiplicity
+verification needs a raw-structure reader or another tool.
+The oracle must not become Yakuori's
 production parser or a universal correctness oracle. Larger Bit6 forms,
 key-only records, shared/overlapping payloads, embedded NULs, invalid UTF-16,
 other versions/languages and empty files need additional independent fixtures
