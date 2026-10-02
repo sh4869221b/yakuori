@@ -4,7 +4,7 @@
 
 ## 状態
 
-計画段階です。現在はリポジトリと実装issueを準備した状態で、アプリケーションコード、build/test結果、実ゲーム検証、releaseはまだありません。
+#2のGo基盤を実装中です。最小CLI（helpとpath表示のみのdoctor）、XDG設定path契約、CGO-free CIを用意しています。翻訳・model・TM・実ゲーム検証・releaseはまだありません。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 - [正本: 設計書 Draft v0.2](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5)
@@ -25,4 +25,19 @@
 
 CLI・XDG namespaceは`yakuori`。旧Kotobaのコード・設定・TM・registryを暗黙移行しません。single binaryはmodel本体やGPU driverの内包を意味しません。
 
-実際のbuild/run手順、保存path、削除・復旧手順は該当実装PRで追加します。詳細な非目標・依存関係・受入れ試験はissue indexを参照してください。
+## Build / test / run
+
+Go 1.27.1を使用します（公式archiveとchecksumは[基盤の再現資料](docs/foundation.md)）。
+
+```sh
+CGO_ENABLED=0 GOTOOLCHAIN=local go build ./cmd/yakuori
+CGO_ENABLED=0 GOTOOLCHAIN=local go test ./...
+CGO_ENABLED=0 GOTOOLCHAIN=local go vet ./...
+./yakuori --help
+./yakuori doctor
+sh ci/verify.sh
+```
+
+`doctor`はXDGのconfig/data/cache/stateディレクトリを表示するだけで、作成・config読込み・model検証は行いません。現在は設定file、TM、registry、model、staging、backupを作らないため、削除対象もありません。具体的な保存・復旧・削除手順は該当実装PRで追加します。
+
+CLIのexit code、stdout/stderr、設定のfallback、fake試験の入口、clean CIの再現方法・制限は[基盤契約](docs/foundation.md)を参照してください。Linux arm64はcross-buildのみで、実行対応は未検証です。詳細な非目標・依存関係・受入れ試験はissue indexを参照してください。
