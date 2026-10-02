@@ -19,17 +19,17 @@ The probe is deliberately unexported and is not called by the CLI. No new runtim
   live in the same directory in same-path mode; stage is inside a private 0700
   run directory beneath the output directory. Cross-mount publication is refused,
   even when device identifiers happen to match through a bind mount.
-- Initial supported persistent-filesystem candidate is local ext4; tmpfs is the
-  tested volatile development target. ext4 acceptance requires the same probe
-  matrix on the actual target environment. Overlay is tested as a development
+- Initial supported persistent filesystem is local ext4, with the CI mount
+  matrix below as evidence; tmpfs is the tested volatile development target.
+  Each target mount still needs the capability gate. Overlay is tested as a development
   filesystem only, **not certified for v1**. XFS/btrfs are documented kernel
   candidates but untested here. NFS/CIFS/FUSE/other distributed or unknown mounts
   are refused in v1; do not infer eligibility solely from syscall availability.
 - #9 must enforce an allowlist of demonstrated filesystem types and perform
   disposable same-directory capability checks before touching real paths. A
   successful probe is evidence for that mounted environment, not proof of all
-  kernels, mount options or hostile concurrent writers. ext4 remains an explicit
-  acceptance blocker until the CI/host probe evidence is recorded.
+  kernels, mount options or hostile concurrent writers. ext4 is selected from
+  measured evidence; other persistent filesystem families remain unqualified.
 
 [Linux rename API](https://man7.org/linux/man-pages/man2/rename.2.html)
 provides no-replace and single-rename replacement, not a transaction over two
@@ -187,8 +187,24 @@ GOOS=linux GOARCH=arm64 go test -c -o /tmp/publication-arm64.test ./research/pub
 - Remaining actual #9/#10/#21 gates: pipeline/DB/stdout injection, SIGKILL at
   arbitrary instruction timing, corrupt-record parser tests, openat component
   traversal races, source-parent multi-lock ordering, power-loss (out of scope),
-  ext4 target matrix, arm64 runtime (cross-compile alone is not runtime evidence).
+  arm64 runtime (cross-compile alone is not runtime evidence).
 
 Do not mark the product R3/R4 gates passed from this spike. The filesystem support
 matrix is deliberately narrower than Linux API documentation; unsupported or
 unmeasured mounts cannot silently enter the v1 support claim.
+
+### CI ext4 qualification
+
+[Non-root filesystem run 36979000748](https://github.com/sh4869221b/yakuori/actions/runs/36979000748)
+on head `7ec49f9c9490d4b410124439f9c2f806e8f6f63e` passed the matrix on
+Linux 6.17.0-1022-azure, Ubuntu 24.04 runner, Go 1.27.1. `findmnt` identifies the
+host mount as **ext4** (statfs magic 0xef53 alone cannot distinguish ext2/3/4).
+Observed options: `rw,relatime,discard,journal_async_commit,nobarrier,errors=remount-ro,commit=30,data=writeback`.
+All same-mount probe cases passed, including non-root EACCES. The host EXDEV case
+was correctly skipped (same device); the second container-overlay-to-host run
+passed EXDEV and preserved both files. Format/vet and arm64 probe cross-compile
+also passed. [Foundation run 36979000658](https://github.com/sh4869221b/yakuori/actions/runs/36979000658)
+passed the clean CGO-free build/test/vet/cgo guard. The PR workflow checks the
+synthetic merge against unchanged base `72fe380b`; this is CI associated with the
+stated head, not an arm64 execution or power-loss test. These options and results
+do not imply power-loss durability, nor prescribe users' mount settings.
