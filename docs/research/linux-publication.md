@@ -19,17 +19,22 @@ The probe is deliberately unexported and is not called by the CLI. No new runtim
   live in the same directory in same-path mode; stage is inside a private 0700
   run directory beneath the output directory. Cross-mount publication is refused,
   even when device identifiers happen to match through a bind mount.
-- Initial supported persistent filesystem is local ext4, with the CI mount
-  matrix below as evidence; tmpfs is the tested volatile development target.
-  Each target mount still needs the capability gate. Overlay is tested as a development
-  filesystem only, **not certified for v1**. XFS/btrfs are documented kernel
-  candidates but untested here. NFS/CIFS/FUSE/other distributed or unknown mounts
-  are refused in v1; do not infer eligibility solely from syscall availability.
-- #9 must enforce an allowlist of demonstrated filesystem types and perform
-  disposable same-directory capability checks before touching real paths. A
-  successful probe is evidence for that mounted environment, not proof of all
-  kernels, mount options or hostile concurrent writers. ext4 is selected from
-  measured evidence; other persistent filesystem families remain unqualified.
+- Measured persistent filesystem: local ext4, with the CI mount matrix below as
+  evidence; tmpfs is the tested volatile development target. Overlay is tested as
+  a development filesystem only. This is **research coverage, not approval of an
+  ext4-only product policy**. Btrfs and XFS are kernel-documented candidates but
+  untested by this PR. The user's CachyOS environment uses Btrfs subvolumes
+  (`@` / `@home`), so Btrfs qualification is a practical gate before claiming the
+  publisher supports that environment. Do not reject it permanently based on a
+  missing test here, or silently mark it supported from kernel documentation.
+- #9 needs a demonstrated local-filesystem support matrix and disposable
+  same-directory capability checks before touching real paths. Unqualified
+  mounts must fail closed until qualified, without copy/delete fallback. The
+  initial production support set remains open until the Btrfs gate is resolved
+  or the user explicitly accepts a narrower product scope. NFS/CIFS/FUSE and
+  other distributed/unknown mounts have no demonstrated contract in this spike.
+  Passing a probe is evidence for that mounted environment, not proof of all
+  kernels, mount options or hostile concurrent writers.
 
 [Linux rename API](https://man7.org/linux/man-pages/man2/rename.2.html)
 provides no-replace and single-rename replacement, not a transaction over two
@@ -189,9 +194,9 @@ GOOS=linux GOARCH=arm64 go test -c -o /tmp/publication-arm64.test ./research/pub
   traversal races, source-parent multi-lock ordering, power-loss (out of scope),
   arm64 runtime (cross-compile alone is not runtime evidence).
 
-Do not mark the product R3/R4 gates passed from this spike. The filesystem support
-matrix is deliberately narrower than Linux API documentation; unsupported or
-unmeasured mounts cannot silently enter the v1 support claim.
+Do not mark the product R3/R4 gates passed from this spike. The measured filesystem
+matrix is deliberately narrower than Linux API documentation; unmeasured mounts
+cannot silently enter the v1 support claim. Btrfs qualification is still open.
 
 ### CI ext4 qualification
 
