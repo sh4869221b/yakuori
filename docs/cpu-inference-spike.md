@@ -14,6 +14,10 @@ remains authoritative. No product defaults or design changes are introduced.
 limits from representative measurements. #3 does not prove full-window quality,
 real MOD translation, hard real-time cancellation, or arm64 runtime support.
 
+A separate [bounded long-context experiment](cpu-long-context.md) stages actual
+token-counted prompts and records time, RSS, and deadline drain latency. Its measured
+results supplement this short-prompt report; neither report chooses #14 product caps.
+
 ## Reproducible pins and rights
 
 | Component | Pin / source | License |

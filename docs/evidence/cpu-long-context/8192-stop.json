@@ -1,0 +1,37 @@
+{
+  "compute_quant": "int4",
+  "cpu_fast_attention": "upstream default enabled",
+  "deadline_overrun_ms": 0,
+  "fused_attention": "upstream default enabled",
+  "go": "go1.27.1",
+  "gomaxprocs": 2,
+  "load_ms": 3231,
+  "model_sha256": "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32",
+  "model_shape": {
+    "head_dim_derived": 64,
+    "heads": 14,
+    "hidden": 896,
+    "intermediate": 4864,
+    "kv_heads": 2,
+    "layers": 24,
+    "max_positions": 32768
+  },
+  "observation": {
+    "name": "long_stop",
+    "finish": "Stop",
+    "tokens": [
+      9707
+    ],
+    "text": "Hello",
+    "milliseconds": 185427,
+    "backend_budget": 2,
+    "backend_budget_clamped": false
+  },
+  "peak_rss_kib": 1345144,
+  "platform": "linux/amd64",
+  "prompt_token_ids_sha256": "aad3f0328f82e2569cf58384962d41660d57d600ea2489497b81d405852a7997",
+  "prompt_tokens": 8192,
+  "rendered_sha256": "a4e5aa8659d3cad420885acc26f8c6149fcf245ba04bfe433abcfebe1083a432",
+  "request_deadline_ms": 300000,
+  "template": "chatml"
+}
