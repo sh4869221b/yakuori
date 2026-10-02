@@ -3,12 +3,13 @@
 package publication
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"runtime"
 	"sync"
 	"syscall"
 	"testing"
@@ -225,7 +226,24 @@ func TestStoppedProcess(t *testing.T) {
 			put(t, d, "final", "original")
 			put(t, d, "stage", "translated")
 			// A minimal closed record is in place before any rename.
-			put(t, d, "run.json", `{"schema":1,"mode":"same-path","run_id":"fixture","source":"final","output":"final","stage":"stage","backup":"backup"}`)
+			sourceHash, err := hash(filepath.Join(d, "final"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			stageHash, err := hash(filepath.Join(d, "stage"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			record, err := json.Marshal(map[string]any{
+				"schema": 1, "mode": "same-path", "run_id": "fixture",
+				"source": filepath.Join(d, "final"), "output": filepath.Join(d, "final"),
+				"stage": filepath.Join(d, "stage"), "backup": filepath.Join(d, "backup"),
+				"source_sha256": sourceHash, "stage_sha256": stageHash,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			put(t, d, "run.json", string(record))
 			c := exec.Command(os.Args[0], "-test.run=^TestStoppedProcess$")
 			c.Env = append(os.Environ(), "YAKUORI_PROBE_DIR="+d, "YAKUORI_PROBE_STOP="+stop)
 			e := c.Run()
@@ -277,7 +295,7 @@ func TestFilesystemIdentity(t *testing.T) {
 	if e := syscall.Statfs(d, &st); e != nil {
 		t.Fatal(e)
 	}
-	t.Logf("filesystem magic=0x%x; Go=%s", st.Type, strings.TrimSpace(os.Getenv("GOVERSION")))
+	t.Logf("filesystem magic=0x%x; Go=%s", st.Type, runtime.Version())
 }
 
 func TestUnsupportedFlagsPreserveBytes(t *testing.T) {

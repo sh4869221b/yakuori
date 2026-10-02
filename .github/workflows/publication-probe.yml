@@ -16,6 +16,7 @@ jobs:
       - name: Non-root host filesystem and separate-mount probes
         run: |
           mkdir -p "$RUNNER_TEMP/publication"
+          findmnt -T "$RUNNER_TEMP/publication" -o TARGET,FSTYPE,OPTIONS
           docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD:/src" -v "$RUNNER_TEMP/publication:/evidence" \
             -e GOCACHE=/evidence/cache -e GOPATH=/evidence/gopath \
