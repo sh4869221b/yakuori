@@ -20,6 +20,21 @@ for lang in en jp; do
  sed 's/^ *//' "$work/$lang.after.csv" | LC_ALL=C sort > "$work/actual"
  cmp "$work/expected" "$work/actual"
 done
+for mod in better-keybinds monster-of-the-week; do
+ fixture=tools/w3spike/testdata/$mod/en
+ "$work/w3spike" "$fixture.w3strings" "$work/$mod.output"
+ cmp "$fixture.w3strings" "$work/$mod.output"
+ "$W3STRINGS_ORACLE" decode "$fixture.w3strings" "$work/$mod.before.csv"
+ "$W3STRINGS_ORACLE" decode "$work/$mod.output" "$work/$mod.after.csv"
+ "$W3STRINGS_ORACLE" encode "$fixture.source.csv" "$work/$mod.reference"
+ "$W3STRINGS_ORACLE" decode "$work/$mod.reference" "$work/$mod.reference.csv"
+ sed 's/^ *//' "$fixture.expected.csv" | LC_ALL=C sort > "$work/expected"
+ for kind in before after reference; do
+  sed 's/^ *//' "$work/$mod.$kind.csv" | LC_ALL=C sort > "$work/actual"
+  cmp "$work/expected" "$work/actual"
+ done
+ echo "Independent $mod original/output/source ID-text-key and exact-byte checks passed."
+done
 # Record, but do not hide, the independent crate's reproducible zero-key-count bug.
 printf ';meta[language=en]\n; id|key(hex)|key(str)|text\n1001|00000000||test\n' > "$work/zero.csv"
 "$W3STRINGS_ORACLE" encode "$work/zero.csv" "$work/zero.w3strings"

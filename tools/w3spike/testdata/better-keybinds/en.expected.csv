@@ -1,0 +1,21 @@
+;meta[language=en]
+; id      |key(hex)|key(str)| text
+2114573011|0eda26a6||Discard Target
+2114573010|865469eb||Next Target (Cycle)
+2114573009|180e4e66||Target Nearest
+2114573008|f270786c||Cancel Aiming
+2114573015|ade1593b||Switch to Bomb 2
+2114573014|ade1593a||Switch to Bomb 1
+2114573013|07e52441||Throw Bomb 2
+2114573012|07e52440||Throw Bomb 1
+2114573018|9eff2e07||Switch to Pocket 2
+2114573017|9eff2e06||Switch to Pocket 1
+2114573016|ae1b023f||Switch to Crossbow
+2114573003|16708e57||Cast Quen
+2114573002|166cb7e3||Cast Igni
+2114573001|b810970a||Cast Yrden
+2114573000|1668fedc||Cast Aard
+2114573007|83e9172a||Sheathe Auto
+2114573006|dd901354||Draw Auto Sword
+2114573005|c86f3f76||Toggle Quickslot
+2114573004|16695421||Cast Axii

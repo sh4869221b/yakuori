@@ -1,19 +1,21 @@
 # Bounded w3strings round-trip spike (#5)
 
-## Decision and evidence scope (2026-10-02)
+## Decision and evidence scope (2026-10-03)
 
-**Pass for the two committed, independently encoded real-format fixtures.** The
-Go spike decodes their IDs, key hashes and text, rebuilds the table records and
-encrypted text, and produces byte-identical files. The separately published Rust
-reader reads both input and output and agrees with the original authored CSV.
-This is not merely a successful re-import by the Go parser.
+**Adopt the observed version-162 en/jp subset for subsequent implementation.**
+The Go spike preserves every byte for two independently encoded authored
+fixtures, the distributed BetterKeybinds MOD (19 IDs/keys) and the distributed
+MonsterOfTheWeek sample MOD (30 IDs/keys). The independent Rust reader decodes
+both original binaries and Go outputs; their ID/hash/text rows agree with the
+original CSV through independent encode/decode and saved expected CSVs.
+This establishes named historical MOD/sample no-translation compatibility
+through an independent tool, beyond successful re-import by the Go parser.
 
-**Not a production Adapter, universal format specification, real-MOD validation,
-or game acceptance.** No game installation or rights-cleared representative MOD
-was available. Keep the real-MOD/game and human-quality gates open. #6 and #20
-must not treat the limited cases below as complete format coverage. This report
-provides a narrow implementation contract and records remaining blockers; it
-does not change the canonical design's acceptance requirements.
+This remains a bounded research result, not a production Adapter or universal
+format specification. Game startup, current Next-Gen/version-164 compatibility,
+large MODs, translation quality and human MVP acceptance were not tested. #6 and
+#20 may use the limited identity/preservation contract below; wider support and
+translation behavior require separate evidence.
 
 ## Fixture provenance and rights boundary
 
@@ -47,11 +49,78 @@ locked in `tools/w3spike/oracle/Cargo.lock`. The thin driver calls the published
 encode/decode API without patching it. Its GPL dependency is research-only:
 not copied into Go, linked into Yakuori, or distributed as a Yakuori binary.
 Anyone redistributing the oracle executable must separately comply with its
-licenses; this PR distributes only the small driver, lockfile and original data.
+licenses; this change includes only the small driver, lockfile and licensed
+fixture data.
 
 Additional format reference, read but not executed:
 [WolvenKit W3StringFile](https://github.com/WolvenKit/WolvenKit-7/blob/c3c1c2028177de37c97a2706412b499a5c04cbf4/WolvenKit.W3Strings/W3StringFile.cs).
 This is a community reverse-engineered reference, not a publisher specification.
+
+### External MOD/sample fixtures
+
+The following public MOD/sample assets are retained under their upstream MIT
+licenses, with successful acquisition and independent no-translation validation.
+Each imported binary is the original fixed-commit file, also checked against the
+named release ZIP. Neither original binary was regenerated or replaced by an
+encoder output. No MOD scripts or upstream executables were imported.
+
+| Fixture | Fixed source and release | Original binary |
+| --- | --- | --- |
+| BetterKeybinds, distributed MOD for Witcher 3 1.12 | [source commit 6fdebda0cb7ba02d52ff7321660a93d74e8cd79f](https://github.com/mpstark/BetterKeybinds/tree/6fdebda0cb7ba02d52ff7321660a93d74e8cd79f), tag [1-1.12](https://github.com/mpstark/BetterKeybinds/releases/tag/1-1.12), asset `BetterKeybinds-1-1.12.zip` | 952 bytes; version 162, en; expected CSV has 19 ID/key rows |
+| MonsterOfTheWeek, distributed sample MOD | [source commit b9ae964d3d76560c689d6f3b3dbbfd1d5a31af3b](https://github.com/SpontanCombust/tw3-settings-framework/tree/b9ae964d3d76560c689d6f3b3dbbfd1d5a31af3b), tag [1.0.2](https://github.com/SpontanCombust/tw3-settings-framework/releases/tag/1.0.2), asset `TW3_MSF_Samples.zip` | 1,122 bytes; version 162, en; expected CSV has 30 ID/key rows |
+
+All local paths below are relative to `tools/w3spike/testdata/`.
+
+| Fixed-commit source path | Local path | Role |
+| --- | --- | --- |
+| BetterKeybinds `modBetterKeybinds/content/en.w3strings` | `better-keybinds/en.w3strings` | original binary |
+| BetterKeybinds `localization/en.csv` | `better-keybinds/en.source.csv` | original CSV, including key spelling |
+| BetterKeybinds `LICENSE.txt` | `better-keybinds/LICENSE.txt` | original MIT notice, Copyright (c) 2016 Michael Starkweather |
+| Existing locked oracle encode/decode of BetterKeybinds original CSV | `better-keybinds/en.expected.csv` | independently generated expected ID/hash/text CSV; key spelling is absent |
+| tw3-settings-framework `samples/MonsterOfTheWeek/Mods/modSampleMonsterOfTheWeek/content/en.w3strings` | `monster-of-the-week/en.w3strings` | original binary |
+| tw3-settings-framework `samples/MonsterOfTheWeek/Mods/modSampleMonsterOfTheWeek/content/en.w3strings.csv` | `monster-of-the-week/en.source.csv` | original CSV, including key spelling |
+| tw3-settings-framework `LICENSE` | `monster-of-the-week/LICENSE.txt` | original MIT notice, Copyright (c) 2023 Przemysław Cedro |
+| [w3stringsx commit f1da749ffe63aa3747d367e1f1edd04a6f1168ed](https://github.com/SpontanCombust/w3stringsx/tree/f1da749ffe63aa3747d367e1f1edd04a6f1168ed), `tests/decode_en/expected/en.csv` | `monster-of-the-week/en.expected.csv` | external expected ID/hash/text CSV |
+
+The fixed w3stringsx root `LICENSE` was downloaded and compared with the fixed
+tw3-settings-framework root `LICENSE`: `cmp` exited 0. The same verbatim MIT
+notice therefore covers both Monster sources and is retained once. Both MIT
+notices permit redistribution with their copyright and permission notices
+included, and provide the assets without warranty. These notices were inspected
+directly; a license of an unrelated parser is not the basis for importing them.
+
+| Local file | Bytes | SHA-256 |
+| --- | --- | --- |
+| better-keybinds/LICENSE.txt | 1087 | 4d57a8e2e09674e97f31546e2534df84a09a56b79c7c734429eeee16c2b05855 |
+| better-keybinds/en.expected.csv | 731 | 62b1515b89c2f6c15decbcbd6814aa0e10bd8ea7406516c787e26a18fe4c3b92 |
+| better-keybinds/en.source.csv | 1031 | af883a18f2889d8bbc90252d42df97009058e1e888f8b837943308739f673fe3 |
+| better-keybinds/en.w3strings | 952 | d3c9e9e51fa666381d3530293e3334de142edf4a32da4227194108933845b57c |
+| monster-of-the-week/LICENSE.txt | 1074 | dc5bb23ba01c4910c6452e462cb54cb3e443711842ba1efd7c3c690fc1a33730 |
+| monster-of-the-week/en.expected.csv | 937 | a06754b60dcbf5e5691d52e3a80f5b22f73df208bd0845ec13cc4c47e8839fe3 |
+| monster-of-the-week/en.source.csv | 1575 | 7aaba894d0d2fe132e6968004a23fa528c83008c0d89829cdc60aac3250e91e9 |
+| monster-of-the-week/en.w3strings | 1122 | 9f0227c983bcdf9d145afc6e614c88e2fb6ad4fc50027adf9efbd4c082b59cb3 |
+
+Acquisition used `curl -fL --retry 2` on
+`https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<source-path>` for
+each original file and on each release's `releases/download/<tag>/<asset>` URL.
+Only the following ZIP entries were extracted with `unzip -p` for comparison:
+
+- `BetterKeybinds-1-1.12/modBetterKeybinds/content/en.w3strings`
+- `samples/MonsterOfTheWeek/Mods/modSampleMonsterOfTheWeek/content/en.w3strings`
+
+`cmp` of each local binary, source CSV and notice against its downloaded pinned
+source exited 0. Both binary comparisons against the extracted release entries
+also exited 0. Monster's saved expected CSV matches its downloaded pinned
+w3stringsx source byte for byte. SHA-256 values and sizes above were captured by
+`sha256sum tools/w3spike/testdata/better-keybinds/* tools/w3spike/testdata/monster-of-the-week/*`
+and `wc -c` on the same eight files.
+
+Better's expected CSV was generated by the unchanged locked `w3strings` 0.2.0
+oracle: encode the original source CSV to a temporary binary, then decode that
+temporary binary to CSV. Both commands exited 0; the saved expected CSV matched
+the temporary decoded CSV with `cmp`. The original imported binary was never
+an encoder output destination. Acquisition ZIPs and temporary comparison files
+were removed after verification.
 
 ## Observed binary contract
 
@@ -107,12 +176,17 @@ an arbitrary normalization allowance. These translation rules are proposals for
 
 ## Reproduction
 
-Linux amd64, Go 1.27.1, `CGO_ENABLED=0`, Rust 1.90.0. Use an official Rust
-installation and crates.io. Network is needed only for explicit research
-setup/dependency acquisition; the fixture commands themselves are local.
+Linux amd64, `CGO_ENABLED=0`, pinned Rust 1.90.0. The host's Go is
+`go1.27.1-X:nodwarf5`; the independent Docker image uses official Go 1.27.1.
+The local oracle build used `rustc 1.90.0 (1159e78c4 2025-09-14)` and
+`cargo 1.90.0 (840b83a10 2025-07-30)`, selected explicitly rather than the host's
+default Cargo 1.99.0. Install the research toolchain, if absent, with
+`rustup toolchain install 1.90.0 --profile minimal`. Existing oracle source and
+Cargo.lock remain unchanged. Network is needed for fixture/toolchain acquisition,
+crate setup and the clean Docker build; saved-fixture commands themselves are local.
 
 ```sh
-cargo build --locked --manifest-path tools/w3spike/oracle/Cargo.toml
+cargo +1.90.0 build --locked --manifest-path tools/w3spike/oracle/Cargo.toml
 export W3STRINGS_ORACLE="$PWD/tools/w3spike/oracle/target/debug/yakuori-w3strings-oracle"
 sh ci/w3strings-spike.sh
 CGO_ENABLED=0 GOTOOLCHAIN=local go test -count=1 ./tools/w3spike
@@ -120,11 +194,27 @@ CGO_ENABLED=0 GOTOOLCHAIN=local go test ./tools/w3spike -run '^$' -fuzz FuzzPars
 sh ci/verify.sh
 # Clean independent-tool reproduction, also run by its dedicated CI job:
 docker build --progress=plain -f ci/w3strings-spike.Dockerfile .
+# If the host's GOVERSION differs from the exact ci/verify.sh requirement:
+docker run --rm <image-produced-by-the-build> sh ci/verify.sh
 ```
 
-The oracle script regenerates each input, compares its pinned bytes, runs Go
-round-trip, independently decodes input and output, and compares both decoded
-results to the original text/ID/key fixture. It fails on any unexpected result.
+For authored en/jp, the oracle script regenerates each input and checks its pinned
+bytes. For external MODs it always uses the saved original binary as Go input.
+It round-trips to a new temporary output and requires `cmp` equality, independently
+decodes original and output, and compares both to the saved expected CSV and a
+fresh oracle encode/decode of the original source CSV. Only leading ID spaces
+and row order are ignored. It fails on any unexpected result and removes its
+temporary directory on exit. To reproduce Better's expected-CSV generation
+separately without replacing the original binary:
+
+```sh
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+"$W3STRINGS_ORACLE" encode tools/w3spike/testdata/better-keybinds/en.source.csv "$work/reference.w3strings"
+"$W3STRINGS_ORACLE" decode "$work/reference.w3strings" "$work/expected.csv"
+cmp tools/w3spike/testdata/better-keybinds/en.expected.csv "$work/expected.csv"
+```
+
 The Go CLI creates only a new output path (`O_EXCL`); it rejects existing output
 and identical input/output paths. This temporary research output path is **not**
 the production staged publication/rollback API. If a filesystem write fails,
@@ -133,20 +223,73 @@ translated artifact.
 
 ## Results and known negative evidence
 
+Validation on 2026-10-03 used the host Go runtime and pinned Rust 1.90.0 for the
+local spike, and official Go 1.27.1 with Rust 1.90.0 for independent Docker checks.
+
+| Invocation / scenario | Observable result |
+| --- | --- |
+| `CGO_ENABLED=0 GOTOOLCHAIN=local go test -v ./tools/w3spike -run 'TestMODFixtures\|TestRejectMalformed\|TestOutputProtection\|TestIndependentFixtures' -count=1` | exit 0; both MOD fixtures, both changed-text/changed-key rejection subtests per MOD, authored en/jp, malformed inputs and output protection passed |
+| `CGO_ENABLED=0 GOTOOLCHAIN=local go test -count=1 ./tools/w3spike` | exit 0, `ok` in 0.004s; includes four original-binary fuzz seeds |
+| `W3STRINGS_ORACLE="$PWD/tools/w3spike/oracle/target/debug/yakuori-w3strings-oracle" sh ci/w3strings-spike.sh` | exit 0; authored en/jp plus Better 19 entries/19 keys and Monster 30 entries/30 keys reported `ExactBytes:true`; both external loops printed `original/output/source ID-text-key and exact-byte checks passed` |
+| `CGO_ENABLED=0 GOTOOLCHAIN=local go test ./tools/w3spike -run '^$' -fuzz FuzzParse -fuzztime=10s -parallel=2` | exit 0; 4/4 initial seeds, 451,618 executions, PASS in 11.006s |
+| Host `sh ci/verify.sh` | exit 1 before build/test: exact version guard rejects `go1.27.1-X:nodwarf5`; `sh -x` confirmed the failing comparison against `go1.27.1` |
+| `docker build --progress=plain -f ci/w3strings-spike.Dockerfile .` | exit 0; fresh locked Rust build and official Go archive verification; all four fixture CLI reports have `ExactBytes:true`, both external ID/text/key loops pass, exact zero-key failure reproduced |
+| `docker run --rm b46cb75b7f0dfdd8f20312dbdd6daa8851a2692279df3f7e54f1cbd6fbd86078 sh ci/verify.sh` (image from preceding build) | exit 0; `go version go1.27.1 linux/amd64`, expected forbidden-cgo self-test rejection, all seven package tests pass, vet and Linux arm64 CLI/SQLite test cross-builds complete |
+| `sh -n ci/w3strings-spike.sh`; Go LSP diagnostics; `git diff --check` | all clean; shell LSP unavailable (previously declined installation), no new tooling installed |
+
+`TestMODFixtures` compares every decoded ID and exact text against the original
+CSV and saved expected CSV, and every decoded key hash/ID against the latter.
+Counts, duplicate detection and consumed-map entries prevent missing, extra or
+duplicate records being hidden. Its CSV helper splits into four columns, removes
+only numeric-field space/tab padding and leaves the text column untouched.
+Each external shell loop reads the saved original binary, compares the new Go
+output with `cmp`, independently decodes both, and compares their full rows to
+the saved expected CSV and a fresh oracle encode/decode of the original CSV.
+Only leading ID spaces and row order are ignored. Original binary regeneration
+is not used for external fixtures. The pinned zero-key `UnexpectedEof` check
+also passed unchanged. The script's EXIT trap removed its temporary directory.
+No production parser or oracle changes were needed. The host version mismatch
+was resolved for validation by running the unchanged CGO-free gate in the clean
+official-Go image; the host failure remains recorded rather than relabeled a pass.
+The disposable verification container removed its CLI/cross-build outputs on
+exit. No host `yakuori` or `bin/` outputs were created. Docker images/build cache
+and the existing local oracle build were retained; no shared cache was purged.
+
 | Check | Local result |
 | --- | --- |
 | Independent fixture generation reproduces pinned hashes | pass, en + jp |
-| Go decoded IDs, key relation and exact text assertions | pass |
-| Go re-encryption equals every input byte | pass, en + jp |
-| Independent reader reads Go outputs and matches authored CSV | pass, en + jp |
-| Empty, 2,048-unit Japanese, supplementary character, whitespace and pipe | pass |
+| Go decoded IDs, key relation and exact text assertions | pass, all four fixtures |
+| Go re-encryption equals every input byte | pass, en + jp + BetterKeybinds + MonsterOfTheWeek |
+| Independent reader reads original/Go output and matches CSV-derived reference/expected | pass, all four fixtures |
+| Empty, 2,048-unit Japanese, supplementary character, whitespace and pipe | pass, authored en/jp only; absent from the external MOD/sample fixtures |
 | Bad header/version/language, duplicate ID/key, dangling key ID, range overflow, overlap, malformed UTF-16/NUL, terminator, trailing bytes | reject |
 | Every truncation of jp fixture, oversized input | reject |
 | Go-only Bit6 positive boundaries 0/1/63/64/127/128/4095, reordered tables and opaque payload gap preservation | pass |
 | Existing output and identical input/output protection | pass |
-| Fuzz, 10 seconds, two workers | pass; 41,340 executions in recorded local run |
-| CGO=0 build/test/vet, cgo guard, Linux arm64 cross-build | pass via ci/verify.sh |
-| Official game / representative third-party MOD / human translation quality | not run |
+| Fuzz, 10 seconds, two workers | pass; 451,618 executions with four original-binary seeds |
+| CGO=0 build/test/vet, cgo guard, Linux arm64 cross-build | pass via unchanged ci/verify.sh in official-Go Docker image; host exact-version guard failed |
+| Independent Docker reproduction | pass, all four fixture comparisons and known zero-key failure |
+| Official game / current Next-Gen / large MOD / human translation quality | not run |
+
+## Issue #5 acceptance and adoption
+
+| Acceptance item | Evidence and decision |
+| --- | --- |
+| Fixture origin/hash/use and redistribution conditions | pass: fixed commits, original paths, release ZIP binary `cmp`, eight file hashes and retained MIT notices above; authored fixtures contain original test content |
+| No-translation meaning and immutable bytes | pass for all four fixtures: TestIndependentFixtures/TestMODFixtures and independent shell require exact ID/text/key relations and zero binary differences; no unavoidable binary normalization is allowed |
+| Independent tool version/commands/results | pass: locked w3strings 0.2.0, Rust 1.90.0, original/output/source-CSV comparison and independent Docker results above; game confirmation is not the chosen research oracle |
+| Japanese/empty/long text, ID and metadata constraints for later fixtures | pass within the observed subset: authored en/jp cover these text cases, external en fixtures add named MOD evidence; UTF-16 units, decoded/encoded ID distinction, absent key spelling and preserved opaque bytes are specified above |
+| Reproduction/fixture pins/results and CGO=0 gates; grounds/adoption/blockers | report ready for PR: commands, pins, pass/fail/not-run and adoption limits are recorded; unchanged CGO=0 build/test/vet/cross-build gate passed in official Go 1.27.1 Docker; hosted PR publication/checks are a separate delivery step |
+
+#6/#20 can adopt stable decoded uint32 IDs, separately preserved key-hash/ID
+relations, UTF-16 offset/length units, explicit en/jp language keys, and exact
+no-translation preservation for the tested version-162 files. Both independent
+CSV comparisons are limited to at most one key per ID. Translating text and
+recalculating offsets/lengths/payload counts or target-language encoded IDs remain
+proposed follow-up behavior, not a verified writer contract. There is no remaining
+blocker to this bounded research adoption; the wider cases below remain outside
+its evidence. This report does not automatically close the Issue or change the
+canonical design Page.
 
 **Reproduced oracle limitation:** a one-string CSV with no key mappings encodes
 successfully, but the pinned independent reader fails on its own output with
@@ -164,19 +307,18 @@ other versions/languages and empty files need additional independent fixtures
 before an implementation-support decision. The observed failures are not proof
 that such files are invalid in the game.
 
-## Remaining gate and next lawful fixture
+## Remaining gates
 
-To claim representative real-MOD compatibility, obtain a user's locally owned
-file or a mod author's explicitly permitted test artifact. Record provenance,
-version, file hash and permission scope separately; do not commit game/MOD text
-on the strength of a code repository's license. Run the spike only if the file
-fits its documented subset, then independently read the unchanged output using
-an appropriate supported tool. For unsupported files record the precise reason
-and expand the research contract only with evidence. Keep private text and
-unnecessary decoded output out of logs and CI artifacts.
+Named historical BetterKeybinds and MonsterOfTheWeek files have passed the
+independent no-translation gate. Broader MOD/format support needs additional
+lawful representative files with recorded provenance, version, hash and rights,
+then the same original/output independent-reader comparison. For unsupported
+files record the precise reason and expand the research contract only with
+evidence. Keep private text and unnecessary decoded output out of logs and CI
+artifacts. Do not infer redistribution rights from an unrelated tool's license.
 
 For game verification, use a separate test mod/profile, preserve the original,
 record game/build/language and mod ordering, and verify known IDs in the game's
-UI. Nothing here installs or activates a MOD. A representative lawful artifact
-and game/tool verification are still required by the later MVP gate; passing
-these original minimal fixtures does not substitute for them.
+UI. Nothing here installs or activates a MOD. Game, current-build and human
+translation-quality verification remain later MVP gates; the independent-reader
+research result does not establish them.
