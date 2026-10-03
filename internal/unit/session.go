@@ -30,6 +30,7 @@ type sessionData struct {
 
 func NewSession(artifact []byte, units []TranslationUnit) (Session, error) {
 	index := make(map[UnitID]int, len(units))
+	sessionUnits := slices.Clone(units)
 	for i, u := range units {
 		if u.ID() == (UnitID{}) {
 			return Session{}, ErrInvalidUnitID
@@ -38,11 +39,12 @@ func NewSession(artifact []byte, units []TranslationUnit) (Session, error) {
 			return Session{}, fmt.Errorf("%w: %s", ErrDuplicateUnit, u.ID().StableID())
 		}
 		index[u.ID()] = i
+		sessionUnits[i].protectionSpans = slices.Clone(u.protectionSpans)
 	}
 	return Session{data: &sessionData{
 		artifact:       bytes.Clone(artifact),
 		artifactDigest: sha256.Sum256(artifact),
-		units:          slices.Clone(units),
+		units:          sessionUnits,
 		index:          index,
 	}}, nil
 }

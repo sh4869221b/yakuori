@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sh4869221b/yakuori/internal/unit"
+	"github.com/sh4869221b/yakuori/internal/validate"
 )
 
 func TestAcceptedCannotBeForged(t *testing.T) {
@@ -50,6 +53,10 @@ var a = validate.AcceptedTranslation{binding: struct{}{}}
 import "github.com/sh4869221b/yakuori/internal/validate"
 var a = validate.AcceptedTranslation{validated: true}
 `, "cannot refer to unexported field validated in struct literal"},
+		{"review literal", `package consumer
+import "github.com/sh4869221b/yakuori/internal/validate"
+var a = validate.AcceptedTranslation{review: 7}
+`, "cannot refer to unexported field review in struct literal"},
 	} {
 		passed := t.Run(tt.name, func(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "consumer.go"), []byte(tt.code), 0600); err != nil {
@@ -74,5 +81,40 @@ var a = validate.AcceptedTranslation{validated: true}
 		if tt.diagnostic == "" && !passed {
 			t.Fatal("positive consumer failed; negative compiler checks cannot establish field privacy")
 		}
+	}
+}
+
+func TestReviewFindingsPublicContract(t *testing.T) {
+	id, err := unit.NewUnitID("fixture", "v1", "name")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := unit.NewTranslationUnit(id, []byte("Geralt"), "en", "ja", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := unit.NewSession([]byte("artifact"), []unit.TranslationUnit{u})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := validate.NewProfile([32]byte{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := validate.Validate(session, id, profile, "Geralt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := accepted
+	findings := accepted.ReviewFindings()
+	if len(findings) != 3 || findings[0].Code != validate.SourceIdentical || findings[1].Code != validate.PossibleProperName || findings[2].Code != validate.TargetLanguageUncertain {
+		t.Fatalf("findings = %v", findings)
+	}
+	findings[0] = validate.ReviewFinding{Code: "changed", Reason: "changed"}
+	if accepted != snapshot || accepted.Text() != "Geralt" || accepted.ReviewFindings()[0].Code != validate.SourceIdentical {
+		t.Fatal("returned finding changed accepted translation")
+	}
+	if err := validate.CheckBinding(session, id, profile, accepted); err != nil {
+		t.Fatal(err)
 	}
 }
