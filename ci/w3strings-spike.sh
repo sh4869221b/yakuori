@@ -1,0 +1,50 @@
+#!/bin/sh
+set -eu
+: "${W3STRINGS_ORACLE:?set path to built independent oracle}"
+export CGO_ENABLED=0 GOTOOLCHAIN=local
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+go build -o "$work/w3spike" ./tools/w3spike
+for lang in en jp; do
+ fixture=tools/w3spike/testdata/$lang
+ "$W3STRINGS_ORACLE" encode "$fixture.csv" "$work/$lang.source"
+ cmp "$fixture.w3strings" "$work/$lang.source"
+ "$work/w3spike" "$work/$lang.source" "$work/$lang.output"
+ cmp "$work/$lang.source" "$work/$lang.output"
+ "$W3STRINGS_ORACLE" decode "$work/$lang.source" "$work/$lang.before.csv"
+ "$W3STRINGS_ORACLE" decode "$work/$lang.output" "$work/$lang.after.csv"
+ cmp "$work/$lang.before.csv" "$work/$lang.after.csv"
+ # The independent CSV reader right-aligns IDs and returns hashed-ID table order.
+ # Only leading ID-field padding and row order are ignored, never text whitespace.
+ sed 's/^ *//' "$fixture.csv" | LC_ALL=C sort > "$work/expected"
+ sed 's/^ *//' "$work/$lang.after.csv" | LC_ALL=C sort > "$work/actual"
+ cmp "$work/expected" "$work/actual"
+done
+for mod in better-keybinds monster-of-the-week; do
+ fixture=tools/w3spike/testdata/$mod/en
+ "$work/w3spike" "$fixture.w3strings" "$work/$mod.output"
+ cmp "$fixture.w3strings" "$work/$mod.output"
+ "$W3STRINGS_ORACLE" decode "$fixture.w3strings" "$work/$mod.before.csv"
+ "$W3STRINGS_ORACLE" decode "$work/$mod.output" "$work/$mod.after.csv"
+ "$W3STRINGS_ORACLE" encode "$fixture.source.csv" "$work/$mod.reference"
+ "$W3STRINGS_ORACLE" decode "$work/$mod.reference" "$work/$mod.reference.csv"
+ sed 's/^ *//' "$fixture.expected.csv" | LC_ALL=C sort > "$work/expected"
+ for kind in before after reference; do
+  sed 's/^ *//' "$work/$mod.$kind.csv" | LC_ALL=C sort > "$work/actual"
+  cmp "$work/expected" "$work/actual"
+ done
+ echo "Independent $mod original/output/source ID-text-key and exact-byte checks passed."
+done
+# Record, but do not hide, the independent crate's reproducible zero-key-count bug.
+printf ';meta[language=en]\n; id|key(hex)|key(str)|text\n1001|00000000||test\n' > "$work/zero.csv"
+"$W3STRINGS_ORACLE" encode "$work/zero.csv" "$work/zero.w3strings"
+# Header(10) + first count(1) + one ID record(12) puts key count at byte 23.
+[ "$(od -An -tu1 -j23 -N1 "$work/zero.w3strings" | tr -d '[:space:]')" = 128 ]
+if "$W3STRINGS_ORACLE" decode "$work/zero.w3strings" "$work/zero.decoded" 2> "$work/zero.stderr"; then
+ echo 'Expected pinned oracle zero-count limitation changed; investigate' >&2; exit 1
+else
+ status=$?
+ [ "$status" -eq 1 ]
+fi
+grep -Fx 'Error: Io(Error { kind: UnexpectedEof, message: "failed to fill whole buffer" })' "$work/zero.stderr"
+echo 'Independent en/jp exact-byte and text/key checks passed; zero-key oracle limitation reproduced.'
