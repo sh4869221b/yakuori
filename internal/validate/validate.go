@@ -29,6 +29,10 @@ func Validate(session unit.Session, id unit.UnitID, profile Profile, candidate s
 	if err := prepared.CheckRestored(session, id, candidate); err != nil {
 		return AcceptedTranslation{}, fmt.Errorf("%w: %v", ErrInvalidCandidate, err)
 	}
+	source := string(u.Source())
+	if err := checkContent(source, candidate); err != nil {
+		return AcceptedTranslation{}, err
+	}
 	return AcceptedTranslation{
 		text: candidate,
 		binding: binding{
@@ -38,5 +42,6 @@ func Validate(session unit.Session, id unit.UnitID, profile Profile, candidate s
 			profile: profile.digest,
 		},
 		validated: true,
+		review:    reviewContent(u, source, candidate),
 	}, nil
 }

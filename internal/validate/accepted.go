@@ -36,6 +36,7 @@ type AcceptedTranslation struct {
 	text      string
 	binding   binding
 	validated bool
+	review    reviewFlags
 }
 
 func (a AcceptedTranslation) Text() string        { return a.text }
