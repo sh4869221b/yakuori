@@ -124,7 +124,7 @@ type fakeAdapter struct {
 	exports  int
 }
 
-func importFake(raw []byte, profile validate.Profile) (*fakeAdapter, error) {
+func importFake(raw []byte, profile validate.Profile, protection map[string][]unit.ProtectionSpan) (*fakeAdapter, error) {
 	image, err := decodeFake(raw)
 	if err != nil {
 		return nil, err
@@ -135,7 +135,7 @@ func importFake(raw []byte, profile validate.Profile) (*fakeAdapter, error) {
 		if err != nil {
 			return nil, err
 		}
-		u, err := unit.NewTranslationUnit(id, []byte(record.text), image.language, "ja", nil)
+		u, err := unit.NewTranslationUnitWithProtection(id, []byte(record.text), image.language, "ja", nil, protection[record.id])
 		if err != nil {
 			return nil, err
 		}
@@ -221,7 +221,7 @@ func adapterFixture(t *testing.T) (*fakeAdapter, []validate.AcceptedTranslation)
 		records: []fakeRecord{{"a", "Hello"}, {"b", ""}}, keys: []fakeKey{{"a", "key"}, {"a", "key"}},
 		metadata: map[string][]byte{"header": {7}, "length": {5, 0, 0, 0}, "language": []byte("en")},
 	})
-	a, err := importFake(raw, profile)
+	a, err := importFake(raw, profile, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
