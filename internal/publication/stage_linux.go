@@ -36,7 +36,7 @@ func (w *stageWriter) Write(b []byte) (int, error) {
 // Stage calls callbacks synchronously; they must not retain or share the
 // writer/reader. The write descriptor is closed before check sees the stage.
 func (r *Run) Stage(ctx context.Context, produce func(io.Writer) error, check func(io.Reader) error) (err error) {
-	if r == nil || r.closed || r.runDir == nil || r.stageAttempted {
+	if r == nil || r.closed || r.runDir == nil || r.stageAttempted || r.publishAttempted {
 		return ErrInvalidStage
 	}
 	r.stageAttempted = true

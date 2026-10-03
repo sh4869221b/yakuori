@@ -17,19 +17,25 @@ import (
 
 // Run owns its opened paths and locks. Methods must be called sequentially.
 type Run struct {
-	mode           Mode
-	source         leaf
-	output         leaf
-	snapshot       []byte
-	locks          []*directory
-	runDir         *directory
-	runID          string
-	closed         bool
-	stage          leaf
-	stageAttempted bool
-	validated      bool
-	syncStage      func(*os.File) error
-	closeStage     func(*os.File) error
+	mode             Mode
+	source           leaf
+	output           leaf
+	snapshot         []byte
+	locks            []*directory
+	runDir           *directory
+	runID            string
+	closed           bool
+	stage            leaf
+	stageAttempted   bool
+	validated        bool
+	syncStage        func(*os.File) error
+	closeStage       func(*os.File) error
+	publishAttempted bool
+	result           Result
+	rename           renameFunc
+	recordWrite      func(*os.File, []byte) (int, error)
+	recordSync       func(*os.File) error
+	recordClose      func(*os.File) error
 }
 
 // Prepare must complete before generation/import. It never moves source/output.
@@ -51,6 +57,7 @@ func prepare(ctx context.Context, options Options, rename renameFunc) (_ *Run, e
 		return nil, fmt.Errorf("source parent: %w", err)
 	}
 	r := &Run{mode: options.Mode, source: source, syncStage: (*os.File).Sync, closeStage: (*os.File).Close}
+	r.rename, r.recordWrite, r.recordSync, r.recordClose = rename, (*os.File).Write, (*os.File).Sync, (*os.File).Close
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, r.Close())
