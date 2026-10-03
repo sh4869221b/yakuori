@@ -12,27 +12,24 @@ The probe is deliberately unexported and is not called by the CLI. No new runtim
 - New output, source-to-backup and backup restoration: `renameat2(...,
   RENAME_NOREPLACE)`. An existence check is never the no-clobber guarantee.
 - Explicit replacement of a *different* existing output: `renameat2(..., 0)`
-  (`renameat` semantics). Never unlink first. Never copy/delete on EXDEV,
+  (`renameat` semantics). If OUT is absent, even with `--replace-output`, create
+  it with `RENAME_NOREPLACE`. Never unlink first. Never copy/delete on EXDEV,
   ENOSYS, EOPNOTSUPP, EINVAL or any other error. Errors are non-zero with
   old output/stage retained as evidence. No automatic retry of translation.
 - Use opened directory FDs and single-component names. Source, backup and final
   live in the same directory in same-path mode; stage is inside a private 0700
   run directory beneath the output directory. Cross-mount publication is refused,
   even when device identifiers happen to match through a bind mount.
-- Measured persistent filesystem: local ext4, with the CI mount matrix below as
-  evidence; tmpfs is the tested volatile development target. Overlay is tested as
-  a development filesystem only. This is **research coverage, not approval of an
-  ext4-only product policy**. Btrfs and XFS are kernel-documented candidates but
-  untested by this PR. The user's CachyOS environment uses Btrfs subvolumes
-  (`@` / `@home`), so Btrfs qualification is a practical gate before claiming the
-  publisher supports that environment. Do not reject it permanently based on a
-  missing test here, or silently mark it supported from kernel documentation.
-- #9 needs a demonstrated local-filesystem support matrix and disposable
-  same-directory capability checks before touching real paths. Unqualified
-  mounts must fail closed until qualified, without copy/delete fallback. The
-  initial production support set remains open until the Btrfs gate is resolved
-  or the user explicitly accepts a narrower product scope. NFS/CIFS/FUSE and
-  other distributed/unknown mounts have no demonstrated contract in this spike.
+- Initial production targets, approved 2026-10-03: ext4 and conditional Btrfs.
+  The ext4 CI and native Btrfs `@home`/`@tmp` measurements below qualify only
+  their measured environments. Btrfs adoption requires a passing qualification
+  and disposable same-directory capability checks at the publication destination
+  before real paths are touched. tmpfs and overlay are development-only targets;
+  XFS, NFS/CIFS/FUSE and other filesystems remain unqualified.
+- #9 must implement the disposable same-directory capability checks for
+  no-replace and atomic replacement. Unqualified mounts or unavailable
+  capabilities fail closed, without copy/delete fallback. These checks are not
+  implemented by this research probe.
   Passing a probe is evidence for that mounted environment, not proof of all
   kernels, mount options or hostile concurrent writers.
 
@@ -72,20 +69,21 @@ explains why overlay results are not a certification of lower/upper configuratio
    directory replacement, already-open writable FDs, or uncooperative writers.
    The probe demonstrates changed-content detection, not elimination of this race.
 
-## CLI mapping (engineering recommendation for #9)
+## CLI mapping (approved 2026-10-03 for #9)
 
-Existing approved behavior maps to the following mutually exclusive modes; these
-options are **not implemented** by this PR:
+The owner approved the following mutually exclusive modes on 2026-10-03; these
+CLI options remain **not implemented**:
 
 | Form | Behavior |
 | --- | --- |
 | `localize --output OUT SOURCE` | OUT must not exist; no-replace publish |
-| `localize --output OUT --replace-output SOURCE` | explicit atomic replacement, OUT distinct from SOURCE; absent OUT may be created |
+| `localize --output OUT --replace-output SOURCE` | atomic replacement of a different existing OUT; absent OUT is created with no-replace |
 | `localize --in-place SOURCE` | same validated path; preserve original backup, then no-replace publish |
 
 Reject `--in-place` together with `--output` or `--replace-output`; reject
-source=output in ordinary mode and explain `--in-place`. These names make the
-already-approved distinction explicit, without adding a force/delete bypass.
+`--replace-output` without `--output`. Reject source=output in ordinary mode
+and explain `--in-place`; symlink/hardlink aliases are rejected, not admitted as
+the same validated path. Existing backup collisions are never overwritten.
 A separate automatic cleanup/backup deletion/recovery command is not introduced.
 Recovery runs before new localization as the design requires. Any later proposal
 to remove backup, follow symlinks or broaden replacement needs product review.
@@ -196,7 +194,8 @@ GOOS=linux GOARCH=arm64 go test -c -o /tmp/publication-arm64.test ./research/pub
 
 Do not mark the product R3/R4 gates passed from this spike. The measured filesystem
 matrix is deliberately narrower than Linux API documentation; unmeasured mounts
-cannot silently enter the v1 support claim. Btrfs qualification is still open.
+cannot silently enter the v1 support claim. The additional Btrfs measurement is
+recorded separately below.
 
 ### CI ext4 qualification
 
@@ -213,3 +212,92 @@ passed the clean CGO-free build/test/vet/cgo guard. The PR workflow checks the
 synthetic merge against unchanged base `72fe380b`; this is CI associated with the
 stated head, not an arm64 execution or power-loss test. These options and results
 do not imply power-loss durability, nor prescribe users' mount settings.
+
+### Native Btrfs qualification
+
+2026-10-03, Linux `7.3.0-rc4-1-cachyos-rc`, amd64, UID 1000, official
+`go version go1.27.1 linux/amd64`, `CGO_ENABLED=0`, `GOTOOLCHAIN=local`.
+The host `/usr/bin/go` reports `go1.27.1-X:nodwarf5` and was not used for these
+tests. The existing `ci/Dockerfile` built successfully, including its existing
+`ci/verify.sh` gate, and supplied the official toolchain. Tests below then ran
+on the native host, without added bind mounts or root execution.
+
+`findmnt -T` identified `/home` as `/dev/nvme0n1p2[/@home]`, subvolid 257,
+and `/var/tmp` as `/dev/nvme0n1p2[/@tmp]`, subvolid 261. Both are Btrfs with
+`rw,noatime,compress=zstd:3,ssd,discard=async,space_cache=v2,commit=120` and their
+respective `subvol`/`subvolid` options. `/tmp` is tmpfs with
+`rw,noatime,inode64,huge=advise`. These are observed settings, not recommendations.
+
+| Fixture mount | Same-directory matrix | `TestPermissionFailure` | `TestCrossMountRejected` to checkout (`@home`) |
+| --- | --- | --- | --- |
+| Btrfs `@home` (magic `0x9123683e`) | PASS | PASS: EACCES, both files retained | SKIP: fixture and checkout share device/mount |
+| Btrfs `@tmp` (magic `0x9123683e`) | PASS | PASS: EACCES, both files retained | PASS: actual EXDEV across subvolumes, stage `new` and destination `old` retained |
+| tmpfs (magic `0x1021994`) | PASS | PASS: EACCES, both files retained | PASS: actual EXDEV to Btrfs, stage `new` and destination `old` retained |
+
+All three runs exited 0. Each passed `TestNoReplaceAndBackupCollision`,
+`TestAtomicReplaceOpenReader`, `TestConcurrentNoReplace`,
+`TestAliasAndChangedSource`, the nine `TestRecoveryTable` cases,
+`TestRecoveryNeverClobbersNewWriter`, `TestStoppedProcess` at prepared/backed-up/
+published boundaries, `TestDirectoryLock`, `TestFilesystemIdentity`, and
+`TestUnsupportedFlagsPreserveBytes`. The existing collision, EACCES, invalid-flag
+and EXDEV tests assert the retained bytes. No failed test or root permission skip
+occurred. The `@home` EXDEV skip is not counted as a pass; the other two runs
+exercise the refusal directly. The `@tmp` run did not take the same-device skip,
+so the planned test-only require-EXDEV override was unnecessary and no probe code
+was changed.
+
+Exact preparation and invocations from the checkout
+`/home/sh4869/.codex/worktrees/issue-8-linux-publication/yakuori`:
+
+```sh
+id -u
+uname -sr
+go version
+findmnt -T "$PWD" -o TARGET,SOURCE,FSTYPE,OPTIONS
+findmnt -T /var/tmp -o TARGET,SOURCE,FSTYPE,OPTIONS
+findmnt -T /tmp -o TARGET,SOURCE,FSTYPE,OPTIONS
+docker build --progress=plain -t yakuori-publication-probe -f ci/Dockerfile .
+probe_home=$(mktemp -d "$PWD/.publication-probe-XXXXXX")
+probe_var_tmp=$(mktemp -d /var/tmp/yakuori-publication-XXXXXX)
+probe_tmpfs=$(mktemp -d /tmp/yakuori-publication-XXXXXX)
+probe_toolchain=$(mktemp -d /tmp/yakuori-publication-go-XXXXXX)
+findmnt -T "$probe_home" -o TARGET,SOURCE,FSTYPE,OPTIONS
+findmnt -T "$probe_var_tmp" -o TARGET,SOURCE,FSTYPE,OPTIONS
+findmnt -T "$probe_tmpfs" -o TARGET,SOURCE,FSTYPE,OPTIONS
+probe_container=$(docker create yakuori-publication-probe)
+docker cp "$probe_container:/usr/local/go/." "$probe_toolchain"
+docker rm "$probe_container"
+export PATH="$probe_toolchain/bin:$PATH" CGO_ENABLED=0 GOTOOLCHAIN=local
+go version
+go env CGO_ENABLED GOTOOLCHAIN
+TMPDIR="$probe_home" go test -count=1 -v ./research/publication
+TMPDIR="$probe_var_tmp" go test -count=1 -v ./research/publication
+TMPDIR="$probe_tmpfs" go test -count=1 -v ./research/publication
+sh ci/verify.sh
+go vet ./research/publication
+GOOS=linux GOARCH=arm64 go test -c -o "$probe_tmpfs/publication-arm64.test" ./research/publication
+gofmt -l research/publication
+git diff --check
+```
+
+Follow-up native verification passed: `sh ci/verify.sh` exited 0, covering
+build/test/vet, the cgo scan and negative guard self-test, Linux arm64 application
+and SQLite test cross-builds. The guard's `cgo import forbidden` / `exit status 1`
+for its disposable forbidden fixture was the expected rejection, not a failed
+gate. `go vet ./research/publication` exited 0; `gofmt -l research/publication`
+exited 0 with no output. The publication test cross-compile succeeded and produced
+an ARM aarch64 ELF binary; this is not arm64 runtime evidence. `git diff --check`
+passed. No probe code changed, so the filesystem matrices were not repeated.
+
+Cleanup completed: the three owned fixture directories, extracted toolchain,
+publication arm64 test binary, and newly created `yakuori`/`bin` build outputs
+were removed. `yakuori` and `bin` were absent before verification. Absence checks
+passed for all owned resources and the cgo guard fixture; no individual
+cross-mount fixtures remained. The extraction container was removed and the
+shared `yakuori-publication-probe` image/cache was retained. No existing source,
+backup or mount was changed.
+
+This qualifies the measured `@home`/`@tmp` environment for the bounded probe.
+It does not qualify the root subvolume `@`, every Btrfs configuration, arm64
+runtime, power-loss durability, or the product publisher/recovery/pipeline gates
+described above.
