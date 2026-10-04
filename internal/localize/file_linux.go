@@ -12,8 +12,9 @@ import (
 )
 
 type Result struct {
-	TMCommitted bool
-	Publication publication.Result
+	TMCommitted  bool
+	BytesWritten int
+	Publication  publication.Result
 }
 
 type publicationRun interface {
