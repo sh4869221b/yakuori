@@ -14,6 +14,21 @@ import (
 
 var ErrRecoveryConflict = errors.New("publication recovery requires manual reconciliation")
 
+// RecoveryError separates an observed publication/restoration result from the
+// failure that prevents Prepare or its caller from continuing.
+type RecoveryError struct {
+	Result Result
+	Reason string
+	Cause  error
+}
+
+func (e *RecoveryError) Error() string {
+	return fmt.Sprintf("publication recovery run=%s reason=%s record=%s final=%s backup=%s: %v",
+		e.Result.RunID, e.Reason, e.Result.RecordPath, e.Result.OutputPath, e.Result.BackupPath, e.Cause)
+}
+
+func (e *RecoveryError) Unwrap() error { return e.Cause }
+
 // The caller reads the strict record first and retains both parent locks.
 func (r *Run) reconcileRecord(record operationRecord, dir *directory) (result Result, err error) {
 	result = Result{State: NotPublished, RunID: record.RunID, RecordPath: filepath.Join(dir.path, "record.json"), OutputPath: record.Output.Path}

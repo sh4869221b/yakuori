@@ -75,11 +75,14 @@ func TestCapability(t *testing.T) {
 					t.Fatalf("capability cleanup: %v %v", files, err)
 				}
 			}
-			reopened, err := Prepare(context.Background(), Options{source, output, Replace})
+			reopened, err := openParent(output)
 			if err != nil {
+				t.Fatal(err)
+			}
+			lockErr := unix.Flock(int(reopened.parent.file.Fd()), unix.LOCK_EX|unix.LOCK_NB)
+			if err := errors.Join(lockErr, reopened.parent.file.Close()); err != nil {
 				t.Fatalf("capability failure leaked lock: %v", err)
 			}
-			closeRun(t, reopened)
 		})
 	}
 }
