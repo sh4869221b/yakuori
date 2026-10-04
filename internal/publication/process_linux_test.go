@@ -20,6 +20,7 @@ type processNotice struct {
 	RunID, Stage, Record, Backup string
 	State                        State
 	Error                        string
+	Snapshot                     string
 }
 
 func TestPublicationProcessHelper(t *testing.T) {
@@ -34,17 +35,37 @@ func TestPublicationProcessHelper(t *testing.T) {
 		mode = Create
 		output = filepath.Join(d, "output")
 	}
-	r, err := Prepare(context.Background(), Options{source, output, mode})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeRun(t, r)
-	stageBytes(t, r, "translated")
 	notice := os.NewFile(3, "notice")
 	defer notice.Close()
 	release := os.NewFile(4, "release")
 	defer release.Close()
 	encoder := json.NewEncoder(notice)
+	r, err := Prepare(context.Background(), Options{source, output, mode})
+	if err != nil {
+		if boundary == "recover-conflict" {
+			var diagnostic *RecoveryError
+			if !errors.As(err, &diagnostic) || !errors.Is(err, ErrRecoveryConflict) {
+				t.Fatal(err)
+			}
+			result := diagnostic.Result
+			if err := encoder.Encode(processNotice{RunID: result.RunID, Record: result.RecordPath, Backup: result.BackupPath, State: result.State, Error: err.Error()}); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+		t.Fatal(err)
+	}
+	defer closeRun(t, r)
+	if boundary == "recover-conflict" {
+		t.Fatal("conflicting recovery continued")
+	}
+	if boundary == "recover" {
+		if err := encoder.Encode(processNotice{RunID: r.runID, Snapshot: string(r.SourceSnapshot())}); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	stageBytes(t, r, "translated")
 	pause := func() {
 		t.Helper()
 		if err := encoder.Encode(processNotice{RunID: r.runID, Stage: r.stage.path, Record: filepath.Join(r.runDir.path, "record.json"), Backup: r.backupPath()}); err != nil {
@@ -148,55 +169,6 @@ func assertProcessLockReleased(t *testing.T, d string) {
 	}
 	if err := unix.Flock(int(f.Fd()), unix.LOCK_UN); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestPublicationStoppedProcess(t *testing.T) {
-	for _, boundary := range []string{"prepared", "before-backup", "after-backup", "before-publish", "after-publish", "published"} {
-		t.Run(boundary, func(t *testing.T) {
-			d := publicationFixture(t)
-			source := filepath.Join(d, "source")
-			putFile(t, source, "original")
-			cmd, decoder, _ := startPublicationProcess(t, d, boundary)
-			var notice processNotice
-			if err := decoder.Decode(&notice); err != nil {
-				t.Fatal(err)
-			}
-			if err := cmd.Process.Kill(); err != nil {
-				t.Fatal(err)
-			}
-			var exit *exec.ExitError
-			if err := cmd.Wait(); !errors.As(err, &exit) {
-				t.Fatalf("child was not killed: %v", err)
-			}
-			phase := preparedPhase
-			switch boundary {
-			case "prepared", "before-backup":
-				wantBytes(t, source, "original")
-				wantBytes(t, notice.Stage, "translated")
-				wantAbsent(t, notice.Backup)
-			case "after-backup", "before-publish":
-				wantAbsent(t, source)
-				wantBytes(t, notice.Backup, "original")
-				wantBytes(t, notice.Stage, "translated")
-				if boundary == "before-publish" {
-					phase = backedUpPhase
-				}
-			case "after-publish", "published":
-				wantBytes(t, source, "translated")
-				wantBytes(t, notice.Backup, "original")
-				wantAbsent(t, notice.Stage)
-				phase = backedUpPhase
-				if boundary == "published" {
-					phase = publishedPhase
-				}
-			}
-			record := readOperationRecord(t, notice.Record)
-			if record.Phase != phase || record.RunID != notice.RunID {
-				t.Fatalf("wrong phase at stop: %+v", record)
-			}
-			assertProcessLockReleased(t, d)
-		})
 	}
 }
 

@@ -1,6 +1,6 @@
 # Linux publication / recovery contract (issue #8)
 
-Status (2026-10-04): the Linux #9 publisher primitive and schema-v1 record writer are implemented for create, replace and in-place modes. The CLI only parses those modes and refuses to run the pipeline; #10 record reading/recovery, translation and TM integration are not implemented.
+Status (2026-10-04): the Linux #9 publisher primitive and #10 strict schema-v1 record reader/recovery are implemented for create, replace and in-place modes. The CLI only parses those modes and refuses to run the pipeline; #11 pipeline connection, translation and #16 TM integration are not implemented.
 Canonical product design: [Draft v0.2 §§5,9,15](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5).
 The historical probe below remains separate, unexported research code and is not called by the CLI. No new runtime dependency.
 
@@ -101,34 +101,40 @@ from `crypto/rand`. Private directory `.yakuori-run-<runID>` is created mode
 source file until publication; only in-place mode moves the original to backup.
 The stage contains the candidate artifact, not the source/prompt metadata record.
 The record contains paths, identities, SHA-256, size, mode and phase metadata,
-not source bytes, translated bytes or prompts. It is a writer-only contract;
-the #10 reader and recovery logic are not implemented.
+not source bytes, translated bytes or prompts. The #10 reader validates this
+record before filesystem reconciliation.
 
 Backup basename `.yakuori-backup-<runID>` is fixed length (to avoid NAME_MAX
 failures with long original names), **in the original directory**. The record
 supplies the original basename. Never reuse/overwrite a colliding run directory
 or backup. A backup collision fails before source movement. If created, backup
-stays after success or failure; this is an ordinary renamed original, not a copy.
+stays after confirmed publication; safe restoration moves it back to the original
+path. This is an ordinary renamed original, not a copy.
 
 `Run.Close` releases opened file descriptors and locks but never removes run,
 stage, record, backup, source or output evidence. Capability checks remove only
-their own disposable fixtures. Until #10 recovery exists, preserve run/stage/
-record/backup after abnormal exit and manually reconcile from the retained
-evidence; there is no cleanup command.
+their own disposable fixtures. `Prepare` scans retained run records under the
+output-parent lock before taking a new source snapshot. It validates all
+candidates before mutation, skips valid terminal history and different targets,
+and refuses multiple pending records for one target. Missing records, including
+run directories retained after failed preparation, require manual reconciliation.
+There is no cleanup command.
 
-If an error follows the in-place source rename, `Publish` returns
-`SourceBackedUp` plus the run, record, output and backup paths; a completed stage
-rename keeps the result `Published` even if a later record update fails. The
-primitive does not restore or roll back. A future pipeline caller must reconcile
-or restore through #10 before ending its command; the current CLI is not that
-caller. `Publish` remains the caller's post-#16-TM-commit step.
+If an error or cancellation follows the in-place source rename, `Publish`
+reconciles once while holding the directory locks, even with a cancelled context.
+Safe restoration returns `Restored` and retains the original error. A conflict
+keeps `SourceBackedUp`; a recovery or completion-record failure adds a typed
+`RecoveryError` with the observed result, reason, run/record/final/backup paths
+and cause. A completed stage rename keeps `Published` even on later error and
+never rolls back. `Publish` remains the caller's post-#16-TM-commit step; the
+current CLI is not that caller.
 
 Record schema v1, mode, run ID, absolute source/output/stage/backup paths, parent
 identities, source and stage identity+SHA-256+size, existing-output identity/hash
 or explicit absence, and phase/last completed operation. No text or prompt.
 The #9 writer records the selected backup destination before any source rename
-and writes a bounded JSON snapshot. The following validation rules describe the
-future #10 reader, not current behavior: require strict fields, valid schema and
+and writes a bounded JSON snapshot. The #10 reader enforces a 64 KiB limit,
+exact fields without duplicates, valid schema and
 validated relative basenames; treat paths outside this run/recorded parent,
 mismatched IDs, duplicates, malformed or truncated records as manual-no-mutation
 errors. Hashes establish content identity, not authorship; also require
@@ -141,18 +147,18 @@ write/close blocks the destructive transition. Filesystem evidence has priority
 when a rename completed but the next phase record did not. Record updates are
 single renames too. These precautions do **not** claim power-loss durability.
 
-## Stop/recovery model for future #10 reader (not implemented)
+## Implemented stop/recovery behavior (#10)
 
-This table describes the intended future recovery behavior; the current #9
-primitive only returns its result to the caller, and the CLI does not reconcile
-or restore. All recovery requires valid record, directory locks, trusted parent identities,
+The publication/recovery actions below are implemented; import, generation and
+TM ordering remain the future pipeline caller's contract. The CLI does not call
+these APIs. All recovery requires valid record, directory locks, trusted parent identities,
 regular single-link files and the exact recorded hashes/identities. No old stage
 is automatically published. If evidence is ambiguous: retain everything, non-zero,
 print run ID, final/backup paths and the conflict reason without file bodies.
 
 | Stop/error boundary | Evidence / action on next run |
 | --- | --- |
-| Preflight, import, generation, any unit failure/cancellation | No TM writes or output mutation; leave source/output intact |
+| New preflight after recovery, import, generation, any unit failure/cancellation | No TM writes or new publication; leave source/output intact |
 | Stage create/write/flush/close | No TM commit or publish; partial stage cannot qualify as validated |
 | Final validation | Failure means no TM writes/publish; stage may be inspected then discarded only under owned-file policy |
 | Before/during TM commit | No publish until commit success; ambiguous commit is reconciled by DB contract, not assumed rolled back |
@@ -164,7 +170,7 @@ print run ID, final/backup paths and the conflict reason without file bodies.
 | Second rename succeeded, record stale | Final matches recorded stage inode/hash, backup matches original, stage absent: published; keep backup |
 | Published, diagnostic/stdout/record update fails | Report publication separately from later command failure; never delete or roll back published result |
 | Final exists with other bytes, backup mismatch, extra links, corrupt/missing record | Manual-no-mutation; keep all evidence. Missing record never authorizes guessing |
-| Restore succeeded, completion-record write fails | Original at final, backup absent: unchanged/restored; never infer publication solely from hash |
+| Restore succeeded, completion-record write fails | Return Restored with error. A stale pending record with original at final + backup absent can become abandoned; an already-written terminal record remains valid history. Never infer publication solely from hash |
 
 When original and translated hashes coincide, distinguish source/stage inode,
 backup and stage presence. A matching hash alone is never sufficient. For ordinary
@@ -172,6 +178,13 @@ output, final matching the recorded stage inode/hash with stage absent establish
 publication; previous-output identity with intact stage means not yet published;
 anything else is manual-no-mutation. Never replay explicit replacement over a
 newly arrived unrelated output during recovery.
+
+Terminal `published`, `restored` and `abandoned` records remain valid history after
+structural validation, even when later legitimate publications change the final.
+An original final with matching identity/hash and no backup can be abandoned
+after a failed restoration-record update even if the old stage is absent; if
+the stage exists, its recorded identity/hash must still match. Old stages are
+never replayed.
 
 **The two same-path renames are not atomic together.** Between them final is
 absent and original exists at backup. On safe restoration backup is moved back,
