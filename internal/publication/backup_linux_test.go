@@ -31,7 +31,7 @@ func TestBackupFailure(t *testing.T) {
 				}
 			case "backup-rename", "publish-rename":
 				if name == "publish-rename" {
-					wantState = SourceBackedUp
+					wantState = Restored
 				}
 				r.rename = func(a int, b string, c int, d string, e uint) error {
 					if (name == "backup-rename" && d == r.backupName()) || (name == "publish-rename" && b == r.stage.name) {
@@ -40,7 +40,7 @@ func TestBackupFailure(t *testing.T) {
 					return unix.Renameat2(a, b, c, d, e)
 				}
 			case "backed-record":
-				wantState = SourceBackedUp
+				wantState = Restored
 				r.recordWrite = func(f *os.File, b []byte) (int, error) {
 					if f.Name() == ".record-source-backed-up" {
 						return 0, unix.EIO
@@ -91,7 +91,7 @@ func TestCancellationState(t *testing.T) {
 			case "before":
 				cancel()
 			case "backup", "backed-record":
-				wantState = SourceBackedUp
+				wantState = Restored
 			case "publish":
 				wantState = Published
 			}
@@ -107,14 +107,10 @@ func TestCancellationState(t *testing.T) {
 				t.Fatalf("cancellation: %+v %v", result, err)
 			}
 			switch wantState {
-			case NotPublished:
+			case NotPublished, Restored:
 				wantBytes(t, r.source.path, "original")
 				wantBytes(t, r.stage.path, "translated")
 				wantAbsent(t, r.backupPath())
-			case SourceBackedUp:
-				wantAbsent(t, r.source.path)
-				wantBytes(t, r.stage.path, "translated")
-				wantBytes(t, result.BackupPath, "original")
 			case Published:
 				wantBytes(t, r.output.path, "translated")
 				wantAbsent(t, r.stage.path)
@@ -125,8 +121,8 @@ func TestCancellationState(t *testing.T) {
 			} else {
 				record := readOperationRecord(t, result.RecordPath)
 				phase := preparedPhase
-				if wantState == SourceBackedUp {
-					phase = backedUpPhase
+				if wantState == Restored {
+					phase = restoredPhase
 				}
 				if wantState == Published {
 					phase = publishedPhase

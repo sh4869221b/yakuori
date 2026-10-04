@@ -75,22 +75,17 @@ func TestPublicationPermissionFailure(t *testing.T) {
 			result, err := r.Publish(context.Background())
 			state := NotPublished
 			if name == "in-place-publish" {
-				state = SourceBackedUp
+				state = Restored
 			}
 			if !errors.Is(err, unix.EACCES) || result.State != state {
 				t.Fatalf("permission result: %+v %v", result, err)
 			}
 			wantBytes(t, r.stage.path, "translated")
-			if state == SourceBackedUp {
-				wantAbsent(t, r.source.path)
-				wantBytes(t, result.BackupPath, "original")
+			wantBytes(t, r.source.path, "original")
+			if mode == Replace {
+				wantBytes(t, r.output.path, "existing")
 			} else {
-				wantBytes(t, r.source.path, "original")
-				if mode == Replace {
-					wantBytes(t, r.output.path, "existing")
-				} else {
-					wantAbsent(t, r.backupPath())
-				}
+				wantAbsent(t, r.backupPath())
 			}
 		})
 	}
@@ -116,7 +111,7 @@ func TestPublicationCrossMountFailure(t *testing.T) {
 			result, err := r.Publish(context.Background())
 			state := NotPublished
 			if mode == InPlace {
-				state = SourceBackedUp
+				state = Restored
 			}
 			if !errors.Is(err, unix.EXDEV) || result.State != state {
 				t.Fatalf("cross mount: %+v %v", result, err)
@@ -124,8 +119,8 @@ func TestPublicationCrossMountFailure(t *testing.T) {
 			wantBytes(t, otherOutput, "other-existing")
 			wantBytes(t, r.stage.path, "translated")
 			if mode == InPlace {
-				wantAbsent(t, r.source.path)
-				wantBytes(t, result.BackupPath, "original")
+				wantBytes(t, r.source.path, "original")
+				wantAbsent(t, result.BackupPath)
 			} else {
 				wantBytes(t, r.source.path, "original")
 				wantBytes(t, r.output.path, "existing")
