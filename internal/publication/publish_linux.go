@@ -17,6 +17,7 @@ const (
 	NotPublished   State = "not-published"
 	SourceBackedUp State = "source-backed-up"
 	Published      State = "published"
+	Restored       State = "restored"
 )
 
 // SourceBackedUp requires the caller to reconcile/restore through recovery before
