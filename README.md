@@ -4,7 +4,7 @@
 
 ## 状態
 
-#2のGo基盤に加え、Linux向けに検証済みstageを安全に公開するprimitive（#9）と、operation recordの検証・異常終了からの復旧（#10）を実装しています。`localize` は承認済み出力指定の解析だけを行い、有効な指定も `localize pipeline is not implemented` で終了します。#11のpipeline接続、model、TM接続、実ゲーム検証、releaseはまだありません。
+#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）と、全件生成・保護復元・最終artifact検証・一括TM commitを接続するCore（#11）を実装しています。text Adapterは全文1unitを扱い、最終検証とcommit後に訳bytesをstdoutへ一括出力します。EngineとTMのfakeはテスト内だけで使用します。通常の `localize` はbackend未接続のため、出力指定の解析後も `localize pipeline is not implemented` でno-I/O終了します。実model、SQLite TM接続・hit再検証、実ゲーム検証、releaseはまだありません。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 - [正本: 設計書 Draft v0.2](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5)
