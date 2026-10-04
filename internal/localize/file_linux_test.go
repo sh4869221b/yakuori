@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sh4869221b/yakuori/internal/artifact"
 	"github.com/sh4869221b/yakuori/internal/publication"
 	"github.com/sh4869221b/yakuori/internal/unit"
 	"github.com/sh4869221b/yakuori/internal/validate"
@@ -86,6 +87,7 @@ func (tm hookedTM) Commit(ctx context.Context, session unit.Session, profile val
 type testRun struct {
 	publicationRun
 	stageErr, publishErr, closeErr error
+	afterStage                     func()
 	afterPublish                   func()
 	closed, published              int
 }
@@ -94,7 +96,11 @@ func (r *testRun) Stage(ctx context.Context, produce func(io.Writer) error, chec
 	if r.stageErr != nil {
 		return r.stageErr
 	}
-	return r.publicationRun.Stage(ctx, produce, check)
+	err := r.publicationRun.Stage(ctx, produce, check)
+	if err == nil && r.afterStage != nil {
+		r.afterStage()
+	}
+	return err
 }
 
 func (r *testRun) Publish(ctx context.Context) (publication.Result, error) {
@@ -143,7 +149,7 @@ func TestFilePipeline(t *testing.T) {
 
 func TestFilePipelineFailures(t *testing.T) {
 	injected := errors.New("file pipeline injected failure")
-	for _, name := range []string{"prepare", "generate", "produce", "stage sync", "stage close", "commit", "cancel after commit", "output appeared", "published plus error", "cancel after publish", "close", "import"} {
+	for _, name := range []string{"prepare", "generate", "produce", "final compare", "stage sync", "stage close", "cancel before commit", "commit", "cancel after commit", "output appeared", "published plus error", "cancel after publish", "close", "import"} {
 		t.Run(name, func(t *testing.T) {
 			mode := publication.Replace
 			if name == "output appeared" {
@@ -162,8 +168,13 @@ func TestFilePipelineFailures(t *testing.T) {
 				}))
 			case "produce":
 				f.adapter.exportErr = injected
+			case "final compare":
+				f.adapter.corrupt = func(image *fakeImage) { image.Records[0].Text = "差替え" }
+				wantErr = artifact.ErrFinalMismatch
 			case "stage sync", "stage close":
 				run.stageErr = injected
+			case "cancel before commit":
+				run.afterStage, wantErr = cancel, context.Canceled
 			case "commit":
 				f.adapter.tm.err = injected
 			case "cancel after commit":
