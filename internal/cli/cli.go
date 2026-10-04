@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/localize"
 	"github.com/sh4869221b/yakuori/internal/publication"
 )
 
@@ -40,8 +42,13 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	return run(args, stdout, stderr, func() (config.Paths, error) { return config.Resolve(os.Getenv) })
 }
 
-// resolve is the small fake-test seam; no engine or dependency framework yet.
 func run(args []string, stdout, stderr io.Writer, resolve func() (config.Paths, error)) int {
+	return runWithPipeline(context.Background(), args, stdout, stderr, resolve, nil)
+}
+
+type fileRunner func(context.Context, publication.Options) (localize.Result, error)
+
+func runWithPipeline(ctx context.Context, args []string, stdout, stderr io.Writer, resolve func() (config.Paths, error), runner fileRunner) int {
 	fail := func(code int, message string) int {
 		// A failed diagnostic write must still return failure.
 		_, _ = fmt.Fprintf(stderr, "yakuori: %s\n", message)
@@ -51,7 +58,7 @@ func run(args []string, stdout, stderr io.Writer, resolve func() (config.Paths, 
 		return fail(ExitUsage, "missing command; use --help")
 	}
 	if args[0] == "localize" {
-		_, help, err := parseLocalize(args[1:])
+		options, help, err := parseLocalize(args[1:])
 		if err != nil {
 			if errors.Is(err, errSameLocalizePath) {
 				return fail(ExitUsage, "source and output are the same path; use --in-place")
@@ -59,7 +66,11 @@ func run(args []string, stdout, stderr io.Writer, resolve func() (config.Paths, 
 			return fail(ExitUsage, "invalid localize arguments; use --help")
 		}
 		if help == "" {
-			return fail(ExitFailure, "localize pipeline is not implemented")
+			if runner == nil {
+				return fail(ExitFailure, "localize pipeline is not implemented")
+			}
+			result, err := runner(ctx, options)
+			return reportPipeline(stderr, result, err)
 		}
 		n, err := io.WriteString(stdout, help)
 		if err != nil || n != len(help) {
@@ -92,6 +103,31 @@ func run(args []string, stdout, stderr io.Writer, resolve func() (config.Paths, 
 		return fail(ExitFailure, "write stdout failed")
 	}
 	return ExitOK
+}
+
+func reportPipeline(stderr io.Writer, result localize.Result, err error) int {
+	if err == nil {
+		return ExitOK
+	}
+	message := "pipeline failed"
+	var failure *localize.Error
+	if errors.As(err, &failure) {
+		message = failure.Error()
+	}
+	message += fmt.Sprintf("; TMCommitted=%t", result.TMCommitted)
+	if result.Publication.State != "" {
+		message += fmt.Sprintf("; publication=%s", result.Publication.State)
+	}
+	var recovery *publication.RecoveryError
+	if errors.As(err, &recovery) {
+		message += fmt.Sprintf("; recovery reason=%s state=%s record=%s output=%s backup=%s", recovery.Reason,
+			recovery.Result.State, recovery.Result.RecordPath, recovery.Result.OutputPath, recovery.Result.BackupPath)
+	}
+	if result.BytesWritten > 0 {
+		message += fmt.Sprintf("; stdout bytes=%d cannot be retracted", result.BytesWritten)
+	}
+	_, _ = fmt.Fprintf(stderr, "yakuori: %s\n", message)
+	return ExitFailure
 }
 
 func parseLocalize(args []string) (publication.Options, string, error) {
