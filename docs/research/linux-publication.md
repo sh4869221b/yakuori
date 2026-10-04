@@ -1,8 +1,8 @@
 # Linux publication / recovery contract (issue #8)
 
-Status: bounded technical investigation, not the #9 publisher or #10 recovery implementation.
+Status (2026-10-04): the Linux #9 publisher primitive and schema-v1 record writer are implemented for create, replace and in-place modes. The CLI only parses those modes and refuses to run the pipeline; #10 record reading/recovery, translation and TM integration are not implemented.
 Canonical product design: [Draft v0.2 §§5,9,15](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5).
-The probe is deliberately unexported and is not called by the CLI. No new runtime dependency.
+The historical probe below remains separate, unexported research code and is not called by the CLI. No new runtime dependency.
 
 ## Adopted API and environment gate
 
@@ -21,8 +21,9 @@ The probe is deliberately unexported and is not called by the CLI. No new runtim
   run directory beneath the output directory. Cross-mount publication is refused,
   even when device identifiers happen to match through a bind mount.
 - Initial production targets, approved 2026-10-03: ext4 and conditional Btrfs.
-  The ext4 CI and native Btrfs `@home`/`@tmp` measurements below qualify only
-  their measured environments. Btrfs adoption requires a passing qualification
+  The historical research-probe ext4 CI and native Btrfs `@home`/`@tmp`
+  measurements below qualify only their measured environments, not the product
+  publisher. Btrfs adoption requires a passing product qualification
   and disposable same-directory capability checks at the publication destination
   before real paths are touched. tmpfs and overlay are development-only targets;
   XFS, NFS/CIFS/FUSE and other filesystems remain unqualified.
@@ -71,8 +72,11 @@ explains why overlay results are not a certification of lower/upper configuratio
 
 ## CLI mapping (approved 2026-10-03 for #9)
 
-The owner approved the following mutually exclusive modes on 2026-10-03; these
-CLI options remain **not implemented**:
+The CLI parser accepts these mutually exclusive forms and maps them to
+`publication.Options`. A valid form currently exits 1 with
+`localize pipeline is not implemented`, empty stdout, and no source/config or
+publisher I/O. Invalid syntax exits 2 with a generic diagnostic. The table
+describes the intended publication behavior once the pipeline is connected:
 
 | Form | Behavior |
 | --- | --- |
@@ -90,23 +94,45 @@ to remove backup, follow symlinks or broaden replacement needs product review.
 
 ## Run record and backup naming
 
-Run ID: 128 random bits as 32 lower-case hex characters from `crypto/rand`; fail
-on randomness error. Private directory `.yakuori-run-<runID>` is mkdir-exclusive
-0700 in the final parent. Backup basename `.yakuori-backup-<runID>` is fixed length
-(to avoid NAME_MAX failures with long original names), **in the original directory**.
-The run record supplies the original basename. Never reuse/overwrite a colliding
-run directory or backup. A backup collision fails before source movement; keeping
-it for inspection is preferable to silently choosing an unrecorded new name.
-Backup stays after success. This is an ordinary renamed original, not a copy.
+The #9 writer generates a 128-bit random run ID as 32 lower-case hex characters
+from `crypto/rand`. Private directory `.yakuori-run-<runID>` is created mode
+`0700` in the output parent. Candidate translated artifact `stage` and
+`record.json` are mode `0600` in that directory. The source bytes remain in the
+source file until publication; only in-place mode moves the original to backup.
+The stage contains the candidate artifact, not the source/prompt metadata record.
+The record contains paths, identities, SHA-256, size, mode and phase metadata,
+not source bytes, translated bytes or prompts. It is a writer-only contract;
+the #10 reader and recovery logic are not implemented.
+
+Backup basename `.yakuori-backup-<runID>` is fixed length (to avoid NAME_MAX
+failures with long original names), **in the original directory**. The record
+supplies the original basename. Never reuse/overwrite a colliding run directory
+or backup. A backup collision fails before source movement. If created, backup
+stays after success or failure; this is an ordinary renamed original, not a copy.
+
+`Run.Close` releases opened file descriptors and locks but never removes run,
+stage, record, backup, source or output evidence. Capability checks remove only
+their own disposable fixtures. Until #10 recovery exists, preserve run/stage/
+record/backup after abnormal exit and manually reconcile from the retained
+evidence; there is no cleanup command.
+
+If an error follows the in-place source rename, `Publish` returns
+`SourceBackedUp` plus the run, record, output and backup paths; a completed stage
+rename keeps the result `Published` even if a later record update fails. The
+primitive does not restore or roll back. A future pipeline caller must reconcile
+or restore through #10 before ending its command; the current CLI is not that
+caller. `Publish` remains the caller's post-#16-TM-commit step.
 
 Record schema v1, mode, run ID, absolute source/output/stage/backup paths, parent
 identities, source and stage identity+SHA-256+size, existing-output identity/hash
 or explicit absence, and phase/last completed operation. No text or prompt.
-Record the selected backup destination before any source rename. Use a bounded
-JSON file with strict fields, valid schema and validated relative basenames.
-Paths outside this run/recorded parent, mismatched IDs, duplicates, malformed or
-truncated records are manual-no-mutation errors. Hashes establish content identity,
-not authorship; also require inode/mode/link-count identity evidence.
+The #9 writer records the selected backup destination before any source rename
+and writes a bounded JSON snapshot. The following validation rules describe the
+future #10 reader, not current behavior: require strict fields, valid schema and
+validated relative basenames; treat paths outside this run/recorded parent,
+mismatched IDs, duplicates, malformed or truncated records as manual-no-mutation
+errors. Hashes establish content identity, not authorship; also require
+inode/mode/link-count identity evidence.
 
 Write each record snapshot into a fresh 0600 temp within the private run directory,
 check full write, Sync and Close, rename over record, and sync the directory where
@@ -115,9 +141,11 @@ write/close blocks the destructive transition. Filesystem evidence has priority
 when a rename completed but the next phase record did not. Record updates are
 single renames too. These precautions do **not** claim power-loss durability.
 
-## Stop/recovery table
+## Stop/recovery model for future #10 reader (not implemented)
 
-All recovery requires valid record, directory locks, trusted parent identities,
+This table describes the intended future recovery behavior; the current #9
+primitive only returns its result to the caller, and the CLI does not reconcile
+or restore. All recovery requires valid record, directory locks, trusted parent identities,
 regular single-link files and the exact recorded hashes/identities. No old stage
 is automatically published. If evidence is ambiguous: retain everything, non-zero,
 print run ID, final/backup paths and the conflict reason without file bodies.
@@ -153,7 +181,7 @@ it does not roll back. stdout write cannot retract delivered bytes and is outsid
 file atomicity. Power-off/reboot durability and arbitrary external-writer
 coordination remain out of scope.
 
-## Reproduction and observed results
+## Historical research probe reproduction and results
 
 Fixtures are generated ASCII strings in temporary directories; no external data
 or license-dependent game files. Toolchain pin and digest are in `ci/Dockerfile`.
@@ -197,7 +225,7 @@ matrix is deliberately narrower than Linux API documentation; unmeasured mounts
 cannot silently enter the v1 support claim. The additional Btrfs measurement is
 recorded separately below.
 
-### CI ext4 qualification
+### Historical CI ext4 research-probe qualification
 
 [Non-root filesystem run 36979000748](https://github.com/sh4869221b/yakuori/actions/runs/36979000748)
 on head `7ec49f9c9490d4b410124439f9c2f806e8f6f63e` passed the matrix on
@@ -213,7 +241,7 @@ synthetic merge against unchanged base `72fe380b`; this is CI associated with th
 stated head, not an arm64 execution or power-loss test. These options and results
 do not imply power-loss durability, nor prescribe users' mount settings.
 
-### Native Btrfs qualification
+### Historical native Btrfs research-probe qualification
 
 2026-10-03, Linux `7.3.0-rc4-1-cachyos-rc`, amd64, UID 1000, official
 `go version go1.27.1 linux/amd64`, `CGO_ENABLED=0`, `GOTOOLCHAIN=local`.
@@ -301,3 +329,26 @@ This qualifies the measured `@home`/`@tmp` environment for the bounded probe.
 It does not qualify the root subvolume `@`, every Btrfs configuration, arm64
 runtime, power-loss durability, or the product publisher/recovery/pipeline gates
 described above.
+
+### Current product publisher validation (2026-10-04)
+
+Task 4 ran `go test -count=1 -v ./internal/cli ./cmd/yakuori`; built-binary QA
+observed valid `localize --in-place SOURCE` exit 1 with empty stdout, invalid
+`localize --replace-output SOURCE` exit 2, and help/doctor exit 0. Source and
+existing output bytes remained unchanged. The command still performs no source
+or config I/O.
+
+As UID 1000 with official Go 1.27.1 and `CGO_ENABLED=0`, the native Btrfs
+`/home` (`@home`) run passed `go test -count=1 -v ./internal/publication ./internal/artifact`;
+the `/var/tmp` (`@tmp`) run passed `go test -count=1 -v ./internal/publication`.
+`TestUnsupportedFilesystem` was the only skip in each supported-mount run. On
+tmpfs, the dedicated refusal invocation
+`go test -count=1 -run '^TestUnsupportedFilesystem$' -v ./internal/publication`
+passed. `sh ci/verify.sh`, the `ci/Dockerfile` build, `go vet ./internal/publication`,
+and the Linux arm64 test cross-compile passed; the cross-compile is not arm64
+runtime evidence. The
+`.github/workflows/publication-probe.yml` `non-root-filesystems` job runs the
+product suite on ext4; the corresponding PR CI run is the authoritative hosted
+result, and these local Btrfs results do not substitute for it. These product
+checks do not connect TM commit after #16 or the full pipeline fault suite in
+#21. Power-loss durability remains outside v1 scope.

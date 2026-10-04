@@ -4,7 +4,7 @@
 
 ## 状態
 
-#2のGo基盤を実装中です。最小CLI（helpとpath表示のみのdoctor）、XDG設定path契約、CGO-free CIを用意しています。翻訳・model・TM・実ゲーム検証・releaseはまだありません。
+#2のGo基盤に加え、Linux向けに検証済みstageを安全に公開するprimitive（#9）を実装しています。`localize` は承認済み出力指定の解析だけを行い、有効な指定も `localize pipeline is not implemented` で終了します。翻訳pipeline、model、TM接続、#10 recovery、実ゲーム検証、releaseはまだありません。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 - [正本: 設計書 Draft v0.2](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5)
@@ -38,7 +38,9 @@ CGO_ENABLED=0 GOTOOLCHAIN=local go vet ./...
 sh ci/verify.sh
 ```
 
-`doctor`はXDGのconfig/data/cache/stateディレクトリを表示するだけで、作成・config読込み・model検証は行いません。現在は設定file、TM、registry、model、staging、backupを作らないため、削除対象もありません。具体的な保存・復旧・削除手順は該当実装PRで追加します。
+`doctor`はXDGのconfig/data/cache/stateディレクトリを表示するだけで、作成・config読込み・model検証は行いません。`localize` はまだsource/configを読み込まず、publisherも呼びません。実装済みprimitiveはoutput parentにmode `0700` の `.yakuori-run-<runID>` を作り、その中へmode `0600` の候補stageと `record.json` を保存します。記録に本文やpromptは含めず、path・identity・hash・size・phase等のmetadataだけを含めます。in-placeの原文backupはsourceと同じdirectoryに置き、成功後も保持します。
+
+失敗時のrun/stage/recordとbackupは自動削除しません。`Run.Close` はFDとlockを解放しますが証拠fileやsource/outputを削除しません。#10 recoveryが未接続のため、異常終了時は既存の証拠を保全して手動で照合し、cleanup commandはありません。実装範囲と検証結果は[Linux publication調査記録](docs/research/linux-publication.md)を参照してください。
 
 CLIのexit code、stdout/stderr、設定のfallback、fake試験の入口、clean CIの再現方法・制限は[基盤契約](docs/foundation.md)を参照してください。Linux arm64はcross-buildのみで、実行対応は未検証です。詳細な非目標・依存関係・受入れ試験はissue indexを参照してください。
 

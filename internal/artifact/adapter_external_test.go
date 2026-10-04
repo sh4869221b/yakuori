@@ -2,13 +2,17 @@ package artifact_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
 	"github.com/sh4869221b/yakuori/internal/artifact"
+	"github.com/sh4869221b/yakuori/internal/publication"
 	"github.com/sh4869221b/yakuori/internal/unit"
 	"github.com/sh4869221b/yakuori/internal/validate"
 )
@@ -258,6 +262,54 @@ func TestAdapterBoundaryRoundTrip(t *testing.T) {
 	}
 	if err := a.manifest.CheckInput(a.session); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestStageArtifactBoundary(t *testing.T) {
+	a, accepted := adapterFixture(t)
+	d := t.TempDir()
+	source, output := filepath.Join(d, "source"), filepath.Join(d, "output")
+	if err := os.WriteFile(source, a.session.Artifact(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	r, err := publication.Prepare(context.Background(), publication.Options{Source: source, Output: output, Mode: publication.Create})
+	if errors.Is(err, publication.ErrUnsupportedFilesystem) {
+		t.Skip("stage bridge requires qualified ext4/Btrfs TMPDIR")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := r.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	if !bytes.Equal(r.SourceSnapshot(), a.session.Artifact()) {
+		t.Fatal("snapshot differs from imported artifact")
+	}
+	exported, expected, err := a.stage(a.session, a.profile, accepted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = r.Stage(context.Background(), func(w io.Writer) error { _, err := w.Write(exported); return err }, func(rd io.Reader) error {
+		actual, err := io.ReadAll(rd)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(actual, exported) {
+			t.Fatal("validator did not receive exported bytes")
+		}
+		return a.checkStage(actual, expected)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := os.ReadFile(source)
+	if err != nil || !bytes.Equal(actual, a.session.Artifact()) {
+		t.Fatalf("source changed: %v", err)
+	}
+	if _, err := os.Stat(output); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stage created output: %v", err)
 	}
 }
 
