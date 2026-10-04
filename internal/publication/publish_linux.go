@@ -17,10 +17,10 @@ const (
 	NotPublished   State = "not-published"
 	SourceBackedUp State = "source-backed-up"
 	Published      State = "published"
+	Restored       State = "restored"
 )
 
-// SourceBackedUp requires the caller to reconcile/restore through recovery before
-// ending its command. This primitive retains evidence and performs no recovery.
+// SourceBackedUp requires manual reconciliation when immediate recovery fails.
 type Result struct {
 	State      State
 	RunID      string
@@ -50,7 +50,22 @@ func (r *Run) Publish(ctx context.Context) (result Result, err error) {
 		return result, ErrInvalidPublish
 	}
 	r.publishAttempted = true
-	defer func() { r.result = result }()
+	defer func() {
+		if err != nil && result.State == SourceBackedUp {
+			record, recoveryErr := readRecord(r.runDir)
+			if recoveryErr == nil {
+				var recovered Result
+				recovered, recoveryErr = r.reconcileRecord(record, r.runDir)
+				if recoveryErr == nil || recovered.State != NotPublished {
+					result = recovered
+				}
+			}
+			if recoveryErr != nil {
+				err = errors.Join(err, &RecoveryError{Result: result, Reason: "recover interrupted publish", Cause: recoveryErr})
+			}
+		}
+		r.result = result
+	}()
 	if !r.validated {
 		return result, ErrInvalidPublish
 	}

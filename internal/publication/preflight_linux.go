@@ -38,7 +38,8 @@ type Run struct {
 	recordClose      func(*os.File) error
 }
 
-// Prepare must complete before generation/import. It never moves source/output.
+// Prepare recovers interrupted publication before taking the source snapshot.
+// It must complete before generation/import.
 func Prepare(ctx context.Context, options Options) (*Run, error) {
 	return prepare(ctx, options, unix.Renameat2)
 }
@@ -81,6 +82,9 @@ func prepare(ctx context.Context, options Options, rename renameFunc) (_ *Run, e
 	}
 	if r.mode != InPlace && samePath {
 		return nil, ErrAlias
+	}
+	if err = r.recoverPendingRecords(ctx); err != nil {
+		return nil, err
 	}
 	r.snapshot, err = observe(&r.source)
 	if err != nil {

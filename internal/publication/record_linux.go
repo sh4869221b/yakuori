@@ -21,6 +21,8 @@ const (
 	preparedPhase  recordPhase = "prepared"
 	backedUpPhase  recordPhase = "source-backed-up"
 	publishedPhase recordPhase = "published"
+	restoredPhase  recordPhase = "restored"
+	abandonedPhase recordPhase = "abandoned"
 )
 
 type recordPath struct {
@@ -58,7 +60,7 @@ func recordedFile(l leaf) recordFile {
 	return recordFile{l.path, l.name, l.id, l.digest, l.id.Size}
 }
 
-func (r *Run) writeRecord(phase recordPhase, operation string) (err error) {
+func (r *Run) writeRecord(phase recordPhase, operation string) error {
 	record := operationRecord{
 		SchemaVersion: 1, RunID: r.runID, Mode: r.mode,
 		Source: recordedFile(r.source), Output: recordPath{r.output.path, r.output.name}, Stage: recordedFile(r.stage),
@@ -73,6 +75,19 @@ func (r *Run) writeRecord(phase recordPhase, operation string) (err error) {
 		file := recordedFile(r.output)
 		record.ExistingOutput.File = &file
 	}
+	w := recordWriter{r.runDir, r.recordWrite, r.recordSync, r.recordClose, r.rename}
+	return w.write(record, ".record-"+string(phase))
+}
+
+type recordWriter struct {
+	dir       *directory
+	writeFile func(*os.File, []byte) (int, error)
+	syncFile  func(*os.File) error
+	closeFile func(*os.File) error
+	rename    renameFunc
+}
+
+func (w recordWriter) write(record operationRecord, name string) (err error) {
 	b, err := json.Marshal(record)
 	if err != nil {
 		return fmt.Errorf("encode publication record: %w", err)
@@ -80,34 +95,33 @@ func (r *Run) writeRecord(phase recordPhase, operation string) (err error) {
 	if len(b) > 64*1024 {
 		return ErrRecordTooLarge
 	}
-	name := ".record-" + string(phase)
-	fd, err := unix.Openat(int(r.runDir.file.Fd()), name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
+	fd, err := unix.Openat(int(w.dir.file.Fd()), name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
 	if err != nil {
 		return fmt.Errorf("create record snapshot: %w", err)
 	}
 	f := os.NewFile(uintptr(fd), name)
 	defer func() {
 		if f != nil {
-			err = errors.Join(err, r.recordClose(f))
+			err = errors.Join(err, w.closeFile(f))
 		}
 	}()
-	n, err := r.recordWrite(f, b)
+	n, err := w.writeFile(f, b)
 	if err == nil && n != len(b) {
 		err = io.ErrShortWrite
 	}
 	if err == nil {
-		err = r.recordSync(f)
+		err = w.syncFile(f)
 	}
-	err = errors.Join(err, r.recordClose(f))
+	err = errors.Join(err, w.closeFile(f))
 	f = nil
 	if err != nil {
 		return fmt.Errorf("write/close publication record: %w", err)
 	}
-	fd = int(r.runDir.file.Fd())
-	if err = r.rename(fd, name, fd, "record.json", 0); err != nil {
+	fd = int(w.dir.file.Fd())
+	if err = w.rename(fd, name, fd, "record.json", 0); err != nil {
 		return fmt.Errorf("replace publication record: %w", err)
 	}
-	if err = r.recordSync(r.runDir.file); err != nil {
+	if err = w.syncFile(w.dir.file); err != nil {
 		return fmt.Errorf("sync record directory: %w", err)
 	}
 	return nil
