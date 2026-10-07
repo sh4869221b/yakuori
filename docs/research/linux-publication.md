@@ -1,7 +1,8 @@
 # Linux publication / recovery contract (issue #8)
 
 Status (2026-10-04): the Linux #9 publisher primitive and #10 strict schema-v1 record reader/recovery are implemented for create, replace and in-place modes. The CLI only parses those modes and refuses to run the pipeline; #11 pipeline connection, translation and #16 TM integration are not implemented.
-Canonical product design: [Draft v0.2 §§5,9,15](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5).
+Design reference: maintainer’s private Draft v0.2, sections 5/9/15.
+The public API contract and reproduction evidence are documented below.
 The historical probe below remains separate, unexported research code and is not called by the CLI. No new runtime dependency.
 
 ## Adopted API and environment gate
@@ -288,7 +289,7 @@ so the planned test-only require-EXDEV override was unnecessary and no probe cod
 was changed.
 
 Exact preparation and invocations from the checkout
-`/home/sh4869/.codex/worktrees/issue-8-linux-publication/yakuori`:
+`<checkout>/yakuori` (machine-specific path omitted):
 
 ```sh
 id -u

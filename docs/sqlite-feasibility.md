@@ -9,7 +9,8 @@ accepted-translation constructor, production database opener, or CLI command.
 No user database is opened or created by `yakuori`; every fixture is synthetic
 and owned by `testing.T.TempDir` (private directory, database mode 0600).
 
-Canonical design: [Draft v0.2 §8/11/15](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5).
+Design reference: maintainer’s private Draft v0.2, sections 8/11/15.
+The implementation evidence and limitations below are self-contained.
 This records concrete implementation evidence without replacing that design.
 #15 still owns artifact scope, canonical serialization/hash fixtures and profile
 fields; #16 owns validated TM integration. The probe deliberately does not invent

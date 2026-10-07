@@ -7,10 +7,8 @@
 #2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）と、全件生成・保護復元・最終artifact検証・一括TM commitを接続するCore（#11）を実装しています。text Adapterは全文1unitを扱い、最終検証とcommit後に訳bytesをstdoutへ一括出力します。EngineとTMのfakeはテスト内だけで使用します。通常の `localize` はbackend未接続のため、出力指定の解析後も `localize pipeline is not implemented` でno-I/O終了します。実model、SQLite TM接続・hit再検証、実ゲーム検証、releaseはまだありません。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
-- [正本: 設計書 Draft v0.2](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5)
-- [設計レビュー対応記録](https://chatgpt.com/space/page_020ed32621908191acfa75ea9b11e340)
 
-設計Pageが正本で、閲覧には所有者のアクセス権が必要です。このrepoはコードと再現用技術資料を扱い、正本の全文コピーは置きません。旧HTML/Markdownは履歴資料です。
+このrepoはコードと再現用技術資料を扱います。非公開の設計資料の全文は含みません。実装済みの契約・再現手順・制限は、このREADMEとリンク先のrepo内ドキュメントを参照してください。
 
 ## v1の採用方針
 
@@ -48,3 +46,7 @@ CLIのexit code、stdout/stderr、設定のfallback、fake試験の入口、clea
 
 The test-only [SQLite storage gate](docs/sqlite-feasibility.md) records driver pin,
 rollback/corruption protection and finite-wait evidence for #4. It does not enable TM.
+
+## 公開準備と権利表示
+
+Yakuoriの原著コード・文書は[MIT License](LICENSE)です。第三者のfixture・依存コード・モデルには各権利者の条件が適用され、MITへの変更を意味しません。研究用Rust oracleが依存するGPL-3.0-onlyのw3stringsは独立した別ツールで、本体CLIへリンクしません。[第三者通知](THIRD_PARTY_NOTICES.md)と[公開前チェック](docs/public-readiness.md)を参照してください。現時点では完成した翻訳アプリや検証済みreleaseを提供していません。

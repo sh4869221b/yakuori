@@ -1,0 +1,97 @@
+goinfer
+Copyright (c) 2026 Francis Townsend-Merino
+
+goinfer is a pure-Go LLM runtime. The SOURCE tree embeds no model weights, and
+the plain `goinfer-chat-<os>-<arch>` binaries embed none either — you supply your
+own open-weight checkpoint (safetensors, GGUF, GPTQ, or AWQ) at runtime, under
+whatever license it carries.
+
+TWO RELEASE ASSETS ARE THE EXCEPTION, and they are a redistribution of somebody
+else's weights: `goinfer-chat-0.5b-*` and `goinfer-chat-1.5b-*` have a
+Qwen2.5-Coder-Instruct GGUF compiled into them. See "Embedded model" below.
+This file used to say the project "does not embed or distribute any model weights
+itself", full stop, while twelve such binaries shipped with each release
+(audit-2026-09-02 M-33).
+
+──────────────────────────────────────────────────────────────────────────────
+Embedded model (release assets `goinfer-chat-0.5b-*` and `goinfer-chat-1.5b-*`)
+──────────────────────────────────────────────────────────────────────────────
+
+    Qwen2.5-Coder-0.5B-Instruct-GGUF  (q4_k_m)
+    Qwen2.5-Coder-1.5B-Instruct-GGUF  (q4_k_m)
+    Copyright 2024 Alibaba Cloud
+    Licensed under the Apache License, Version 2.0.
+
+    https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF
+    https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF
+
+    The Apache-2.0 text both models ship travels with the release as the
+    QWEN2.5-CODER-LICENSE.txt asset (§4(a)), and the copyright line above is the
+    attribution §4(c) requires. Neither model repository contains a NOTICE file,
+    so §4(d) does not attach. The weights are unmodified: the release pins each
+    file's sha256 and refuses to build on a mismatch, so what is embedded is the
+    exact upstream artifact and not a re-quantization of it.
+
+    NOT embedded in: the plain binaries, the source tree, or any library module.
+
+──────────────────────────────────────────────────────────────────────────────
+Third-party Go dependencies
+──────────────────────────────────────────────────────────────────────────────
+
+    golang.org/x/text
+    Copyright (c) The Go Authors.
+    Licensed under the BSD 3-Clause License.
+
+    golang.org/x/sys
+    Copyright (c) The Go Authors.
+    Licensed under the BSD 3-Clause License.
+    Required by all four modules (root, gpu, cuda, metal); imported directly by
+    the Metal backend (metal/gemma4_moe.go).
+
+    github.com/townsendmerino/aikit   (embedding + tensor primitives)
+    Copyright (c) 2026 Francis Townsend-Merino
+    Licensed under the MIT License.
+
+    github.com/townsendmerino/aikit/gpu   (shared GPU tensor primitives; used by
+    the optional cuda and metal backends)
+    Copyright (c) 2026 Francis Townsend-Merino
+    Licensed under the MIT License.
+
+The optional WebGPU backend (./gpu submodule, built only under `-tags gpu`)
+additionally links:
+
+    github.com/oliverbestmann/webgpu
+    Licensed under the Apache License, Version 2.0.
+
+The optional cgo-free CUDA backend (./cuda module, built only under `-tags cuda`)
+additionally links:
+
+    github.com/eitamring/gocudrv   (cgo-free CUDA driver API binding)
+    Copyright (c) 2026 eitamring.
+    Licensed under the MIT License.
+    goinfer's CUDA backend is built on this work; see the release notes for
+    the full credit and https://eitamring.github.io/posts/gocudrv-ten-weekends.html
+
+    github.com/ebitengine/purego   (dlopen/FFI without cgo; gocudrv dependency)
+    Copyright (c) The Ebitengine Authors.
+    Licensed under the Apache License, Version 2.0.
+
+The optional cgo-free Metal backend (./metal module, built only under
+`-tags metal` on darwin) additionally links:
+
+    github.com/ebitengine/purego   (Objective-C runtime / Metal FFI without cgo)
+    Copyright (c) The Ebitengine Authors.
+    Licensed under the Apache License, Version 2.0.
+
+    golang.org/x/sys   (syscall bindings; imported at metal/gemma4_moe.go)
+    Copyright (c) The Go Authors.
+    Licensed under the BSD 3-Clause License.
+
+    github.com/townsendmerino/aikit/gpu   (shared GPU tensor primitives)
+    Copyright (c) 2026 Francis Townsend-Merino
+    Licensed under the MIT License.
+
+──────────────────────────────────────────────────────────────────────────────
+
+For a generated listing of Go-module dependencies and their licenses, see
+THIRD_PARTY_LICENSES.md (produced by `go-licenses report`).
