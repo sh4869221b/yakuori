@@ -8,8 +8,8 @@ conservatively by a future wrapper. This is a probe, **not** the production Engi
 model registry, translation pipeline, adopted translation model, or quality gate.
 No CUDA/GPU package, server, cloud LLM, implicit download or generation retry is used.
 
-The [canonical design](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5)
-remains authoritative. No product defaults or design changes are introduced.
+The maintainer’s private design remains authoritative; public implementation
+contracts and reproducible evidence are documented in this repository. No product defaults or design changes are introduced.
 #12 must implement the production boundary and #14 must choose practical finite
 limits from representative measurements. #3 does not prove full-window quality,
 real MOD translation, hard real-time cancellation, or arm64 runtime support.

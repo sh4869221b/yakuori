@@ -1,0 +1,1067 @@
+SOURCE NOTICE EXTRACTS FROM EXACT MODERNC MODULES
+
+This contains complete source comment blocks selected by the linux/amd64 or linux/arm64 Yakuori test package closure, excluding ordinary modernc project BSD headers and SQLite public-domain blessings already covered by named licenses. Classification labels describe notice evidence, not a whole-file or binary license conclusion. Comments may survive translation without protectable code; no conclusion is made about linker reachability.
+
+======================================================================
+Notice d9a162759d7edf6b
+Classification evidence: BSD license reference (see referenced LICENSE)
+sqlite@v1.60.1/convert.go:3 [linux/amd64, linux/arm64]
+
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+
+======================================================================
+Notice 00de00b16b170a78
+Classification evidence: Public-domain claim / related notice
+sqlite@v1.60.1/lib/sqlite.go:29895 [linux/amd64, linux/arm64]
+
+/*
+** The "printf" code that follows dates from the 1980's.  It is in
+** the public domain.
+**
+**************************************************************************
+**
+** This file contains code for a set of "printf"-like routines.  These
+** routines format strings much like the printf() from the standard C
+** library, though the implementation here has enhancements to support
+** SQLite.
+ */
+
+======================================================================
+Notice 0210a0ce49f8e7a9
+Classification evidence: BSD-2-Clause-form
+libc@v1.77.1/ccgo_linux_amd64.go:10879 [linux/amd64]
+libc@v1.77.1/ccgo_linux_arm64.go:10802 [linux/arm64]
+
+/*-
+ * Copyright (c) 2003 Poul-Henning Kamp
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+======================================================================
+Notice 6d7b2382d1222242
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:83 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:102 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:544 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:997 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:83 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:102 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:579 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1065 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:159 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:178 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:620 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1073 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1587 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1604 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1688 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1707 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:159 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:178 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:655 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1141 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1690 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1707 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1791 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1810 [linux/arm64]
+
+// Copyright (C) 1991-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice ccedbd2bd9d59bf1
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:283 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:283 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:359 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:359 [linux/arm64]
+
+// Get definitions of __STDC_* predefined macros, if the compiler has
+//    not preincluded this header automatically.
+// Copyright (C) 1991-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 250f7770c101d265
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:312 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:312 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:388 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:388 [linux/arm64]
+
+// This is here only because every header file already includes this one.
+// Copyright (C) 1992-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 222ec99391aaae6c
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:524 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:816 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:839 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:862 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:885 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:943 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:1066 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:1096 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:559 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:884 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:907 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:930 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:953 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1011 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1133 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1163 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:600 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:892 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:915 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:938 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:961 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1019 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1142 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1172 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1621 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1814 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1858 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1896 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:635 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:960 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:983 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1006 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1029 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1087 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1209 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1239 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1724 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1917 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1961 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1999 [linux/arm64]
+
+// bits/types.h -- definitions of __*_t types underlying *_t types.
+//    Copyright (C) 2002-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 4db16c3cc31f5063
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:683 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:751 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:759 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:827 [linux/arm64]
+
+// bits/time64.h -- underlying types for __time64_t.  Generic version.
+//    Copyright (C) 2018-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 5ca46e2a8be7705d
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:470 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:546 [linux/amd64]
+
+// Both x86-64 and x32 use the 64-bit system call interface.
+// Properties of long double type.  ldbl-96 version.
+//    Copyright (C) 2016-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License  published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 1e0731290fc214b6
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:563 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:639 [linux/amd64]
+
+// Both x86-64 and x32 use the 64-bit system call interface.
+// Bit size of the time_t type at glibc build time, x86-64 and x32 case.
+//    Copyright (C) 2018-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 13d2ff35c56fdc1b
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:647 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:723 [linux/amd64]
+
+// No need to mark the typedef with __extension__.
+// bits/typesizes.h -- underlying types for *_t.  Linux/x86-64 version.
+//    Copyright (C) 2012-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice b1caaf21c615cdcc
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_arm64.go:615 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:691 [linux/arm64]
+
+// Bit size of the time_t type at glibc build time, general case.
+//    Copyright (C) 2018-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice c2b6aea90bd3d074
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_arm64.go:468 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:535 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:596 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:633 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:544 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:611 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:672 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:709 [linux/arm64]
+
+// Determine the wordsize from the preprocessor defines.
+//
+//    Copyright (C) 2016-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 2a6033d95b20625b
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_arm64.go:487 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:563 [linux/arm64]
+
+// Properties of long double type.  ldbl-128 version.
+//    Copyright (C) 2016-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License  published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice dc80abd51805c164
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_arm64.go:717 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:793 [linux/arm64]
+
+// No need to mark the typedef with __extension__.
+// bits/typesizes.h -- underlying types for *_t.  For the generic Linux ABI.
+//    Copyright (C) 2011-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//    Contributed by Chris Metcalf <cmetcalf@tilera.com>, 2011.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library.  If not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 16697f18081a60c7
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:1116 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1183 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1312 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1417 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1192 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1259 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1388 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1493 [linux/arm64]
+
+// Endian macros for string.h functions
+//    Copyright (C) 1992-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <http://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice b801a57b29558887
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:925 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:993 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1001 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1069 [linux/arm64]
+
+// Define intN_t types.
+//    Copyright (C) 2017-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice ae418e9cbfbdf48d
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:976 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1044 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1052 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1120 [linux/arm64]
+
+// It also defines `fd_set' and the FD_* macros for `select'.
+// `fd_set' type and related macros, and `select'/`pselect' declarations.
+//    Copyright (C) 1996-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 326e89bd7d56319b
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:1014 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1082 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1090 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1158 [linux/arm64]
+
+// Get definition of needed basic types.
+// bits/types.h -- definitions of __*_t types underlying *_t types.
+//    Copyright (C) 2002-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 8f99987097cb3c2b
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:1035 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1103 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1111 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1179 [linux/arm64]
+
+// Get __FD_* definitions.
+// Copyright (C) 1997-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice d904d9714bfe192d
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:1167 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:1257 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1234 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1339 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1243 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1333 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1310 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1415 [linux/arm64]
+
+// Now add the thread types.
+// Declaration of common pthread types for all architectures.
+//    Copyright (C) 2017-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 863e5c8835f15f3f
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:1186 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:1276 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1253 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1358 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1262 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1352 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1329 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1434 [linux/arm64]
+
+// For internal mutex and condition variable definitions.
+// Common threading primitives definitions for both POSIX and C11.
+//    Copyright (C) 2017-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 335e6f6e980d1147
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:1227 [linux/amd64]
+libc@v1.77.1/sys/types/types_linux_amd64.go:1317 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1303 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1393 [linux/amd64]
+
+// Copyright (C) 2002-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice c06296b8cf3c2afd
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:1360 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1436 [linux/amd64]
+
+// x86 internal mutex struct definitions.
+//    Copyright (C) 2019-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <http://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice fcedda0dd602290b
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_amd64.go:1400 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1476 [linux/amd64]
+
+// x86 internal rwlock struct definitions.
+//    Copyright (C) 2019-2020 Free Software Foundation, Inc.
+//
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <http://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 9561332f7a4a918b
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_arm64.go:1457 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1533 [linux/arm64]
+
+// Default mutex implementation struct definitions.
+//    Copyright (C) 2019-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <http://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 3619111d767a59f7
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_arm64.go:1294 [linux/arm64]
+libc@v1.77.1/sys/types/types_linux_arm64.go:1399 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1370 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1475 [linux/arm64]
+
+// Copyright (C) 2002-2020 Free Software Foundation, Inc.
+//
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 2f6c94e20543f403
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/sys/types/types_linux_arm64.go:1501 [linux/arm64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1577 [linux/arm64]
+
+// AArch64 internal rwlock struct definitions.
+//    Copyright (C) 2019-2020 Free Software Foundation, Inc.
+//
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <http://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice a6d0c0641d148978
+Classification evidence: BSD-3-Clause-form
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:127 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:127 [linux/arm64]
+
+// Public include file for the UUID library
+//
+// Copyright (C) 1996, 1997, 1998 Theodore Ts'o.
+//
+// %Begin-Header%
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+// 1. Redistributions of source code must retain the above copyright
+//    notice, and the entire permission notice in its entirety,
+//    including the disclaimer of warranties.
+// 2. Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimer in the
+//    documentation and/or other materials provided with the distribution.
+// 3. The name of the author may not be used to endorse or promote
+//    products derived from this software without specific prior
+//    written permission.
+//
+// THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+// WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+// OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, ALL OF
+// WHICH ARE HEREBY DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+// OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+// BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+// LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+// USE OF THIS SOFTWARE, EVEN IF NOT ADVISED OF THE POSSIBILITY OF SUCH
+// DAMAGE.
+// %End-Header%
+
+
+======================================================================
+Notice 95c52a18d57ec75d
+Classification evidence: MIT
+libc@v1.77.1/int128.go:9 [linux/amd64, linux/arm64]
+
+/*
+The MIT License (MIT)
+
+Copyright (c) 2019 Luke Champine
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+======================================================================
+Notice ac4183bee8623343
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1948 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:2051 [linux/arm64]
+
+// Definition of struct __locale_struct and __locale_t.
+//    Copyright (C) 1997-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//    Contributed by Ulrich Drepper <drepper@cygnus.com>, 1997.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 2ba159d934eb145b
+Classification evidence: Linux-man-pages-copyleft documentation
+libc@v1.77.1/libc_musl.go:69 [linux/amd64, linux/arm64]
+
+// Package libc provides run time support for programs generated by the
+// [ccgo] C to Go transpiler, version 4 or later.
+//
+// # Concurrency
+//
+// Many C libc functions are not thread safe. Such functions are not safe
+// for concurrent use by multiple goroutines in the Go translation as well.
+//
+// # Thread Local Storage
+//
+// C threads are modeled as Go goroutines.  Every such C thread, ie. a Go
+// goroutine, must use its own Thread Local Storage instance implemented by the
+// [TLS] type.
+//
+// # Signals
+//
+// Signal handling in translated C code is not coordinated with the Go runtime.
+// This is probably the same as when running C code via CGo.
+//
+// # Environmental variables
+//
+// This package synchronizes its environ with the current Go environ lazily and
+// only once.
+//
+// # libc API documentation copyright
+//
+// From [Linux man-pages Copyleft]
+//
+//	Permission is granted to make and distribute verbatim copies of this
+//	manual provided the copyright notice and this permission notice are
+//	preserved on all copies.
+//
+//	Permission is granted to copy and distribute modified versions of this
+//	manual under the conditions for verbatim copying, provided that the
+//	entire resulting derived work is distributed under the terms of a
+//	permission notice identical to this one.
+//
+//	Since the Linux kernel and libraries are constantly changing, this
+//	manual page may be incorrect or out-of-date. The author(s) assume no
+//	responsibility for errors or omissions, or for damages resulting from
+//	the use of the information contained herein. The author(s) may not have
+//	taken the same level of care in the production of this manual, which is
+//	licensed free of charge, as they might when working professionally.
+//
+//	Formatted or processed versions of this manual, if unaccompanied by the
+//	source, must acknowledge the copyright and authors of this work.
+//
+// [Linux man-pages Copyleft]: https://spdx.org/licenses/Linux-man-pages-copyleft.html
+// [ccgo]: http://modernc.org/ccgo/v4
+
+
+======================================================================
+Notice ed41f03e91cdf0d4
+Classification evidence: GPL-3.0-or-later WITH GCC-exception-3.1
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1724 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1827 [linux/arm64]
+
+// Copyright (C) 1989-2020 Free Software Foundation, Inc.
+//
+// This file is part of GCC.
+//
+// GCC is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3, or (at your option)
+// any later version.
+//
+// GCC is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// Under Section 7 of GPL version 3, you are granted additional
+// permissions described in the GCC Runtime Library Exception, version
+// 3.1, as published by the Free Software Foundation.
+//
+// You should have received a copy of the GNU General Public License and
+// a copy of the GCC Runtime Library Exception along with this program;
+// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+// <http://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 569a0d4157b10dd6
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1792 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1895 [linux/arm64]
+
+// This defines CLOCKS_PER_SEC, which is the number of processor clock
+//    ticks per second, and possibly a number of other constants.
+// System-dependent timing definitions.  Linux version.
+//    Copyright (C) 1996-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 1b34950b7630a445
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1930 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:2033 [linux/arm64]
+
+// Definition of locale_t.
+//    Copyright (C) 2017-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice 9a33ab2847249e8d
+Classification evidence: LGPL-2.1-or-later
+libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:1641 [linux/amd64]
+libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:1744 [linux/arm64]
+
+// `fd_set' type and related macros, and `select'/`pselect' declarations.
+//    Copyright (C) 1996-2020 Free Software Foundation, Inc.
+//    This file is part of the GNU C Library.
+//
+//    The GNU C Library is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU Lesser General Public
+//    License as published by the Free Software Foundation; either
+//    version 2.1 of the License, or (at your option) any later version.
+//
+//    The GNU C Library is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//    Lesser General Public License for more details.
+//
+//    You should have received a copy of the GNU Lesser General Public
+//    License along with the GNU C Library; if not, see
+//    <https://www.gnu.org/licenses/>.
+
+
+======================================================================
+Notice fd6e19fea4dd8383
+Classification evidence: BSD license reference (see referenced LICENSE)
+memory@v1.12.1/mmap_unix.go:1 [linux/amd64, linux/arm64]
+
+// Copyright 2011 Evan Shaw. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE-MMAP-GO file.
+

@@ -1,0 +1,159 @@
+
+======================================================================
+d9a162759d7edf6b
+sqlite@v1.60.1/convert.go:3
+
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+
+======================================================================
+0210a0ce49f8e7a9
+libc@v1.77.1/ccgo_linux_386.go:10996, libc@v1.77.1/ccgo_linux_amd64.go:10879, libc@v1.77.1/ccgo_linux_arm.go:11064, libc@v1.77.1/ccgo_linux_arm64.go:10802, libc@v1.77.1/ccgo_linux_loong64.go:10864, libc@v1.77.1/ccgo_linux_ppc64le.go:11033, libc@v1.77.1/ccgo_linux_riscv64.go:10775, libc@v1.77.1/ccgo_linux_s390x.go:10849
+
+/*-
+ * Copyright (c) 2003 Poul-Henning Kamp
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+======================================================================
+a6d0c0641d148978
+libc@v1.77.1/grp/grp_darwin_amd64.go:888, libc@v1.77.1/grp/grp_darwin_arm64.go:890, libc@v1.77.1/pwd/pwd_darwin_amd64.go:968, libc@v1.77.1/pwd/pwd_darwin_arm64.go:970, libc@v1.77.1/uuid/uuid/uuid_darwin_amd64.go:56, libc@v1.77.1/uuid/uuid/uuid_darwin_arm64.go:58, libc@v1.77.1/uuid/uuid/uuid_linux_386.go:119, libc@v1.77.1/uuid/uuid/uuid_linux_amd64.go:127, libc@v1.77.1/uuid/uuid/uuid_linux_arm.go:116, libc@v1.77.1/uuid/uuid/uuid_linux_arm64.go:127, libc@v1.77.1/uuid/uuid/uuid_linux_loong64.go:127, libc@v1.77.1/uuid/uuid/uuid_linux_mips64le.go:127, libc@v1.77.1/uuid/uuid/uuid_linux_ppc64le.go:140, libc@v1.77.1/uuid/uuid/uuid_linux_riscv64.go:127, libc@v1.77.1/uuid/uuid/uuid_linux_s390x.go:127
+
+// Public include file for the UUID library
+//
+// Copyright (C) 1996, 1997, 1998 Theodore Ts'o.
+//
+// %Begin-Header%
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+// 1. Redistributions of source code must retain the above copyright
+//    notice, and the entire permission notice in its entirety,
+//    including the disclaimer of warranties.
+// 2. Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimer in the
+//    documentation and/or other materials provided with the distribution.
+// 3. The name of the author may not be used to endorse or promote
+//    products derived from this software without specific prior
+//    written permission.
+//
+// THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+// WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+// OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, ALL OF
+// WHICH ARE HEREBY DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+// OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+// BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+// LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+// USE OF THIS SOFTWARE, EVEN IF NOT ADVISED OF THE POSSIBILITY OF SUCH
+// DAMAGE.
+// %End-Header%
+
+
+======================================================================
+95c52a18d57ec75d
+libc@v1.77.1/int128.go:9
+
+/*
+The MIT License (MIT)
+
+Copyright (c) 2019 Luke Champine
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+======================================================================
+2ba159d934eb145b
+libc@v1.77.1/libc_musl.go:69
+
+// Package libc provides run time support for programs generated by the
+// [ccgo] C to Go transpiler, version 4 or later.
+//
+// # Concurrency
+//
+// Many C libc functions are not thread safe. Such functions are not safe
+// for concurrent use by multiple goroutines in the Go translation as well.
+//
+// # Thread Local Storage
+//
+// C threads are modeled as Go goroutines.  Every such C thread, ie. a Go
+// goroutine, must use its own Thread Local Storage instance implemented by the
+// [TLS] type.
+//
+// # Signals
+//
+// Signal handling in translated C code is not coordinated with the Go runtime.
+// This is probably the same as when running C code via CGo.
+//
+// # Environmental variables
+//
+// This package synchronizes its environ with the current Go environ lazily and
+// only once.
+//
+// # libc API documentation copyright
+//
+// From [Linux man-pages Copyleft]
+//
+//	Permission is granted to make and distribute verbatim copies of this
+//	manual provided the copyright notice and this permission notice are
+//	preserved on all copies.
+//
+//	Permission is granted to copy and distribute modified versions of this
+//	manual under the conditions for verbatim copying, provided that the
+//	entire resulting derived work is distributed under the terms of a
+//	permission notice identical to this one.
+//
+//	Since the Linux kernel and libraries are constantly changing, this
+//	manual page may be incorrect or out-of-date. The author(s) assume no
+//	responsibility for errors or omissions, or for damages resulting from
+//	the use of the information contained herein. The author(s) may not have
+//	taken the same level of care in the production of this manual, which is
+//	licensed free of charge, as they might when working professionally.
+//
+//	Formatted or processed versions of this manual, if unaccompanied by the
+//	source, must acknowledge the copyright and authors of this work.
+//
+// [Linux man-pages Copyleft]: https://spdx.org/licenses/Linux-man-pages-copyleft.html
+// [ccgo]: http://modernc.org/ccgo/v4
+
