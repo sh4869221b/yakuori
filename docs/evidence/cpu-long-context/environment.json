@@ -1,0 +1,30 @@
+{
+  "date_utc": "2026-10-02",
+  "source_base_commit": "580a33ae79c23ce5de51d2e74455e9aeb415e761",
+  "source_worktree_modified": true,
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "host_ram_kib": 10206508,
+  "swap_kib": 0,
+  "gomaxprocs": 2,
+  "soft_go_memory_limit": "2300MiB",
+  "rss_watchdog_kib": 3145728,
+  "host_available_floor_kib": 1048576,
+  "supervisor_poll_seconds": 0.05,
+  "process_wall_limit_seconds": 360,
+  "normal_generation_deadline_seconds": 300,
+  "deadline_probe_milliseconds": 100,
+  "binaries": {
+    "cpuspike": "8bdfb0a7345b8bc25967a28985d0ad1abbfedce65a75abe3ace3e0e797f9e5b2",
+    "cpuspike-next": "4607ac7d9fbaf999d67b14f9d633d5e8c21a8c3b9abdcb2a907651dcbdbb224d"
+  },
+  "stages_by_binary": {
+    "cpuspike": [
+      1024,
+      4096
+    ],
+    "cpuspike-next": [
+      8192,
+      16384
+    ]
+  }
+}

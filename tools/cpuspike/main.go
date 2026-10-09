@@ -271,6 +271,9 @@ func probe(path string) (r report, err error) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "long" {
+		os.Exit(longMain(os.Args[2:]))
+	}
 	if len(os.Args) != 2 {
 		fmt.Fprintln(os.Stderr, "usage: cpuspike /absolute/path/to/pinned-model.gguf")
 		os.Exit(2)

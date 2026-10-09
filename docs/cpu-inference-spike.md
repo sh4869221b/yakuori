@@ -14,6 +14,10 @@ contracts and reproducible evidence are documented in this repository. No produc
 limits from representative measurements. #3 does not prove full-window quality,
 real MOD translation, hard real-time cancellation, or arm64 runtime support.
 
+A separate [bounded long-context experiment](cpu-long-context.md) stages actual
+token-counted prompts and records time, RSS, and deadline drain latency. Its measured
+results supplement this short-prompt report; neither report chooses #14 product caps.
+
 ## Reproducible pins and rights
 
 | Component | Pin / source | License |
@@ -81,8 +85,12 @@ all builds and tests have CGO=0. The Docker CI runs the exact required model; it
 cannot report success by skipping model-dependent assertions. Ordinary `go test`
 only runs deterministic classification/context/fixture-gate unit tests and must
 not be reported as evidence of real inference. The dedicated workflow supplies
-that evidence separately. It uses a 20-minute job limit and each normal probe
-request a 2-minute deadline; these are experimental safeguards, not MVP defaults.
+that evidence separately. Its long-context smoke uses 1K and 4K stages with the
+supervisor defaults: a 300-second normal request deadline, 360-second process
+wall, 3 GiB sampled RSS limit, 1 GiB host-available floor, and 2300 MiB soft
+`GOMEMLIMIT`. The workflow has a 20-minute job limit; its long-context smoke
+container gets 4 GiB with no swap, 2 CPUs, and disabled networking. These are
+experimental safeguards, not MVP defaults.
 The model fixture can be removed from local disk after the probe. Removing the
 Docker image removes its copy; no user model registry or TM state was created.
 
@@ -127,14 +135,19 @@ Loaded `Config().MaxPositions` is **32,768** for this GGUF. The CPU model's RoPE
 architecture is not a separate smaller resident GPU cap. The probe verifies this
 loaded value and rejects `prompt + output > limit` before calling the backend,
 with overflow-safe subtraction; boundary cases 32,767+1 and 32,768+1 are tested.
-**This verifies metadata and admission arithmetic, not a successful 32K prefill.**
-No full-window performance, memory ceiling, or long-context correctness claim is
-made. The [plain CPU implementation](https://github.com/townsendmerino/goinfer/blob/v0.20.0/decoder/model.go)
+This metadata and admission check is complemented by a separate limited synthetic
+run: a 32,766-token prompt with two output tokens reserved completed a controlled
+Stop on a Ryzen 7 7700X under an 8 GiB container budget. See the
+[extended long-context results](cpu-long-context.md#extended-local-results-2026-10-10)
+and its [raw reports](evidence/cpu-long-context/ryzen-7700x-extended/). This is one
+full-context forward/Stop observation for the synthetic fixture, not natural
+full-window generation, translation quality, a general performance guarantee, or
+a memory ceiling. The [plain CPU implementation](https://github.com/townsendmerino/goinfer/blob/v0.20.0/decoder/model.go)
 and [prefill](https://github.com/townsendmerino/goinfer/blob/v0.20.0/decoder/forwardn.go)
 do not provide an application admission gate enforcing that sum; the future wrapper
 must enforce it itself and must not infer a supported window from success on a
-short prompt. #14 remains the gate for a measured smaller effective operational
-cap and finite input/unit/segment/time bounds. Full-window execution remains **not run**.
+short prompt. #14 remains the gate for an effective operational cap and finite
+input/unit/segment/time bounds.
 
 ### Terminal mapping and cancellation
 
@@ -162,10 +175,11 @@ process isolation or an upstream API change; it is not silently assumed here.
 ## Remaining gates / decision points
 
 - CPU short-prompt feasibility: passed locally; clean CI status is reported per PR.
-- Model context metadata and fail-closed budget gate: passed. Full-window runtime:
-  **not run**; no unmeasured cap adopted. If #3 is interpreted as requiring successful
-  inference at the entire advertised 32K window, keep that checklist item open until
-  a separately budgeted long-context experiment succeeds.
+- Model context metadata and fail-closed budget gate: passed. A controlled synthetic
+  Stop completed at 32,766 prompt tokens with two output tokens reserved in the
+  limited Ryzen run linked above. It does not measure translation quality or select
+  an operational cap; #12 and #14 still need their production and representative
+  input gates.
 - Linux arm64: compile only. No runtime/ISA or speed claim.
 - Non-cancellation partial backend fault: classification unit fixture only; real
   partial cancellation+error is exercised. No claim of injected native decoder fault.

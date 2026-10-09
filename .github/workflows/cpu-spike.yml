@@ -4,6 +4,8 @@ on:
     paths:
       - 'tools/cpuspike/**'
       - 'ci/cpu-spike.Dockerfile'
+      - 'ci/run-long-context.py'
+      - 'ci/test-long-context-supervisor.py'
       - '.github/workflows/cpu-spike.yml'
       - 'go.mod'
       - 'go.sum'
@@ -20,3 +22,18 @@ jobs:
         run: docker build --progress=plain -f ci/cpu-spike.Dockerfile -t yakuori-cpu-spike .
       - name: Real CPU generation and failure semantics without network
         run: docker run --rm --network none --memory 4g --cpus 2 yakuori-cpu-spike
+      - name: Bounded 1K and 4K token-counted CPU experiment
+        run: |
+          mkdir -p long-context-results
+          docker run --rm --network none --memory 4g --memory-swap 4g --cpus 2 \
+            -v "$PWD/long-context-results:/evidence" --entrypoint python3 \
+            yakuori-cpu-spike /src/ci/run-long-context.py /cpuspike /model.gguf \
+            /evidence --stages 1024,4096
+      - name: Show bounded long-context evidence even on failure
+        if: always()
+        run: |
+          for file in long-context-results/*; do
+            [ -f "$file" ] || continue
+            echo "=== $file ==="
+            cat "$file"
+          done
