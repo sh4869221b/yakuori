@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -21,7 +22,7 @@ import (
 )
 
 // longProbe is an opt-in synthetic capacity experiment, never a translation gate.
-func longProbe(path string, target int, mode string) error {
+func longProbe(path string, target int, mode string, requestTimeout time.Duration) error {
 	if target < 32 || target > 32766 || (mode != "stop" && mode != "deadline") {
 		return fmt.Errorf("target must be 32..32766; mode stop or deadline")
 	}
@@ -109,7 +110,7 @@ func longProbe(path string, target int, mode string) error {
 		}
 		logits[id] = 0
 	}}
-	limit := 5 * time.Minute
+	limit := requestTimeout
 	if mode == "deadline" {
 		limit = 100 * time.Millisecond
 	}
@@ -138,13 +139,22 @@ func longProbe(path string, target int, mode string) error {
 }
 
 func longMain(args []string) int {
-	if len(args) != 3 {
-		fmt.Fprintln(os.Stderr, "long mode: model target-tokens stop|deadline")
+	if len(args) < 3 {
+		fmt.Fprintln(os.Stderr, "long mode: model target-tokens stop|deadline [--request-timeout=5m]")
+		return 2
+	}
+	flags := flag.NewFlagSet("long", flag.ContinueOnError)
+	requestTimeout := flags.Duration("request-timeout", 5*time.Minute, "normal request timeout")
+	if err := flags.Parse(args[3:]); err != nil {
+		return 2
+	}
+	if *requestTimeout <= 0 || flags.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "request timeout must be positive; unexpected positional arguments are not allowed")
 		return 2
 	}
 	n, err := strconv.Atoi(args[1])
 	if err == nil {
-		err = longProbe(args[0], n, args[2])
+		err = longProbe(args[0], n, args[2], *requestTimeout)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
