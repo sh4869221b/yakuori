@@ -1,0 +1,34 @@
+[
+  {
+    "target": 16384,
+    "mode": "stop",
+    "returncode": 0,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 2160812,
+    "process_wall_seconds": 367.168
+  },
+  {
+    "target": 16384,
+    "mode": "deadline",
+    "returncode": 0,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 1717120,
+    "process_wall_seconds": 17.829
+  },
+  {
+    "target": 32766,
+    "mode": "stop",
+    "returncode": 0,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 4019400,
+    "process_wall_seconds": 1286.257
+  },
+  {
+    "target": 32766,
+    "mode": "deadline",
+    "returncode": 0,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 2864960,
+    "process_wall_seconds": 54.799
+  }
+]
