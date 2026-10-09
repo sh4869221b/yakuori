@@ -1,0 +1,24 @@
+;meta[language=en]
+; id      |key(hex)|key(str)| text
+;
+; 4573 is my domain
+;
+2114573000|        |bk_cast_aard|Cast Aard
+2114573001|        |bk_cast_yrden|Cast Yrden
+2114573002|        |bk_cast_igni|Cast Igni
+2114573003|        |bk_cast_quen|Cast Quen
+2114573004|        |bk_cast_axii|Cast Axii
+2114573005|        |bk_toggle_quickslot|Toggle Quickslot
+2114573006|        |bk_draw_auto|Draw Auto Sword
+2114573007|        |bk_sheathe|Sheathe Auto
+2114573008|        |bk_cancel_aiming|Cancel Aiming
+2114573009|        |bk_target_nearest|Target Nearest
+2114573010|        |bk_target_next|Next Target (Cycle)
+2114573011|        |bk_target_discard|Discard Target
+2114573012|        |bk_throw_bomb1|Throw Bomb 1
+2114573013|        |bk_throw_bomb2|Throw Bomb 2
+2114573014|        |bk_switch_bomb1|Switch to Bomb 1
+2114573015|        |bk_switch_bomb2|Switch to Bomb 2
+2114573016|        |bk_switch_crossbow|Switch to Crossbow
+2114573017|        |bk_switch_pocket1|Switch to Pocket 1
+2114573018|        |bk_switch_pocket2|Switch to Pocket 2

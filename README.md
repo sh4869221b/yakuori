@@ -4,13 +4,11 @@
 
 ## 状態
 
-#2のGo基盤を実装中です。最小CLI（helpとpath表示のみのdoctor）、XDG設定path契約、CGO-free CIを用意しています。翻訳・model・TM・実ゲーム検証・releaseはまだありません。
+#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）と、全件生成・保護復元・最終artifact検証・一括TM commitを接続するCore（#11）を実装しています。text Adapterは全文1unitを扱い、最終検証とcommit後に訳bytesをstdoutへ一括出力します。EngineとTMのfakeはテスト内だけで使用します。通常の `localize` はbackend未接続のため、出力指定の解析後も `localize pipeline is not implemented` でno-I/O終了します。実model、SQLite TM接続・hit再検証、実ゲーム検証、releaseはまだありません。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
-- [正本: 設計書 Draft v0.2](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5)
-- [設計レビュー対応記録](https://chatgpt.com/space/page_020ed32621908191acfa75ea9b11e340)
 
-設計Pageが正本で、閲覧には所有者のアクセス権が必要です。このrepoはコードと再現用技術資料を扱い、正本の全文コピーは置きません。旧HTML/Markdownは履歴資料です。
+このrepoはコードと再現用技術資料を扱います。非公開の設計資料の全文は含みません。実装済みの契約・再現手順・制限は、このREADMEとリンク先のrepo内ドキュメントを参照してください。
 
 ## v1の採用方針
 
@@ -38,7 +36,9 @@ CGO_ENABLED=0 GOTOOLCHAIN=local go vet ./...
 sh ci/verify.sh
 ```
 
-`doctor`はXDGのconfig/data/cache/stateディレクトリを表示するだけで、作成・config読込み・model検証は行いません。現在は設定file、TM、registry、model、staging、backupを作らないため、削除対象もありません。具体的な保存・復旧・削除手順は該当実装PRで追加します。
+`doctor`はXDGのconfig/data/cache/stateディレクトリを表示するだけで、作成・config読込み・model検証は行いません。`localize` はまだsource/configを読み込まず、publisherも呼びません。実装済みprimitiveはoutput parentにmode `0700` の `.yakuori-run-<runID>` を作り、その中へmode `0600` の候補stageと `record.json` を保存します。記録に本文やpromptは含めず、path・identity・hash・size・phase等のmetadataだけを含めます。in-placeの原文backupはsourceと同じdirectoryに置き、成功後も保持します。
+
+失敗時のrun/stage/recordは自動削除しません。`Prepare` は新しいsource snapshotの前に記録と実fileを照合し、安全に戻せる原文backupを `RENAME_NOREPLACE` で復元します。`Publish` もbackup移動後の通常error・取消しで同じ復旧を試みます。復元時はbackupを原文pathへ移動し、公開済みの場合はbackupを保持します。旧stageの自動公開は行いません。記録の欠落・破損やfileの競合は `RecoveryError` と診断pathを返し、証拠を残して手動確認で停止します。`Run.Close` はFDとlockだけを解放し、cleanup commandはありません。CLIはまだこれらのAPIを呼びません。実装範囲と検証結果は[Linux publication調査記録](docs/research/linux-publication.md)を参照してください。
 
 CLIのexit code、stdout/stderr、設定のfallback、fake試験の入口、clean CIの再現方法・制限は[基盤契約](docs/foundation.md)を参照してください。Linux arm64はcross-buildのみで、実行対応は未検証です。詳細な非目標・依存関係・受入れ試験はissue indexを参照してください。
 
@@ -46,3 +46,7 @@ CLIのexit code、stdout/stderr、設定のfallback、fake試験の入口、clea
 
 The test-only [SQLite storage gate](docs/sqlite-feasibility.md) records driver pin,
 rollback/corruption protection and finite-wait evidence for #4. It does not enable TM.
+
+## 公開準備と権利表示
+
+Yakuoriの原著コード・文書は[MIT License](LICENSE)です。第三者のfixture・依存コード・モデルには各権利者の条件が適用され、MITへの変更を意味しません。研究用Rust oracleが依存するGPL-3.0-onlyのw3stringsは独立した別ツールで、本体CLIへリンクしません。[第三者通知](THIRD_PARTY_NOTICES.md)と[公開前チェック](docs/public-readiness.md)を参照してください。現時点では完成した翻訳アプリや検証済みreleaseを提供していません。

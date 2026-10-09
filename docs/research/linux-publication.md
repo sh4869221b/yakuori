@@ -1,8 +1,9 @@
 # Linux publication / recovery contract (issue #8)
 
-Status: bounded technical investigation, not the #9 publisher or #10 recovery implementation.
-Canonical product design: [Draft v0.2 §§5,9,15](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5).
-The probe is deliberately unexported and is not called by the CLI. No new runtime dependency.
+Status (2026-10-04): the Linux #9 publisher primitive and #10 strict schema-v1 record reader/recovery are implemented for create, replace and in-place modes. The CLI only parses those modes and refuses to run the pipeline; #11 pipeline connection, translation and #16 TM integration are not implemented.
+Design reference: maintainer’s private Draft v0.2, sections 5/9/15.
+The public API contract and reproduction evidence are documented below.
+The historical probe below remains separate, unexported research code and is not called by the CLI. No new runtime dependency.
 
 ## Adopted API and environment gate
 
@@ -12,27 +13,25 @@ The probe is deliberately unexported and is not called by the CLI. No new runtim
 - New output, source-to-backup and backup restoration: `renameat2(...,
   RENAME_NOREPLACE)`. An existence check is never the no-clobber guarantee.
 - Explicit replacement of a *different* existing output: `renameat2(..., 0)`
-  (`renameat` semantics). Never unlink first. Never copy/delete on EXDEV,
+  (`renameat` semantics). If OUT is absent, even with `--replace-output`, create
+  it with `RENAME_NOREPLACE`. Never unlink first. Never copy/delete on EXDEV,
   ENOSYS, EOPNOTSUPP, EINVAL or any other error. Errors are non-zero with
   old output/stage retained as evidence. No automatic retry of translation.
 - Use opened directory FDs and single-component names. Source, backup and final
   live in the same directory in same-path mode; stage is inside a private 0700
   run directory beneath the output directory. Cross-mount publication is refused,
   even when device identifiers happen to match through a bind mount.
-- Measured persistent filesystem: local ext4, with the CI mount matrix below as
-  evidence; tmpfs is the tested volatile development target. Overlay is tested as
-  a development filesystem only. This is **research coverage, not approval of an
-  ext4-only product policy**. Btrfs and XFS are kernel-documented candidates but
-  untested by this PR. The user's CachyOS environment uses Btrfs subvolumes
-  (`@` / `@home`), so Btrfs qualification is a practical gate before claiming the
-  publisher supports that environment. Do not reject it permanently based on a
-  missing test here, or silently mark it supported from kernel documentation.
-- #9 needs a demonstrated local-filesystem support matrix and disposable
-  same-directory capability checks before touching real paths. Unqualified
-  mounts must fail closed until qualified, without copy/delete fallback. The
-  initial production support set remains open until the Btrfs gate is resolved
-  or the user explicitly accepts a narrower product scope. NFS/CIFS/FUSE and
-  other distributed/unknown mounts have no demonstrated contract in this spike.
+- Initial production targets, approved 2026-10-03: ext4 and conditional Btrfs.
+  The historical research-probe ext4 CI and native Btrfs `@home`/`@tmp`
+  measurements below qualify only their measured environments, not the product
+  publisher. Btrfs adoption requires a passing product qualification
+  and disposable same-directory capability checks at the publication destination
+  before real paths are touched. tmpfs and overlay are development-only targets;
+  XFS, NFS/CIFS/FUSE and other filesystems remain unqualified.
+- #9 must implement the disposable same-directory capability checks for
+  no-replace and atomic replacement. Unqualified mounts or unavailable
+  capabilities fail closed, without copy/delete fallback. These checks are not
+  implemented by this research probe.
   Passing a probe is evidence for that mounted environment, not proof of all
   kernels, mount options or hostile concurrent writers.
 
@@ -72,43 +71,75 @@ explains why overlay results are not a certification of lower/upper configuratio
    directory replacement, already-open writable FDs, or uncooperative writers.
    The probe demonstrates changed-content detection, not elimination of this race.
 
-## CLI mapping (engineering recommendation for #9)
+## CLI mapping (approved 2026-10-03 for #9)
 
-Existing approved behavior maps to the following mutually exclusive modes; these
-options are **not implemented** by this PR:
+The CLI parser accepts these mutually exclusive forms and maps them to
+`publication.Options`. A valid form currently exits 1 with
+`localize pipeline is not implemented`, empty stdout, and no source/config or
+publisher I/O. Invalid syntax exits 2 with a generic diagnostic. The table
+describes the intended publication behavior once the pipeline is connected:
 
 | Form | Behavior |
 | --- | --- |
 | `localize --output OUT SOURCE` | OUT must not exist; no-replace publish |
-| `localize --output OUT --replace-output SOURCE` | explicit atomic replacement, OUT distinct from SOURCE; absent OUT may be created |
+| `localize --output OUT --replace-output SOURCE` | atomic replacement of a different existing OUT; absent OUT is created with no-replace |
 | `localize --in-place SOURCE` | same validated path; preserve original backup, then no-replace publish |
 
 Reject `--in-place` together with `--output` or `--replace-output`; reject
-source=output in ordinary mode and explain `--in-place`. These names make the
-already-approved distinction explicit, without adding a force/delete bypass.
+`--replace-output` without `--output`. Reject source=output in ordinary mode
+and explain `--in-place`; symlink/hardlink aliases are rejected, not admitted as
+the same validated path. Existing backup collisions are never overwritten.
 A separate automatic cleanup/backup deletion/recovery command is not introduced.
 Recovery runs before new localization as the design requires. Any later proposal
 to remove backup, follow symlinks or broaden replacement needs product review.
 
 ## Run record and backup naming
 
-Run ID: 128 random bits as 32 lower-case hex characters from `crypto/rand`; fail
-on randomness error. Private directory `.yakuori-run-<runID>` is mkdir-exclusive
-0700 in the final parent. Backup basename `.yakuori-backup-<runID>` is fixed length
-(to avoid NAME_MAX failures with long original names), **in the original directory**.
-The run record supplies the original basename. Never reuse/overwrite a colliding
-run directory or backup. A backup collision fails before source movement; keeping
-it for inspection is preferable to silently choosing an unrecorded new name.
-Backup stays after success. This is an ordinary renamed original, not a copy.
+The #9 writer generates a 128-bit random run ID as 32 lower-case hex characters
+from `crypto/rand`. Private directory `.yakuori-run-<runID>` is created mode
+`0700` in the output parent. Candidate translated artifact `stage` and
+`record.json` are mode `0600` in that directory. The source bytes remain in the
+source file until publication; only in-place mode moves the original to backup.
+The stage contains the candidate artifact, not the source/prompt metadata record.
+The record contains paths, identities, SHA-256, size, mode and phase metadata,
+not source bytes, translated bytes or prompts. The #10 reader validates this
+record before filesystem reconciliation.
+
+Backup basename `.yakuori-backup-<runID>` is fixed length (to avoid NAME_MAX
+failures with long original names), **in the original directory**. The record
+supplies the original basename. Never reuse/overwrite a colliding run directory
+or backup. A backup collision fails before source movement. If created, backup
+stays after confirmed publication; safe restoration moves it back to the original
+path. This is an ordinary renamed original, not a copy.
+
+`Run.Close` releases opened file descriptors and locks but never removes run,
+stage, record, backup, source or output evidence. Capability checks remove only
+their own disposable fixtures. `Prepare` scans retained run records under the
+output-parent lock before taking a new source snapshot. It validates all
+candidates before mutation, skips valid terminal history and different targets,
+and refuses multiple pending records for one target. Missing records, including
+run directories retained after failed preparation, require manual reconciliation.
+There is no cleanup command.
+
+If an error or cancellation follows the in-place source rename, `Publish`
+reconciles once while holding the directory locks, even with a cancelled context.
+Safe restoration returns `Restored` and retains the original error. A conflict
+keeps `SourceBackedUp`; a recovery or completion-record failure adds a typed
+`RecoveryError` with the observed result, reason, run/record/final/backup paths
+and cause. A completed stage rename keeps `Published` even on later error and
+never rolls back. `Publish` remains the caller's post-#16-TM-commit step; the
+current CLI is not that caller.
 
 Record schema v1, mode, run ID, absolute source/output/stage/backup paths, parent
 identities, source and stage identity+SHA-256+size, existing-output identity/hash
 or explicit absence, and phase/last completed operation. No text or prompt.
-Record the selected backup destination before any source rename. Use a bounded
-JSON file with strict fields, valid schema and validated relative basenames.
-Paths outside this run/recorded parent, mismatched IDs, duplicates, malformed or
-truncated records are manual-no-mutation errors. Hashes establish content identity,
-not authorship; also require inode/mode/link-count identity evidence.
+The #9 writer records the selected backup destination before any source rename
+and writes a bounded JSON snapshot. The #10 reader enforces a 64 KiB limit,
+exact fields without duplicates, valid schema and
+validated relative basenames; treat paths outside this run/recorded parent,
+mismatched IDs, duplicates, malformed or truncated records as manual-no-mutation
+errors. Hashes establish content identity, not authorship; also require
+inode/mode/link-count identity evidence.
 
 Write each record snapshot into a fresh 0600 temp within the private run directory,
 check full write, Sync and Close, rename over record, and sync the directory where
@@ -117,16 +148,18 @@ write/close blocks the destructive transition. Filesystem evidence has priority
 when a rename completed but the next phase record did not. Record updates are
 single renames too. These precautions do **not** claim power-loss durability.
 
-## Stop/recovery table
+## Implemented stop/recovery behavior (#10)
 
-All recovery requires valid record, directory locks, trusted parent identities,
+The publication/recovery actions below are implemented; import, generation and
+TM ordering remain the future pipeline caller's contract. The CLI does not call
+these APIs. All recovery requires valid record, directory locks, trusted parent identities,
 regular single-link files and the exact recorded hashes/identities. No old stage
 is automatically published. If evidence is ambiguous: retain everything, non-zero,
 print run ID, final/backup paths and the conflict reason without file bodies.
 
 | Stop/error boundary | Evidence / action on next run |
 | --- | --- |
-| Preflight, import, generation, any unit failure/cancellation | No TM writes or output mutation; leave source/output intact |
+| New preflight after recovery, import, generation, any unit failure/cancellation | No TM writes or new publication; leave source/output intact |
 | Stage create/write/flush/close | No TM commit or publish; partial stage cannot qualify as validated |
 | Final validation | Failure means no TM writes/publish; stage may be inspected then discarded only under owned-file policy |
 | Before/during TM commit | No publish until commit success; ambiguous commit is reconciled by DB contract, not assumed rolled back |
@@ -138,7 +171,7 @@ print run ID, final/backup paths and the conflict reason without file bodies.
 | Second rename succeeded, record stale | Final matches recorded stage inode/hash, backup matches original, stage absent: published; keep backup |
 | Published, diagnostic/stdout/record update fails | Report publication separately from later command failure; never delete or roll back published result |
 | Final exists with other bytes, backup mismatch, extra links, corrupt/missing record | Manual-no-mutation; keep all evidence. Missing record never authorizes guessing |
-| Restore succeeded, completion-record write fails | Original at final, backup absent: unchanged/restored; never infer publication solely from hash |
+| Restore succeeded, completion-record write fails | Return Restored with error. A stale pending record with original at final + backup absent can become abandoned; an already-written terminal record remains valid history. Never infer publication solely from hash |
 
 When original and translated hashes coincide, distinguish source/stage inode,
 backup and stage presence. A matching hash alone is never sufficient. For ordinary
@@ -146,6 +179,13 @@ output, final matching the recorded stage inode/hash with stage absent establish
 publication; previous-output identity with intact stage means not yet published;
 anything else is manual-no-mutation. Never replay explicit replacement over a
 newly arrived unrelated output during recovery.
+
+Terminal `published`, `restored` and `abandoned` records remain valid history after
+structural validation, even when later legitimate publications change the final.
+An original final with matching identity/hash and no backup can be abandoned
+after a failed restoration-record update even if the old stage is absent; if
+the stage exists, its recorded identity/hash must still match. Old stages are
+never replayed.
 
 **The two same-path renames are not atomic together.** Between them final is
 absent and original exists at backup. On safe restoration backup is moved back,
@@ -155,7 +195,7 @@ it does not roll back. stdout write cannot retract delivered bytes and is outsid
 file atomicity. Power-off/reboot durability and arbitrary external-writer
 coordination remain out of scope.
 
-## Reproduction and observed results
+## Historical research probe reproduction and results
 
 Fixtures are generated ASCII strings in temporary directories; no external data
 or license-dependent game files. Toolchain pin and digest are in `ci/Dockerfile`.
@@ -196,9 +236,10 @@ GOOS=linux GOARCH=arm64 go test -c -o /tmp/publication-arm64.test ./research/pub
 
 Do not mark the product R3/R4 gates passed from this spike. The measured filesystem
 matrix is deliberately narrower than Linux API documentation; unmeasured mounts
-cannot silently enter the v1 support claim. Btrfs qualification is still open.
+cannot silently enter the v1 support claim. The additional Btrfs measurement is
+recorded separately below.
 
-### CI ext4 qualification
+### Historical CI ext4 research-probe qualification
 
 [Non-root filesystem run 36979000748](https://github.com/sh4869221b/yakuori/actions/runs/36979000748)
 on head `7ec49f9c9490d4b410124439f9c2f806e8f6f63e` passed the matrix on
@@ -213,3 +254,115 @@ passed the clean CGO-free build/test/vet/cgo guard. The PR workflow checks the
 synthetic merge against unchanged base `72fe380b`; this is CI associated with the
 stated head, not an arm64 execution or power-loss test. These options and results
 do not imply power-loss durability, nor prescribe users' mount settings.
+
+### Historical native Btrfs research-probe qualification
+
+2026-10-03, Linux `7.3.0-rc4-1-cachyos-rc`, amd64, UID 1000, official
+`go version go1.27.1 linux/amd64`, `CGO_ENABLED=0`, `GOTOOLCHAIN=local`.
+The host `/usr/bin/go` reports `go1.27.1-X:nodwarf5` and was not used for these
+tests. The existing `ci/Dockerfile` built successfully, including its existing
+`ci/verify.sh` gate, and supplied the official toolchain. Tests below then ran
+on the native host, without added bind mounts or root execution.
+
+`findmnt -T` identified `/home` as `/dev/nvme0n1p2[/@home]`, subvolid 257,
+and `/var/tmp` as `/dev/nvme0n1p2[/@tmp]`, subvolid 261. Both are Btrfs with
+`rw,noatime,compress=zstd:3,ssd,discard=async,space_cache=v2,commit=120` and their
+respective `subvol`/`subvolid` options. `/tmp` is tmpfs with
+`rw,noatime,inode64,huge=advise`. These are observed settings, not recommendations.
+
+| Fixture mount | Same-directory matrix | `TestPermissionFailure` | `TestCrossMountRejected` to checkout (`@home`) |
+| --- | --- | --- | --- |
+| Btrfs `@home` (magic `0x9123683e`) | PASS | PASS: EACCES, both files retained | SKIP: fixture and checkout share device/mount |
+| Btrfs `@tmp` (magic `0x9123683e`) | PASS | PASS: EACCES, both files retained | PASS: actual EXDEV across subvolumes, stage `new` and destination `old` retained |
+| tmpfs (magic `0x1021994`) | PASS | PASS: EACCES, both files retained | PASS: actual EXDEV to Btrfs, stage `new` and destination `old` retained |
+
+All three runs exited 0. Each passed `TestNoReplaceAndBackupCollision`,
+`TestAtomicReplaceOpenReader`, `TestConcurrentNoReplace`,
+`TestAliasAndChangedSource`, the nine `TestRecoveryTable` cases,
+`TestRecoveryNeverClobbersNewWriter`, `TestStoppedProcess` at prepared/backed-up/
+published boundaries, `TestDirectoryLock`, `TestFilesystemIdentity`, and
+`TestUnsupportedFlagsPreserveBytes`. The existing collision, EACCES, invalid-flag
+and EXDEV tests assert the retained bytes. No failed test or root permission skip
+occurred. The `@home` EXDEV skip is not counted as a pass; the other two runs
+exercise the refusal directly. The `@tmp` run did not take the same-device skip,
+so the planned test-only require-EXDEV override was unnecessary and no probe code
+was changed.
+
+Exact preparation and invocations from the checkout
+`<checkout>/yakuori` (machine-specific path omitted):
+
+```sh
+id -u
+uname -sr
+go version
+findmnt -T "$PWD" -o TARGET,SOURCE,FSTYPE,OPTIONS
+findmnt -T /var/tmp -o TARGET,SOURCE,FSTYPE,OPTIONS
+findmnt -T /tmp -o TARGET,SOURCE,FSTYPE,OPTIONS
+docker build --progress=plain -t yakuori-publication-probe -f ci/Dockerfile .
+probe_home=$(mktemp -d "$PWD/.publication-probe-XXXXXX")
+probe_var_tmp=$(mktemp -d /var/tmp/yakuori-publication-XXXXXX)
+probe_tmpfs=$(mktemp -d /tmp/yakuori-publication-XXXXXX)
+probe_toolchain=$(mktemp -d /tmp/yakuori-publication-go-XXXXXX)
+findmnt -T "$probe_home" -o TARGET,SOURCE,FSTYPE,OPTIONS
+findmnt -T "$probe_var_tmp" -o TARGET,SOURCE,FSTYPE,OPTIONS
+findmnt -T "$probe_tmpfs" -o TARGET,SOURCE,FSTYPE,OPTIONS
+probe_container=$(docker create yakuori-publication-probe)
+docker cp "$probe_container:/usr/local/go/." "$probe_toolchain"
+docker rm "$probe_container"
+export PATH="$probe_toolchain/bin:$PATH" CGO_ENABLED=0 GOTOOLCHAIN=local
+go version
+go env CGO_ENABLED GOTOOLCHAIN
+TMPDIR="$probe_home" go test -count=1 -v ./research/publication
+TMPDIR="$probe_var_tmp" go test -count=1 -v ./research/publication
+TMPDIR="$probe_tmpfs" go test -count=1 -v ./research/publication
+sh ci/verify.sh
+go vet ./research/publication
+GOOS=linux GOARCH=arm64 go test -c -o "$probe_tmpfs/publication-arm64.test" ./research/publication
+gofmt -l research/publication
+git diff --check
+```
+
+Follow-up native verification passed: `sh ci/verify.sh` exited 0, covering
+build/test/vet, the cgo scan and negative guard self-test, Linux arm64 application
+and SQLite test cross-builds. The guard's `cgo import forbidden` / `exit status 1`
+for its disposable forbidden fixture was the expected rejection, not a failed
+gate. `go vet ./research/publication` exited 0; `gofmt -l research/publication`
+exited 0 with no output. The publication test cross-compile succeeded and produced
+an ARM aarch64 ELF binary; this is not arm64 runtime evidence. `git diff --check`
+passed. No probe code changed, so the filesystem matrices were not repeated.
+
+Cleanup completed: the three owned fixture directories, extracted toolchain,
+publication arm64 test binary, and newly created `yakuori`/`bin` build outputs
+were removed. `yakuori` and `bin` were absent before verification. Absence checks
+passed for all owned resources and the cgo guard fixture; no individual
+cross-mount fixtures remained. The extraction container was removed and the
+shared `yakuori-publication-probe` image/cache was retained. No existing source,
+backup or mount was changed.
+
+This qualifies the measured `@home`/`@tmp` environment for the bounded probe.
+It does not qualify the root subvolume `@`, every Btrfs configuration, arm64
+runtime, power-loss durability, or the product publisher/recovery/pipeline gates
+described above.
+
+### Current product publisher validation (2026-10-04)
+
+Task 4 ran `go test -count=1 -v ./internal/cli ./cmd/yakuori`; built-binary QA
+observed valid `localize --in-place SOURCE` exit 1 with empty stdout, invalid
+`localize --replace-output SOURCE` exit 2, and help/doctor exit 0. Source and
+existing output bytes remained unchanged. The command still performs no source
+or config I/O.
+
+As UID 1000 with official Go 1.27.1 and `CGO_ENABLED=0`, the native Btrfs
+`/home` (`@home`) run passed `go test -count=1 -v ./internal/publication ./internal/artifact`;
+the `/var/tmp` (`@tmp`) run passed `go test -count=1 -v ./internal/publication`.
+`TestUnsupportedFilesystem` was the only skip in each supported-mount run. On
+tmpfs, the dedicated refusal invocation
+`go test -count=1 -run '^TestUnsupportedFilesystem$' -v ./internal/publication`
+passed. `sh ci/verify.sh`, the `ci/Dockerfile` build, `go vet ./internal/publication`,
+and the Linux arm64 test cross-compile passed; the cross-compile is not arm64
+runtime evidence. The
+`.github/workflows/publication-probe.yml` `non-root-filesystems` job runs the
+product suite on ext4; the corresponding PR CI run is the authoritative hosted
+result, and these local Btrfs results do not substitute for it. These product
+checks do not connect TM commit after #16 or the full pipeline fault suite in
+#21. Power-loss durability remains outside v1 scope.

@@ -1,0 +1,92 @@
+[
+  {
+    "repository": "townsendmerino/goinfer",
+    "version_or_revision": "v0.20.0",
+    "license_file": "LICENSE",
+    "git_blob_sha1": "0bdd7a2fb4a3982551d8fb6dce4835d0222a5e07",
+    "sha256": "e6748a83fb6b323f85260b8979b0728c647a7ad6ae6772e7fcbc69301d3d1a0c",
+    "classification": "MIT",
+    "source_url": "https://github.com/townsendmerino/goinfer/blob/v0.20.0/LICENSE",
+    "scope": "root notice verified; complete archive and file-header audit pending"
+  },
+  {
+    "repository": "townsendmerino/aikit",
+    "version_or_revision": "v1.51.1",
+    "license_file": "LICENSE",
+    "git_blob_sha1": "0bdd7a2fb4a3982551d8fb6dce4835d0222a5e07",
+    "sha256": "e6748a83fb6b323f85260b8979b0728c647a7ad6ae6772e7fcbc69301d3d1a0c",
+    "classification": "MIT",
+    "source_url": "https://github.com/townsendmerino/aikit/blob/v1.51.1/LICENSE",
+    "scope": "root notice verified; complete archive and file-header audit pending"
+  },
+  {
+    "repository": "golang/sys",
+    "version_or_revision": "v0.48.0",
+    "license_file": "LICENSE",
+    "git_blob_sha1": "2a7cf70da6e498df9c11ab6a5eaa2ddd7af34da4",
+    "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+    "classification": "BSD-3-Clause",
+    "source_url": "https://github.com/golang/sys/blob/v0.48.0/LICENSE",
+    "scope": "root notice verified; complete archive and file-header audit pending"
+  },
+  {
+    "repository": "golang/text",
+    "version_or_revision": "v0.40.0",
+    "license_file": "LICENSE",
+    "git_blob_sha1": "2a7cf70da6e498df9c11ab6a5eaa2ddd7af34da4",
+    "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+    "classification": "BSD-3-Clause",
+    "source_url": "https://github.com/golang/text/blob/v0.40.0/LICENSE",
+    "scope": "root notice verified; complete archive and file-header audit pending"
+  },
+  {
+    "repository": "dustin/go-humanize",
+    "version_or_revision": "v1.0.1",
+    "license_file": "LICENSE",
+    "git_blob_sha1": "8d9a94a90680d9fc114a1b3a2b4123c233c324af",
+    "sha256": "a973b4498c13eb74baa2a8e5c351426a6826f2fcdd909916dbe53ee2e755fd71",
+    "classification": "MIT",
+    "source_url": "https://github.com/dustin/go-humanize/blob/v1.0.1/LICENSE",
+    "scope": "root notice verified; complete archive and file-header audit pending"
+  },
+  {
+    "repository": "google/uuid",
+    "version_or_revision": "v1.6.0",
+    "license_file": "LICENSE",
+    "git_blob_sha1": "5dc68268d900581915a7bfdc1f2be75cd503dd9e",
+    "sha256": "0a8d61ed3cbfd5312326e8126c31ce9c627a283adc99131b56896d29ada04b2d",
+    "classification": "BSD-3-Clause",
+    "source_url": "https://github.com/google/uuid/blob/v1.6.0/LICENSE",
+    "scope": "root notice verified; complete archive and file-header audit pending"
+  },
+  {
+    "repository": "mattn/go-isatty",
+    "version_or_revision": "v0.0.24",
+    "license_file": "LICENSE",
+    "git_blob_sha1": "65dc692b6b171e95c7e7698674ebaf8524dcd0d6",
+    "sha256": "08eab1118c80885fa1fa6a6dd7303f65a379fcb3733e063d20d1bbc2c76e6fa1",
+    "classification": "MIT",
+    "source_url": "https://github.com/mattn/go-isatty/blob/v0.0.24/LICENSE",
+    "scope": "root notice verified; complete archive and file-header audit pending"
+  },
+  {
+    "repository": "ncruces/go-strftime",
+    "version_or_revision": "v1.0.0",
+    "license_file": "LICENSE",
+    "git_blob_sha1": "7f0f5534ca24fd8d76c33badeb08f7510e22907c",
+    "sha256": "38ae43959daf953a393a585b2988672cb65a5a541aca0d0be5e72595a0a16883",
+    "classification": "MIT",
+    "source_url": "https://github.com/ncruces/go-strftime/blob/v1.0.0/LICENSE",
+    "scope": "root notice verified; complete archive and file-header audit pending"
+  },
+  {
+    "repository": "remyoudompheng/bigfft",
+    "version_or_revision": "24d4a6f8daec",
+    "license_file": "LICENSE",
+    "git_blob_sha1": "74487567632c8f137ef3971b0f5912ca50bebcda",
+    "sha256": "dd26a7abddd02e2d0aba97805b31f248ef7835d9e10da289b22e3b8ab78b324d",
+    "classification": "BSD-3-Clause",
+    "source_url": "https://github.com/remyoudompheng/bigfft/blob/24d4a6f8daec/LICENSE",
+    "scope": "root notice verified; complete archive and file-header audit pending"
+  }
+]

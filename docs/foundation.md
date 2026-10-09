@@ -57,8 +57,12 @@ Real CPU inference, model smoke, SQLite and .w3strings tests remain separate gat
   returns 1; previously written stdout bytes cannot be retracted.
 - Diagnostic write failure retains a non-zero status.
 - Only `cmd/yakuori/main.go` calls `os.Exit`. `internal/cli.Run` returns a status.
-  The unexported resolver seam and fake writers make failures testable without
-  a model. This does not introduce an Engine abstraction ahead of #3/#11/#12.
+  The unexported resolver/file-runner seams and fake writers make failures
+  testable without a model. CLI tests call the real Core and text adapter through
+  an internal test path, then use the shared result reporter; there is no public
+  fake flag or text translation syntax. Diagnostics retain unit/phase,
+  TMCommitted, publication state and RecoveryError reason/paths. Partial stdout
+  failures report the sent byte count without rolling back committed rows.
 
 There are deliberately no working `translate`, `localize`, or `models` commands,
 no placeholder translation output, no retry, and no legacy Kotoba reads/migration.

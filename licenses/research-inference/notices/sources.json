@@ -1,0 +1,50 @@
+[
+  {
+    "file": "upstream-semble-MIT.txt",
+    "url": "https://raw.githubusercontent.com/MinishLab/semble/main/LICENSE",
+    "retrieved_utc": "2026-10-07",
+    "scope": "Current upstream reference, not pinned to original copied revision"
+  },
+  {
+    "file": "upstream-tiktoken-MIT.txt",
+    "url": "https://raw.githubusercontent.com/openai/tiktoken/main/LICENSE",
+    "retrieved_utc": "2026-10-07",
+    "scope": "Current upstream reference, not pinned to original copied revision"
+  },
+  {
+    "file": "upstream-gpt2-Modified-MIT.txt",
+    "url": "https://raw.githubusercontent.com/openai/gpt-2/master/LICENSE",
+    "retrieved_utc": "2026-10-07",
+    "scope": "Current upstream reference, not pinned to original copied revision"
+  },
+  {
+    "file": "reference-Cephes-SciPy-BSD3.txt",
+    "url": "https://raw.githubusercontent.com/scipy/scipy/v1.14.1/LICENSES_bundled.txt",
+    "retrieved_utc": "2026-10-07",
+    "scope": "Current upstream reference, not pinned to original copied revision"
+  },
+  {
+    "file": "upstream-gguf-py-MIT.txt",
+    "url": "https://raw.githubusercontent.com/ggml-org/llama.cpp/master/gguf-py/LICENSE",
+    "retrieved_utc": "2026-10-07",
+    "scope": "Current upstream reference, not pinned to original copied revision"
+  },
+  {
+    "file": "upstream-llama-cpp-MIT.txt",
+    "url": "https://raw.githubusercontent.com/ggml-org/llama.cpp/master/LICENSE",
+    "retrieved_utc": "2026-10-07",
+    "scope": "Current upstream reference, not pinned to original copied revision"
+  },
+  {
+    "file": "upstream-AmbientCSS-MIT.txt",
+    "url": "https://raw.githubusercontent.com/kikkupico/ambientcss/master/LICENSE",
+    "retrieved_utc": "2026-10-07",
+    "scope": "Current upstream reference, not pinned to original copied revision"
+  },
+  {
+    "file": "upstream-Cephes-netlib-readme.txt",
+    "url": "https://www.netlib.org/cephes/readme",
+    "retrieved_utc": "2026-10-07",
+    "scope": "Current upstream reference, not pinned to original copied revision"
+  }
+]
