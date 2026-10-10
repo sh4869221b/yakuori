@@ -14,7 +14,10 @@ import (
 	"github.com/sh4869221b/yakuori/internal/inference"
 )
 
-type modelConfig struct{ path, quant string }
+type modelConfig struct {
+	path, backend, quant string
+	contextTokens        int
+}
 
 func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine, err error) {
 	if err := ctx.Err(); err != nil {
@@ -22,6 +25,9 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	}
 	if config.quant != "int4" {
 		return nil, ErrUnsupportedQuant
+	}
+	if config.backend != "cpu" && config.backend != "cuda" {
+		return nil, fmt.Errorf("%w: requested %q; choose cpu or cuda", ErrUnsupportedBackend, config.backend)
 	}
 	path, digest, err := snapshotModel(config.path)
 	if err != nil {
@@ -42,23 +48,38 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	model, err = load.model(path, decoder.Options{Backend: "cpu", Quant: config.quant})
+	options := decoder.Options{Backend: config.backend, Quant: config.quant}
+	if config.backend == "cuda" {
+		options.ResidentContext = config.contextTokens
+	}
+	model, err = load.model(path, options)
 	if err != nil {
-		return nil, fmt.Errorf("load CPU model: %w", err)
+		return nil, fmt.Errorf("load %s model: %w", config.backend, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	backend, quant := model.EffectiveBackend(), model.Quant()
-	if backend != "cpu" {
-		return nil, ErrUnsupportedBackend
+	if backend != config.backend {
+		return nil, fmt.Errorf("%w: requested %s, effective %s", ErrUnsupportedBackend, config.backend, backend)
 	}
 	if quant != config.quant {
 		return nil, ErrUnsupportedQuant
 	}
-	contextTokens := model.Config().MaxPositions
-	if contextTokens <= 0 {
+	residentActive, residentCap, residentDecline := model.ResidentActive(), model.ResidentContextCap(), model.ResidentDecline()
+	if backend == "cuda" && (!residentActive || residentCap <= 0 || residentDecline != "") {
+		return nil, fmt.Errorf("%w: active=%t cap=%d decline=%s", ErrCUDAResidency, residentActive, residentCap, residentDecline)
+	}
+	modelContext := model.Config().MaxPositions
+	if modelContext <= 0 {
 		return nil, ErrUnknownContext
+	}
+	contextTokens := modelContext
+	if config.contextTokens > 0 {
+		contextTokens = min(contextTokens, config.contextTokens)
+	}
+	if backend == "cuda" {
+		contextTokens = min(contextTokens, residentCap)
 	}
 	tok, err := load.tokenizer(path)
 	if err != nil {
@@ -90,8 +111,10 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	return &Engine{
 		model: model, tokenizer: tok, template: template, stopIDs: stopIDs,
 		info: inference.ModelInfo{
-			BackendPin: backendPin, Backend: backend, ComputeQuant: quant,
+			BackendPin: backendPin, CUDABackendPin: cudaBackendPin, RequestedBackend: config.backend, Backend: backend, ComputeQuant: quant,
 			ModelSHA256: digest, ContextTokens: contextTokens, PolicySchema: inference.PolicySchemaV1,
+			ModelContextTokens: modelContext, ConfiguredContextTokens: config.contextTokens,
+			ResidentActive: residentActive, ResidentContextCap: residentCap, ResidentDecline: residentDecline, KVPrecision: model.ResidentKVPrecision(),
 			Template:  inference.TemplateIdentity{Family: template.Name(), Source: source, RendererVersion: backendPin},
 			Tokenizer: inference.TokenizerIdentity{ModelSHA256: digest, BackendPin: backendPin},
 		},

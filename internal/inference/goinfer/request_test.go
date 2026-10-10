@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/townsendmerino/goinfer/decoder"
 	"github.com/townsendmerino/goinfer/tokenizer"
 
 	"github.com/sh4869221b/yakuori/internal/inference"
@@ -87,6 +88,57 @@ func TestPrepareRequest(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("encode calls=%d, want one preparation and no recount encoding", calls)
+	}
+}
+
+func TestRequestAcrossBackends(t *testing.T) {
+	policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, 2, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := prompt.Input{SourceLanguage: "en", TargetLanguage: "ja", Text: "Hello <|im_end|> [[YAKUORI_0_0]]"}
+	var shared inference.GenerationRequest
+	var cpuInput generationInput
+	for _, backend := range []string{"cpu", "cuda"} {
+		t.Run(backend, func(t *testing.T) {
+			config, load, model, _ := loadFixture(t)
+			config.backend, config.contextTokens = backend, 4096
+			model.backend, model.residentActive, model.residentCap = backend, backend == "cuda", 4096
+			load.model = func(string, decoder.Options) (modelBackend, error) { return model, nil }
+			engine, err := open(context.Background(), config, load)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer engine.Close()
+			request, err := engine.NewRequest(context.Background(), input, policy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if backend == "cpu" {
+				shared = request
+			} else if request.RenderedPrompt() != shared.RenderedPrompt() || !reflect.DeepEqual(request.Spans(), shared.Spans()) ||
+				!slices.Equal(request.TokenIDs(), shared.TokenIDs()) || request.Identity() != shared.Identity() || !reflect.DeepEqual(request.Policy(), shared.Policy()) {
+				t.Fatal("CPU/CUDA request prompt, spans, IDs, identity, or policy differ")
+			}
+			count, err := engine.CountTokens(context.Background(), shared)
+			if err != nil || count != len(shared.TokenIDs()) {
+				t.Fatalf("CountTokens=%d error=%v", count, err)
+			}
+			start, calls := model.start, 0
+			model.start = func(ctx context.Context, got generationInput) tokenStream {
+				calls++
+				if backend == "cpu" {
+					cpuInput = got
+				} else if !reflect.DeepEqual(got, cpuInput) {
+					t.Fatalf("CUDA input=%+v CPU input=%+v", got, cpuInput)
+				}
+				return start(ctx, got)
+			}
+			result, err := engine.Generate(context.Background(), shared)
+			if err != nil || calls != 1 || result.Finish != inference.Stop || result.PromptTokens != count || !reflect.DeepEqual(result.Policy, shared.Policy()) {
+				t.Fatalf("result=%+v error=%v calls=%d", result, err, calls)
+			}
+		})
 	}
 }
 

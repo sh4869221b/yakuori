@@ -3,6 +3,7 @@ package goinfer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"testing"
@@ -55,6 +56,60 @@ func TestGenerateUsesRequest(t *testing.T) {
 	result, err := engine.Generate(context.Background(), request)
 	if err != nil || result.PromptTokens != count || !slices.Equal(request.TokenIDs(), []int{10, 11, 12}) {
 		t.Fatalf("result=%+v error=%v request ids=%v", result, err, request.TokenIDs())
+	}
+}
+
+func TestEffectiveContextBudget(t *testing.T) {
+	for _, tc := range []struct {
+		backend  string
+		resident int
+	}{
+		{"cpu", 0},
+		{"cuda", 4096},
+		{"cuda", 2048},
+	} {
+		t.Run(fmt.Sprintf("%s/resident%d", tc.backend, tc.resident), func(t *testing.T) {
+			config, load, model, _ := loadFixture(t)
+			config.backend, config.contextTokens = tc.backend, 4096
+			model.backend, model.contextTokens = tc.backend, 262144
+			model.residentActive, model.residentCap = tc.backend == "cuda", tc.resident
+			load.model = func(string, decoder.Options) (modelBackend, error) { return model, nil }
+			engine, err := open(context.Background(), config, load)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer engine.Close()
+			limit := 4096
+			if tc.backend == "cuda" {
+				limit = min(limit, tc.resident)
+			}
+			for extra := range 2 {
+				t.Run(fmt.Sprintf("over%d", extra), func(t *testing.T) {
+					policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, 1, time.Minute)
+					if err != nil {
+						t.Fatal(err)
+					}
+					request, err := inference.NewGenerationRequest(inference.PreparedRequest{Identity: engine.identity(), TokenIDs: make([]int, limit-1+extra)}, policy)
+					if err != nil {
+						t.Fatal(err)
+					}
+					calls, start := 0, model.start
+					model.start = func(ctx context.Context, input generationInput) tokenStream {
+						calls++
+						return start(ctx, input)
+					}
+					defer func() { model.start = start }()
+					result, err := engine.Generate(context.Background(), request)
+					if extra == 0 {
+						if err != nil || calls != 1 {
+							t.Fatalf("boundary result=%+v error=%v calls=%d", result, err, calls)
+						}
+					} else if !errors.Is(err, ErrContextLimit) || result.Finish != inference.ContextLimit || calls != 0 {
+						t.Fatalf("over boundary result=%+v error=%v calls=%d", result, err, calls)
+					}
+				})
+			}
+		})
 	}
 }
 
