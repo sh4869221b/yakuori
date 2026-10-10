@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'tools/cpuspike/**'
+      - 'internal/inference/**'
+      - 'internal/prompt/**'
+      - 'internal/localize/**'
       - 'ci/cpu-spike.Dockerfile'
       - 'ci/run-long-context.py'
       - 'ci/test-long-context-supervisor.py'
@@ -22,6 +25,11 @@ jobs:
         run: docker build --progress=plain -f ci/cpu-spike.Dockerfile -t yakuori-cpu-spike .
       - name: Real CPU generation and failure semantics without network
         run: docker run --rm --network none --memory 4g --cpus 2 yakuori-cpu-spike
+      - name: Production CPU wrapper smoke without network
+        run: |
+          docker run --rm --network none --memory 4g --memory-swap 4g --cpus 2 \
+            -e YAKUORI_CPU_MODEL=/model.gguf --entrypoint /cpu-wrapper-smoke.test \
+            yakuori-cpu-spike -test.run '^TestCPUWrapperSmoke$' -test.v -test.timeout 180s
       - name: Bounded 1K and 4K token-counted CPU experiment
         run: |
           mkdir -p long-context-results

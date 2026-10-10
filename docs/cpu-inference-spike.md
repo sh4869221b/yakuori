@@ -10,8 +10,8 @@ No CUDA/GPU package, server, cloud LLM, implicit download or generation retry is
 
 The maintainer’s private design remains authoritative; public implementation
 contracts and reproducible evidence are documented in this repository. No product defaults or design changes are introduced.
-#12 must implement the production boundary and #14 must choose practical finite
-limits from representative measurements. #3 does not prove full-window quality,
+#12 implements the production CPU boundary described below; #14 must choose practical
+finite limits from representative measurements. #3 does not prove full-window quality,
 real MOD translation, hard real-time cancellation, or arm64 runtime support.
 
 A separate [bounded long-context experiment](cpu-long-context.md) stages actual
@@ -51,7 +51,7 @@ Primary sources:
 - [pinned model download](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf)
 
 Future distribution must retain applicable copyright/license notices, including
-Apache NOTICE obligations if applicable. This repository only carries probe code,
+Apache NOTICE obligations if applicable. This repository carries the CPU wrapper, probe code,
 synthetic prompt text, token IDs, and measured output.
 
 ## Reproduce
@@ -78,6 +78,9 @@ explicit manual download. The stronger clean-environment gate performs that
 ```sh
 docker build --progress=plain -f ci/cpu-spike.Dockerfile -t yakuori-cpu-spike .
 docker run --rm --network none --memory 4g --cpus 2 yakuori-cpu-spike
+docker run --rm --network none --memory 4g --memory-swap 4g --cpus 2 \
+  -e YAKUORI_CPU_MODEL=/model.gguf --entrypoint /cpu-wrapper-smoke.test \
+  yakuori-cpu-spike -test.run '^TestCPUWrapperSmoke$' -test.v -test.timeout 180s
 ```
 
 The container checks absence of cc/gcc/g++/c++/clang/clang++/cmake before compilation;
@@ -93,6 +96,46 @@ container gets 4 GiB with no swap, 2 CPUs, and disabled networking. These are
 experimental safeguards, not MVP defaults.
 The model fixture can be removed from local disk after the probe. Removing the
 Docker image removes its copy; no user model registry or TM state was created.
+
+## Production wrapper (#12)
+
+`internal/inference/goinfer` implements Open, model Info, immutable request
+preparation, exact CountTokens, Generate, and Close for the pinned plain CPU/int4
+path. Open copies the local GGUF to a private temporary snapshot and hashes and
+loads both weights and tokenizer from those bytes, so replacing the original path
+cannot mix model identities. This requires temporary disk space equal to the GGUF;
+the snapshot is unlinked after loading (Linux mappings remain valid).
+The template source must exactly match the pinned Qwen fixture: its no-tools,
+explicit-system, single-user path is equivalent to the selected ChatML renderer.
+Customized sources are rejected even if they contain familiar family markers.
+The tokenizer and template come from the same GGUF; segmented encoding
+keeps literal user control-marker text separate from template controls. The common
+request exposes its rendered spans, frozen token IDs, model/tokenizer/template
+identity, prompt schema, and effective policy. Policy schema v1 requires explicit
+positive output and request-time budgets; greedy sampling and seed zero are fixed,
+with penalties, bias, logprobs, processors, speculation, sessions, and batching
+disabled. The reported deadline is the earlier of the parent deadline and the
+request timeout measured from Generate entry. These fields describe this wrapper's
+request, not arbitrary upstream inference modes or product defaults.
+
+Only a consistent Stop can reach Core's existing restore, content validation,
+final artifact validation, and TM commit gates. The adapter does not own the Engine.
+The CLI and SQLite TM remain unconnected. Generate is sequential and rejects busy
+or closed admission. Cancellation is cooperative: Generate drains the backend and
+finishes decoding/classification before reuse; Close cancels and waits before
+releasing model resources. A forward pass can overrun its deadline. Loading has
+pre/post context checks, but upstream Load itself has no cancellable API.
+
+The `cpusmoke`-tagged `TestCPUWrapperSmoke` requires `YAKUORI_CPU_MODEL`; absent or
+unreadable models fail rather than skip or download. The image builds both amd64
+and arm64 test binaries without a native compiler, but only amd64 is executed.
+The dedicated offline workflow checks this pinned Qwen fixture's 32,768-token
+metadata, natural nonempty Stop, exact prompt count, literal `<|im_end|>` handling,
+a real 1 ms cooperative deadline, healthy reuse after drain, and Close. Its explicit
+128-token output budget, 60-second normal request budget, and 180-second binary
+timeout are trial fixtures. Other terminal branches use deterministic fake streams.
+This verifies neither Japanese translation quality nor natural full-window output,
+other model/template families, hard cancellation, or arm64 runtime behavior.
 
 ## Observations and acceptance boundaries
 
@@ -126,10 +169,9 @@ pretokenizers or templates fail. A fixed explicit system prompt avoids upstream
 ChatML's documented no-system/default-system difference. Render once; encode with
 `addBOS=false`; freeze the token IDs; count their length and pass that same slice to
 Generate. The model-required probe compares all 26 IDs to a frozen golden, not a
-character estimate. This fixture contains no untrusted control-marker text. #12
-must use the template's segmented encoding API (or an equivalent validated policy)
-for literal marker strings in arbitrary input; do not generalize this simple
-fixture's raw Encode call to user content without those tests.
+character estimate. This original probe fixture contains no untrusted control-marker
+text. The #12 wrapper instead uses the template's segmented encoding API and tests
+literal marker strings; its dedicated smoke is separate from this probe's raw Encode call.
 
 Loaded `Config().MaxPositions` is **32,768** for this GGUF. The CPU model's RoPE
 architecture is not a separate smaller resident GPU cap. The probe verifies this
@@ -144,9 +186,9 @@ full-context forward/Stop observation for the synthetic fixture, not natural
 full-window generation, translation quality, a general performance guarantee, or
 a memory ceiling. The [plain CPU implementation](https://github.com/townsendmerino/goinfer/blob/v0.20.0/decoder/model.go)
 and [prefill](https://github.com/townsendmerino/goinfer/blob/v0.20.0/decoder/forwardn.go)
-do not provide an application admission gate enforcing that sum; the future wrapper
-must enforce it itself and must not infer a supported window from success on a
-short prompt. #14 remains the gate for an effective operational cap and finite
+do not provide an application admission gate enforcing that sum; the #12 wrapper
+enforces it before generation. Short-prompt success does not establish a supported
+window. #14 remains the gate for an effective operational cap and finite
 input/unit/segment/time bounds.
 
 ### Terminal mapping and cancellation
@@ -178,8 +220,8 @@ process isolation or an upstream API change; it is not silently assumed here.
 - Model context metadata and fail-closed budget gate: passed. A controlled synthetic
   Stop completed at 32,766 prompt tokens with two output tokens reserved in the
   limited Ryzen run linked above. It does not measure translation quality or select
-  an operational cap; #12 and #14 still need their production and representative
-  input gates.
+  an operational cap; #14 still needs representative input gates. The #12 wrapper
+  has separate unit and model-required smoke coverage described above.
 - Linux arm64: compile only. No runtime/ISA or speed claim.
 - Non-cancellation partial backend fault: classification unit fixture only; real
   partial cancellation+error is exercised. No claim of injected native decoder fault.
