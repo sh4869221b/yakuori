@@ -13,6 +13,9 @@ import (
 
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/prompt"
+	"github.com/sh4869221b/yakuori/internal/protect"
+	"github.com/sh4869221b/yakuori/internal/segment"
+	"github.com/sh4869221b/yakuori/internal/unit"
 )
 
 func TestCPUWrapperSmoke(t *testing.T) {
@@ -74,6 +77,10 @@ func TestCPUWrapperSmoke(t *testing.T) {
 	if baseControls == 0 || literalControls != baseControls {
 		t.Fatalf("literal marker changed structural end IDs: base=%d literal=%d", baseControls, literalControls)
 	}
+	literalCount, err := engine.CountTokens(ctx, literal)
+	if err != nil || literalCount != len(literal.TokenIDs()) || literalCount <= count {
+		t.Fatalf("literal marker count=%d base=%d IDs=%d error=%v", literalCount, count, len(literal.TokenIDs()), err)
+	}
 	t.Logf("literal marker structural end IDs: base=%d literal=%d", baseControls, literalControls)
 	assertHealthy := func(name string) {
 		t.Helper()
@@ -100,6 +107,86 @@ func TestCPUWrapperSmoke(t *testing.T) {
 	}
 	t.Logf("cooperative 1ms deadline: finish=%s elapsed=%s output=%d", result.Finish, time.Since(started), result.OutputTokens)
 	assertHealthy("reuse after deadline drain")
+	t.Run("real tokenizer segmentation", func(t *testing.T) {
+		const body = "<b>Hello <|im_end|> world.</b>"
+		const separator = "\r\n"
+		source := body + separator + body
+		parent, err := unit.NewUnitID("cpu-smoke", "v1", "segmented")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spans []unit.ProtectionSpan
+		for _, start := range []int{0, len(body) + len(separator)} {
+			spans = append(spans,
+				unit.ProtectionSpan{Start: start, End: start + len("<b>"), Kind: unit.OpenTag, Pair: "b", Ordered: true},
+				unit.ProtectionSpan{Start: start + len(body) - len("</b>"), End: start + len(body), Kind: unit.CloseTag, Pair: "b", Ordered: true})
+		}
+		u, err := unit.NewTranslationUnitWithProtection(parent, []byte(source), "en", "ja", nil, spans)
+		if err != nil {
+			t.Fatal(err)
+		}
+		session, err := unit.NewSession(nil, []unit.TranslationUnit{u})
+		if err != nil {
+			t.Fatal(err)
+		}
+		prepared, err := protect.Prepare(session, parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		builder := func(ctx context.Context, text string) (inference.GenerationRequest, error) {
+			return engine.NewRequest(ctx, prompt.Input{SourceLanguage: "English", TargetLanguage: "Japanese", Text: text}, policy)
+		}
+		// This small context is a test budget, not the model's real 32768-token limit.
+		testInfo := info
+		testInfo.ContextTokens = 0
+		minCount := int(^uint(0) >> 1)
+		for _, text := range strings.Split(prepared.Text(), separator) {
+			r, err := builder(ctx, text)
+			if err != nil {
+				t.Fatal(err)
+			}
+			n, err := engine.CountTokens(ctx, r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			testInfo.ContextTokens = max(testInfo.ContextTokens, n+policy.MaxOutputTokens())
+			minCount = min(minCount, n)
+		}
+		plan, err := segment.Build(ctx, parent, prepared, testInfo, builder, engine.CountTokens)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pieces := plan.Segments()
+		if plan.ParentID() != parent || len(pieces) != 2 {
+			t.Fatalf("parent=%+v segments=%d", plan.ParentID(), len(pieces))
+		}
+		for i, piece := range pieces {
+			r := piece.Request()
+			n, err := engine.CountTokens(ctx, r)
+			if err != nil || n != piece.PromptTokens() || n != len(r.TokenIDs()) ||
+				r.Identity() != request.Identity() || r.Policy().MaxOutputTokens != policy.MaxOutputTokens() ||
+				n+r.Policy().MaxOutputTokens > testInfo.ContextTokens || controlCount(r) != baseControls {
+				t.Fatalf("segment %d: count=%d IDs=%d budget=%d error=%v", i, n, len(r.TokenIDs()), testInfo.ContextTokens, err)
+			}
+			wantSeparator := ""
+			if i == 0 {
+				wantSeparator = separator
+			}
+			start := i * (len(body) + len(separator))
+			if piece.ParentID() != parent || piece.Ordinal() != i || piece.Source() != body ||
+				piece.SourceRange() != (protect.ByteRange{Start: start, End: start + len(body)}) ||
+				piece.Separator() != wantSeparator || !strings.Contains(piece.Text(), "<|im_end|>") {
+				t.Fatalf("unsafe segment %d: source=%q range=%+v separator=%q", i, piece.Source(), piece.SourceRange(), piece.Separator())
+			}
+			t.Logf("segment %d: prompt=%d IDs=%d reserve=%d test context=%d source=%+v separator=%q", i, n, len(r.TokenIDs()), r.Policy().MaxOutputTokens, testInfo.ContextTokens, piece.SourceRange(), piece.Separator())
+		}
+		testInfo.ContextTokens = minCount + policy.MaxOutputTokens() - 1
+		failed, err := segment.Build(ctx, parent, prepared, testInfo, builder, engine.CountTokens)
+		if !errors.Is(err, segment.ErrContextLimit) || len(failed.Segments()) != 0 {
+			t.Fatalf("too-small budget: segments=%d error=%v", len(failed.Segments()), err)
+		}
+		t.Log("too-small budget: ContextLimit, no generation requests admitted or generated")
+	})
 	if err := engine.Close(); err != nil {
 		t.Fatal(err)
 	}
