@@ -2,6 +2,8 @@ package localize
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	textadapter "github.com/sh4869221b/yakuori/internal/adapter/text"
+	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/unit"
 )
@@ -17,6 +20,69 @@ type commonEngine struct {
 	inference.Engine
 	count    func(context.Context, inference.GenerationRequest) (int, error)
 	generate func(context.Context, inference.GenerationRequest) (inference.GenerationResult, error)
+}
+
+func TestInferenceCoreUsesSelectedLimits(t *testing.T) {
+	for _, pointer := range []bool{false, true} {
+		for _, field := range []string{"output", "context", "request", "higher experiment"} {
+			t.Run(fmt.Sprintf("%s/pointer=%t", field, pointer), func(t *testing.T) {
+				limits := config.DefaultLimits()
+				output, timeout, count := 16, time.Second, 3
+				switch field {
+				case "output":
+					limits.MaxOutputTokens = output - 1
+				case "context":
+					limits.ContextTokens, limits.MaxOutputTokens = 18, output
+				case "request":
+					limits.RequestTimeout = timeout / 2
+				case "higher experiment":
+					output = limits.MaxOutputTokens + 1
+					timeout = limits.RequestTimeout + time.Second
+					count = limits.ContextTokens
+					limits.ContextTokens, limits.MaxOutputTokens, limits.RequestTimeout = count+output, output, timeout
+				}
+				policy, err := inference.NewGenerationPolicy(1, output, timeout)
+				if err != nil {
+					t.Fatal(err)
+				}
+				request, err := inference.NewGenerationRequest(inference.PreparedRequest{RenderedPrompt: "one", TokenIDs: make([]int, count)}, policy)
+				if err != nil {
+					t.Fatal(err)
+				}
+				calls := 0
+				backend := commonEngine{count: func(context.Context, inference.GenerationRequest) (int, error) { return count, nil }, generate: func(context.Context, inference.GenerationRequest) (inference.GenerationResult, error) {
+					calls++
+					return inference.GenerationResult{Text: "訳文", Finish: inference.Stop, PromptTokens: count}, nil
+				}}
+				original := NewInferenceEngine(backend, func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error) { return request, nil })
+				var engine Engine = original
+				if pointer {
+					engine = &original
+				}
+				core, err := NewCoreWithLimits(engine, limits)
+				if err != nil {
+					t.Fatal(err)
+				}
+				session, profile := generationFixture(t, []string{"one"}, nil)
+				accepted, err := core.Generate(context.Background(), session, profile)
+				if field == "higher experiment" {
+					if err != nil || len(accepted) != 1 || calls != 1 {
+						t.Fatalf("accepted=%v calls=%d err=%v", accepted, calls, err)
+					}
+				} else if err == nil || calls != 0 || accepted != nil {
+					t.Fatalf("accepted=%v calls=%d err=%v", accepted, calls, err)
+				}
+				_, originalErr := original.Generate(context.Background(), unit.UnitID{}, "one")
+				if field == "higher experiment" {
+					if !errors.Is(originalErr, inference.ErrInvalidPolicy) {
+						t.Fatalf("original adapter lost default limits: %v", originalErr)
+					}
+				} else if originalErr != nil {
+					t.Fatal(originalErr)
+				}
+			})
+		}
+	}
 }
 
 func (e commonEngine) CountTokens(ctx context.Context, request inference.GenerationRequest) (int, error) {

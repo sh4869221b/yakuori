@@ -65,6 +65,15 @@ func NewCoreWithLimits(engine Engine, limits config.Limits) (Core, error) {
 	if err := limits.Check(); err != nil {
 		return Core{}, err
 	}
+	switch e := engine.(type) {
+	case InferenceEngine:
+		e.limits = limits
+		engine = e
+	case *InferenceEngine:
+		copy := *e
+		copy.limits = limits
+		engine = &copy
+	}
 	return Core{engine: engine, limits: limits}, nil
 }
 

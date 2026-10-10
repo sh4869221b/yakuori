@@ -11,12 +11,13 @@ import (
 
 // InferenceEngine connects generation to Core without taking ownership of the model.
 type InferenceEngine struct {
+	limits       config.Limits
 	engine       inference.Engine
 	buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)
 }
 
 func NewInferenceEngine(engine inference.Engine, buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) InferenceEngine {
-	return InferenceEngine{engine: engine, buildRequest: buildRequest}
+	return InferenceEngine{engine: engine, buildRequest: buildRequest, limits: config.DefaultLimits()}
 }
 
 func (e InferenceEngine) Generate(ctx context.Context, id unit.UnitID, text string) (Generation, error) {
@@ -24,7 +25,7 @@ func (e InferenceEngine) Generate(ctx context.Context, id unit.UnitID, text stri
 	if err != nil {
 		return Generation{}, err
 	}
-	limits := config.DefaultLimits()
+	limits := e.limits
 	policy := request.Policy()
 	if policy.MaxOutputTokens > limits.MaxOutputTokens || policy.RequestTimeout > limits.RequestTimeout {
 		return Generation{Finish: InvalidOutput}, inference.ErrInvalidPolicy
