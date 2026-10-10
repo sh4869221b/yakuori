@@ -590,3 +590,92 @@ prose quality. The conditional added 100ms/reuse and SQLite measurements were
 **not run**, because no added successful translation or warm batch exists.
 No retry, further output increase, other input measurement or product adoption
 was performed.
+
+### Owner-approved nonrepeated prose experiment
+
+Task9, authorized after the repeated-sentence failure, uses three original
+English samples with distinct coherent sentences: a lantern instruction (50
+UTF8 bytes), a bridge-closure and shelter notice (258 bytes), and a harbor
+supply-journey narrative (980 bytes). Each is one unit. Full source text is saved
+in the [prose fixtures](evidence/cpu-long-context/index-translate/prose/fixtures/02-long.json)
+(`00-short.json`, `01-medium.json`, `02-long.json` in the same directory).
+No external text, padding or repeated sentences were used.
+
+The unchanged probe was built before measurement with
+`CGO_ENABLED=0 go build -o /tmp/yakuori-issue14-cpuspike-task9 ./tools/cpuspike`.
+The measurement image was rebuilt from `yakuori-publication-probe:latest` with
+Python3 installed, as for task2/task8. The exact measurement invocation was:
+
+```sh
+docker run --rm --name yakuori-issue14-prose \
+  --cpus=16 --memory=16g --memory-swap=16g \
+  -v "$PWD:/src" -v /tmp/yakuori-issue14-cpuspike-task9:/probe:ro \
+  -v /home/sh4869/.cache/yakuori/models:/local:ro \
+  --entrypoint python3 yakuori-issue14-measure \
+  /src/ci/run-long-context.py /probe /local/Index-Translate-2B.Q4_K_M.gguf \
+  /src/docs/evidence/cpu-long-context/index-translate/prose/results \
+  --translate-fixtures /src/docs/evidence/cpu-long-context/index-translate/prose/fixtures \
+  --contexts 4096 --max-output-tokens 2048 --pairs 3 \
+  --process-wall-seconds 1800 --request-timeout-seconds 300 \
+  --generation-timeout-seconds 1500 --rss-limit-mib 16384 \
+  --go-memory-limit-mib 14336
+```
+
+GOMAXPROCS16, CPU/int4, greedy, thinking=false, ambient GOINFER removal,
+GOMEMLIMIT14336MiB, supervisor RSS16384MiB and host MemAvailable floor1024MiB
+match task8. No build, test or database workload ran concurrently with inference.
+All [nine pairs](evidence/cpu-long-context/index-translate/prose/results/supervisor.json)
+completed: **9 successful, 0 failed, 0 unrun**. Every cold and warm run ended
+Stop and accepted one unit, with mechanical validation failures0/denominator1.
+The [summary](evidence/cpu-long-context/index-translate/prose/summary.json)
+retains all individual timings and observables.
+
+| Source / JSON bytes | Completed pairs | Prompt/output tokens per run | Cold including load s | Warm s | Maximum child RSS KiB |
+| --- | ---: | --- | --- | --- | ---: |
+| 50 / 55 | 3/3 | 114/11 | 6.550–6.858 | 3.449–3.573 | 3601612 |
+| 258 / 263 | 3/3 | 157/68 | 10.109–10.275 | 6.848–6.937 | 3551872 |
+| 980 / 985 | 3/3 | 301/250 | 22.064–22.370 | 18.971–19.489 | 3602200 |
+
+All inputs planned one segment. Maximum individual request time was19.487845s;
+maximum load was3.401972s. Maximum sampled RSS was3604480KiB, and container
+memory.peak reached4844163072 bytes cumulatively through these nine pairs. This
+is not a per-case independent container peak or a guaranteed product footprint.
+
+Every saved successful translation was read and compared; the six outputs per
+stage are identical. The short instruction preserves meaning, although lantern
+becomes the broader `灯り`. The medium notice preserves bridge closure, shelter,
+soup/blankets, the scout's inspection and free accommodation. The long translation
+represents all eleven narrative sentences, including supplies, safety advice,
+the carpenter and the sister's letter. No omitted event, repeated passage,
+untranslated clause or added explanation was observed in these samples.
+However, the long output contains grammatical defects (`物資を船で送し`,
+`水路をクルーを案内`), changes “stayed behind” to passive `残された`, and renders
+age-unspecified “sister” as `姉`. Mechanical acceptance does not establish
+publication quality or correctness on other prose.
+
+Only the largest successful input was then copied to
+`/tmp/yakuori-issue14-prose-deadline/02-long.json` for one additional pair. The
+same Docker command used name `yakuori-issue14-prose-deadline`, an extra
+`-v /tmp/yakuori-issue14-prose-deadline:/deadline-input:ro`, output directory
+`.../prose/deadline`, and
+`--translate-fixtures /deadline-input --pairs 1 --deadline-probe` in place of the
+matrix fixture directory/pair count. All other flags stayed identical.
+Its [report](evidence/cpu-long-context/index-translate/prose/deadline/4096-02-long-pair1.json)
+records request/drain105.824965ms for a100ms request, effective deadline
+overrun5.824664ms, and zero accepted partial units. After drain returned, a fresh
+generation context on the same model completed warm reuse in19.032822s with
+Stop, accepted1 and validation0/1. Supervisor exit0 and no watchdog interruption
+confirm cooperative cancellation and reuse for this sample.
+
+The measured prose profile is **985 artifact bytes / 1 unit / 980 maximum unit
+bytes / 980 total text bytes / 1 segment**, at context4096/output2048 and the
+trial request300s/generation1500s/pair1800s. It adds a successful nonrepeated
+single-prose observation to the earlier short-label profile
+**1495 artifact bytes / 76 units / 19 maximum unit bytes / 1036 total text bytes /
+76 segments**. These profiles can inform a conservative owner-selected subset
+of measured workloads. A rectangular combination such as76 units each980 bytes
+was not measured, and a cap assembled from every largest field does not acquire
+coverage automatically. The earlier 5150-byte repeated prose failures and label
+quality reservations remain valid. No input caps, context/output policy or time
+budgets are adopted by this experiment; the owner must select their scope and
+margin. Full CI was not repeated because probe and production code are unchanged.

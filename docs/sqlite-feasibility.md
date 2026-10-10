@@ -222,3 +222,22 @@ at context4096/output2048, and warm/later pairs were unrun. Therefore it supplie
 27 measured task2 batches above remain the available database evidence; task8
 did not run a database measurement or establish a new transaction bound. See the
 [additional CPU summary](evidence/cpu-long-context/index-translate/reserve2048/summary.json).
+
+For task9's nonrepeated prose, the existing probe measured all nine successful
+warm outputs after CPU measurement ended:
+
+```sh
+YAKUORI_MEASURED_TRANSLATIONS="$PWD/docs/evidence/cpu-long-context/index-translate/prose/results" \
+  CGO_ENABLED=0 go test ./internal/sqliteprobe \
+  -run '^TestMeasuredTranslationBatches$' -count=1 -v
+```
+
+All nine fresh transactions passed and committed one row each. Output sizes were
+54 bytes (short),342 bytes (medium),1146 bytes (long). Maximum observed
+transaction+commit time was **0.066195ms**, with the unchanged initial busy100ms,
+operation1000ms and cleanup1000ms budgets, no retry. The
+[individual measurements](evidence/cpu-long-context/index-translate/prose/sqlite-batches.json)
+record each batch. Database files were on host `/tmp` tmpfs
+(`rw,noatime,inode64,huge=advise`), as in task2; these observations do not establish
+a persistent-disk SLO or production TM performance. No database job ran alongside
+model inference. The opt-in experiment passed; unchanged full CI was not rerun.
