@@ -1,0 +1,18 @@
+    PID COMMAND         %CPU %MEM
+ 646224 probe            689  8.5
+ 646344 ps               200  0.0
+   2527 dms             11.1  0.0
+ 646329 bash             8.3  0.0
+ 596789 ChatGPT          4.9  1.8
+   2777 qs               4.4  1.1
+   2021 Hyprland         2.1  0.2
+ 167686 ChatGPT          1.6  0.5
+ 167733 ChatGPT          1.5  0.5
+   4114 steamwebhelper   1.4  0.6
+  26389 azeron-software  1.3  0.0
+   3814 steam            0.8  0.1
+  13065 firefox          0.7  0.9
+ 168017 codex            0.7  0.6
+ 644977 python3          0.6  0.0
+    142 kswapd0          0.6  0.0
+  13471 Isolated Web Co  0.5  2.0

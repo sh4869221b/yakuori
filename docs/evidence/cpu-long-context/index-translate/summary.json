@@ -1,0 +1,2752 @@
+{
+  "conditions": {
+    "contexts": [
+      1024,
+      2048,
+      4096
+    ],
+    "output_reservation": "one quarter of context",
+    "pairs_per_condition": 3,
+    "request_seconds": 300,
+    "generation_seconds_per_run": 1500,
+    "process_seconds_per_cold_warm_pair": 1800
+  },
+  "raw_reporting_notes": [
+    "Initial matrix binary: validation_ms measures additional revalidation, not isolated Core validation.",
+    "Failure denominators are derived from observed failed unit and fixture order; raw fields remain unchanged.",
+    "No deadline-overrun metric exists in initial raw reports; it cannot be inferred.",
+    "Container peak is cumulative from container start through each case; child RSS is case-specific.",
+    "Remaining overhead combines Core planning/protection/validation/export and other run overhead; phases are not individually isolated."
+  ],
+  "fixtures": {
+    "00-short": {
+      "artifact_bytes": 29,
+      "units": 1,
+      "max_unit_bytes": 20,
+      "total_text_bytes": 20
+    },
+    "01-fixture": {
+      "artifact_bytes": 376,
+      "units": 19,
+      "max_unit_bytes": 19,
+      "total_text_bytes": 259
+    },
+    "02-x4": {
+      "artifact_bytes": 1495,
+      "units": 76,
+      "max_unit_bytes": 19,
+      "total_text_bytes": 1036
+    },
+    "03-x16": {
+      "artifact_bytes": 5971,
+      "units": 304,
+      "max_unit_bytes": 19,
+      "total_text_bytes": 4144
+    },
+    "04-x64": {
+      "artifact_bytes": 23875,
+      "units": 1216,
+      "max_unit_bytes": 19,
+      "total_text_bytes": 16576
+    },
+    "single-1024": {
+      "artifact_bytes": 5159,
+      "units": 1,
+      "max_unit_bytes": 5150,
+      "total_text_bytes": 5150
+    },
+    "single-2048": {
+      "artifact_bytes": 10259,
+      "units": 1,
+      "max_unit_bytes": 10250,
+      "total_text_bytes": 10250
+    },
+    "single-4096": {
+      "artifact_bytes": 20509,
+      "units": 1,
+      "max_unit_bytes": 20500,
+      "total_text_bytes": 20500
+    }
+  },
+  "pair_status_counts": {
+    "success": 27,
+    "interrupted": 3,
+    "unrun": 39,
+    "failed": 3
+  },
+  "cases": [
+    {
+      "target": 1024,
+      "mode": "00-short",
+      "pair": 1,
+      "container_memory_peak_bytes": 4278308864,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3567372,
+      "process_wall_seconds": 9.679,
+      "input_dimensions": {
+        "artifact_bytes": 29,
+        "units": 1,
+        "max_unit_bytes": 20,
+        "total_text_bytes": 20
+      },
+      "report": "results/1024-00-short-pair1.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 3128.992147,
+          "generation_ms": 3128.459494,
+          "measurement_planning_ms": 0.320995,
+          "extra_revalidation_ms": 0.002926,
+          "unisolated_remaining_overhead_ms": 0.2087319999997547,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3128.459494,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 3213.18281,
+          "generation_ms": 3212.629449,
+          "measurement_planning_ms": 0.364826,
+          "extra_revalidation_ms": 0.003317,
+          "unisolated_remaining_overhead_ms": 0.18521799999976798,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3212.629449,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3184.924098,
+      "reported_peak_rss_kib": 3566732,
+      "process_total_ms": 9527.169777,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 1024,
+      "mode": "00-short",
+      "pair": 2,
+      "container_memory_peak_bytes": 4278308864,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3304284,
+      "process_wall_seconds": 9.838,
+      "input_dimensions": {
+        "artifact_bytes": 29,
+        "units": 1,
+        "max_unit_bytes": 20,
+        "total_text_bytes": 20
+      },
+      "report": "results/1024-00-short-pair2.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 3129.02806,
+          "generation_ms": 3128.395129,
+          "measurement_planning_ms": 0.41456,
+          "extra_revalidation_ms": 0.003076,
+          "unisolated_remaining_overhead_ms": 0.21529500000009874,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3128.395129,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 3197.452651,
+          "generation_ms": 3196.962879,
+          "measurement_planning_ms": 0.315784,
+          "extra_revalidation_ms": 0.003316,
+          "unisolated_remaining_overhead_ms": 0.1706719999999026,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3196.962879,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3342.932731,
+      "reported_peak_rss_kib": 3304284,
+      "process_total_ms": 9669.500195,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 1024,
+      "mode": "00-short",
+      "pair": 3,
+      "container_memory_peak_bytes": 5192658944,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3722040,
+      "process_wall_seconds": 9.66,
+      "input_dimensions": {
+        "artifact_bytes": 29,
+        "units": 1,
+        "max_unit_bytes": 20,
+        "total_text_bytes": 20
+      },
+      "report": "results/1024-00-short-pair3.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 3095.800018,
+          "generation_ms": 3095.305267,
+          "measurement_planning_ms": 0.317067,
+          "extra_revalidation_ms": 0.003316,
+          "unisolated_remaining_overhead_ms": 0.17436799999972372,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3095.305267,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 3226.051843,
+          "generation_ms": 3225.558254,
+          "measurement_planning_ms": 0.290848,
+          "extra_revalidation_ms": 0.002786,
+          "unisolated_remaining_overhead_ms": 0.19995500000015637,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3225.558254,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3175.126088,
+      "reported_peak_rss_kib": 3722040,
+      "process_total_ms": 9497.168949,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 1024,
+      "mode": "01-fixture",
+      "pair": 1,
+      "container_memory_peak_bytes": 5192658944,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3667368,
+      "process_wall_seconds": 120.31,
+      "input_dimensions": {
+        "artifact_bytes": 376,
+        "units": 19,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 259
+      },
+      "report": "results/1024-01-fixture-pair1.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 58565.813592,
+          "generation_ms": 58557.099264000004,
+          "measurement_planning_ms": 2.191174,
+          "extra_revalidation_ms": 0.049103,
+          "unisolated_remaining_overhead_ms": 6.474050999994566,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3208.58784,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 58511.232699,
+          "generation_ms": 58502.70720199999,
+          "measurement_planning_ms": 1.95528,
+          "extra_revalidation_ms": 0.048662,
+          "unisolated_remaining_overhead_ms": 6.521555000009636,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3203.352811,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3068.454939,
+      "reported_peak_rss_kib": 3667368,
+      "process_total_ms": 120145.579759,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 1024,
+      "mode": "01-fixture",
+      "pair": 2,
+      "container_memory_peak_bytes": 5192658944,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3589620,
+      "process_wall_seconds": 121.599,
+      "input_dimensions": {
+        "artifact_bytes": 376,
+        "units": 19,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 259
+      },
+      "report": "results/1024-01-fixture-pair2.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 58655.985384,
+          "generation_ms": 58647.256975,
+          "measurement_planning_ms": 2.076959,
+          "extra_revalidation_ms": 0.044885,
+          "unisolated_remaining_overhead_ms": 6.606565000003012,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3232.780715,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 58611.21206,
+          "generation_ms": 58602.701773,
+          "measurement_planning_ms": 2.014261,
+          "extra_revalidation_ms": 0.047329,
+          "unisolated_remaining_overhead_ms": 6.448696999997334,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3205.521555,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 4179.473634,
+      "reported_peak_rss_kib": 3589620,
+      "process_total_ms": 121446.774523,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 1024,
+      "mode": "01-fixture",
+      "pair": 3,
+      "container_memory_peak_bytes": 5192658944,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3199340,
+      "process_wall_seconds": 122.052,
+      "input_dimensions": {
+        "artifact_bytes": 376,
+        "units": 19,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 259
+      },
+      "report": "results/1024-01-fixture-pair3.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 58745.198242,
+          "generation_ms": 58736.237307,
+          "measurement_planning_ms": 2.375,
+          "extra_revalidation_ms": 0.049754,
+          "unisolated_remaining_overhead_ms": 6.536180999995516,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3202.946813,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 59836.654075,
+          "generation_ms": 59828.026388,
+          "measurement_planning_ms": 1.985507,
+          "extra_revalidation_ms": 0.055635,
+          "unisolated_remaining_overhead_ms": 6.586545000000151,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3540.554892,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3304.322393,
+      "reported_peak_rss_kib": 3199340,
+      "process_total_ms": 121886.24857,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 1024,
+      "mode": "02-x4",
+      "pair": 1,
+      "container_memory_peak_bytes": 5192658944,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3584784,
+      "process_wall_seconds": 471.665,
+      "input_dimensions": {
+        "artifact_bytes": 1495,
+        "units": 76,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 1036
+      },
+      "report": "results/1024-02-x4-pair1.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 234241.843147,
+          "generation_ms": 234207.019139,
+          "measurement_planning_ms": 7.44924,
+          "extra_revalidation_ms": 0.178847,
+          "unisolated_remaining_overhead_ms": 27.195920999995955,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3207.740349,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 234032.469389,
+          "generation_ms": 233997.970837,
+          "measurement_planning_ms": 7.032806,
+          "extra_revalidation_ms": 0.171803,
+          "unisolated_remaining_overhead_ms": 27.293943000004564,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3224.174471,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3196.589394,
+      "reported_peak_rss_kib": 3583180,
+      "process_total_ms": 471471.130872,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 1024,
+      "mode": "02-x4",
+      "pair": 2,
+      "container_memory_peak_bytes": 5192658944,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3650344,
+      "process_wall_seconds": 471.974,
+      "input_dimensions": {
+        "artifact_bytes": 1495,
+        "units": 76,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 1036
+      },
+      "report": "results/1024-02-x4-pair2.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 233908.365807,
+          "generation_ms": 233874.205176,
+          "measurement_planning_ms": 7.468987,
+          "extra_revalidation_ms": 0.168878,
+          "unisolated_remaining_overhead_ms": 26.522766000006108,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3213.985714,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 234672.528225,
+          "generation_ms": 234638.33493099996,
+          "measurement_planning_ms": 7.177709,
+          "extra_revalidation_ms": 0.170952,
+          "unisolated_remaining_overhead_ms": 26.84463300002607,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3303.641755,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3199.635817,
+      "reported_peak_rss_kib": 3650344,
+      "process_total_ms": 471780.633303,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 1024,
+      "mode": "02-x4",
+      "pair": 3,
+      "container_memory_peak_bytes": 5192658944,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3472868,
+      "process_wall_seconds": 472.893,
+      "input_dimensions": {
+        "artifact_bytes": 1495,
+        "units": 76,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 1036
+      },
+      "report": "results/1024-02-x4-pair3.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 234758.059905,
+          "generation_ms": 234724.42320699999,
+          "measurement_planning_ms": 6.931534,
+          "extra_revalidation_ms": 0.179539,
+          "unisolated_remaining_overhead_ms": 26.525625000016625,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3255.397531,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 234730.271485,
+          "generation_ms": 234695.399953,
+          "measurement_planning_ms": 7.732746,
+          "extra_revalidation_ms": 0.15921,
+          "unisolated_remaining_overhead_ms": 26.979576000019215,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3230.159598,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3263.686644,
+      "reported_peak_rss_kib": 3472868,
+      "process_total_ms": 472752.110769,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 1024,
+      "mode": "03-x16",
+      "pair": 1,
+      "container_memory_peak_bytes": 5192658944,
+      "returncode": -9,
+      "watchdog_kill": "1800-second process wall limit",
+      "observed_peak_rss_kib": 3730716,
+      "process_wall_seconds": 1800.192,
+      "input_dimensions": {
+        "artifact_bytes": 5971,
+        "units": 304,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 4144
+      },
+      "report": "results/1024-03-x16-pair1.json",
+      "status": "interrupted",
+      "runs": [],
+      "run_completion": "unknown: pair stdout was not emitted before watchdog interruption",
+      "validation_failures": null,
+      "validation_denominator": null
+    },
+    {
+      "target": 1024,
+      "mode": "03-x16",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5971,
+        "units": 304,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 4144
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "03-x16",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5971,
+        "units": 304,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 4144
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "04-x64",
+      "pair": 1,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 23875,
+        "units": 1216,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 16576
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "04-x64",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 23875,
+        "units": 1216,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 16576
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "04-x64",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 23875,
+        "units": 1216,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 16576
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "single-1024",
+      "pair": 1,
+      "container_memory_peak_bytes": 5192658944,
+      "returncode": 1,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3667988,
+      "process_wall_seconds": 40.632,
+      "input_dimensions": {
+        "artifact_bytes": 5159,
+        "units": 1,
+        "max_unit_bytes": 5150,
+        "total_text_bytes": 5150
+      },
+      "report": "results/1024-single-1024-pair1.json",
+      "status": "failed",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 37315.474754,
+          "generation_ms": 36596.298785,
+          "measurement_planning_ms": 337.465485,
+          "extra_revalidation_ms": 0.000221,
+          "unisolated_remaining_overhead_ms": 381.7102630000035,
+          "segments": 2,
+          "accepted_units": 0,
+          "validation_failures": 0,
+          "validation_denominator": 0,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 0,
+          "validation_count_basis": "observed generate error at zero-based unit 0; preceding units passed Core checks",
+          "prompt_tokens": 768,
+          "output_tokens": 256,
+          "request_count": 1,
+          "max_request_generation_ms": 36596.298785,
+          "finishes": {
+            "max_tokens": 1
+          },
+          "error": "localize generate failed for unit 0: generation did not finish with stop"
+        }
+      ],
+      "load_ms": 3163.772115,
+      "reported_peak_rss_kib": 3667988,
+      "process_total_ms": 40480.084437,
+      "error": "localize generate failed for unit 0",
+      "run_completion": "cold failed; warm unrun"
+    },
+    {
+      "target": 1024,
+      "mode": "single-1024",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5159,
+        "units": 1,
+        "max_unit_bytes": 5150,
+        "total_text_bytes": 5150
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "single-1024",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5159,
+        "units": 1,
+        "max_unit_bytes": 5150,
+        "total_text_bytes": 5150
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "single-2048",
+      "pair": 1,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 10259,
+        "units": 1,
+        "max_unit_bytes": 10250,
+        "total_text_bytes": 10250
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "single-2048",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 10259,
+        "units": 1,
+        "max_unit_bytes": 10250,
+        "total_text_bytes": 10250
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "single-2048",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 10259,
+        "units": 1,
+        "max_unit_bytes": 10250,
+        "total_text_bytes": 10250
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "single-4096",
+      "pair": 1,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 20509,
+        "units": 1,
+        "max_unit_bytes": 20500,
+        "total_text_bytes": 20500
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "single-4096",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 20509,
+        "units": 1,
+        "max_unit_bytes": 20500,
+        "total_text_bytes": 20500
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 1024,
+      "mode": "single-4096",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 20509,
+        "units": 1,
+        "max_unit_bytes": 20500,
+        "total_text_bytes": 20500
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "00-short",
+      "pair": 1,
+      "container_memory_peak_bytes": 5192658944,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3573812,
+      "process_wall_seconds": 9.927,
+      "input_dimensions": {
+        "artifact_bytes": 29,
+        "units": 1,
+        "max_unit_bytes": 20,
+        "total_text_bytes": 20
+      },
+      "report": "results/2048-00-short-pair1.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 3166.590098,
+          "generation_ms": 3166.068224,
+          "measurement_planning_ms": 0.345792,
+          "extra_revalidation_ms": 0.002985,
+          "unisolated_remaining_overhead_ms": 0.1730970000000253,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3166.068224,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 3164.523978,
+          "generation_ms": 3163.971808,
+          "measurement_planning_ms": 0.32369,
+          "extra_revalidation_ms": 0.003456,
+          "unisolated_remaining_overhead_ms": 0.22502400000038755,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3163.971808,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3444.554226,
+      "reported_peak_rss_kib": 3573812,
+      "process_total_ms": 9775.748804,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 2048,
+      "mode": "00-short",
+      "pair": 2,
+      "container_memory_peak_bytes": 5233999872,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3752136,
+      "process_wall_seconds": 9.654,
+      "input_dimensions": {
+        "artifact_bytes": 29,
+        "units": 1,
+        "max_unit_bytes": 20,
+        "total_text_bytes": 20
+      },
+      "report": "results/2048-00-short-pair2.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 3099.756644,
+          "generation_ms": 3099.194314,
+          "measurement_planning_ms": 0.365469,
+          "extra_revalidation_ms": 0.003667,
+          "unisolated_remaining_overhead_ms": 0.19319400000020184,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3099.194314,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 3237.52252,
+          "generation_ms": 3237.037626,
+          "measurement_planning_ms": 0.297441,
+          "extra_revalidation_ms": 0.002906,
+          "unisolated_remaining_overhead_ms": 0.18454700000016758,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3237.037626,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3147.734589,
+      "reported_peak_rss_kib": 3752136,
+      "process_total_ms": 9485.08061,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 2048,
+      "mode": "00-short",
+      "pair": 3,
+      "container_memory_peak_bytes": 5233999872,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3752988,
+      "process_wall_seconds": 9.499,
+      "input_dimensions": {
+        "artifact_bytes": 29,
+        "units": 1,
+        "max_unit_bytes": 20,
+        "total_text_bytes": 20
+      },
+      "report": "results/2048-00-short-pair3.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 3122.392968,
+          "generation_ms": 3121.906701,
+          "measurement_planning_ms": 0.322708,
+          "extra_revalidation_ms": 0.003126,
+          "unisolated_remaining_overhead_ms": 0.1604330000002254,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3121.906701,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 3235.89827,
+          "generation_ms": 3235.324359,
+          "measurement_planning_ms": 0.363365,
+          "extra_revalidation_ms": 0.003387,
+          "unisolated_remaining_overhead_ms": 0.20715899999995277,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3235.324359,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 2970.524173,
+      "reported_peak_rss_kib": 3752988,
+      "process_total_ms": 9328.885333,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 2048,
+      "mode": "01-fixture",
+      "pair": 1,
+      "container_memory_peak_bytes": 5233999872,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3545052,
+      "process_wall_seconds": 120.821,
+      "input_dimensions": {
+        "artifact_bytes": 376,
+        "units": 19,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 259
+      },
+      "report": "results/2048-01-fixture-pair1.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 58939.078672,
+          "generation_ms": 58930.55234600001,
+          "measurement_planning_ms": 1.976925,
+          "extra_revalidation_ms": 0.046167,
+          "unisolated_remaining_overhead_ms": 6.503233999991969,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3207.415226,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 58648.171258,
+          "generation_ms": 58639.46253699999,
+          "measurement_planning_ms": 2.01657,
+          "extra_revalidation_ms": 0.048261,
+          "unisolated_remaining_overhead_ms": 6.643890000009973,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3262.595432,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3068.889536,
+      "reported_peak_rss_kib": 3545052,
+      "process_total_ms": 120669.07825,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 2048,
+      "mode": "01-fixture",
+      "pair": 2,
+      "container_memory_peak_bytes": 5233999872,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3152852,
+      "process_wall_seconds": 120.87,
+      "input_dimensions": {
+        "artifact_bytes": 376,
+        "units": 19,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 259
+      },
+      "report": "results/2048-01-fixture-pair2.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 58859.801078,
+          "generation_ms": 58850.194786000015,
+          "measurement_planning_ms": 2.423256,
+          "extra_revalidation_ms": 0.05825,
+          "unisolated_remaining_overhead_ms": 7.124785999982204,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3259.82693,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 58559.343156,
+          "generation_ms": 58550.81401600002,
+          "measurement_planning_ms": 1.968078,
+          "extra_revalidation_ms": 0.05327,
+          "unisolated_remaining_overhead_ms": 6.507791999984181,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3222.061867,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3284.225283,
+      "reported_peak_rss_kib": 3152852,
+      "process_total_ms": 120703.996187,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 2048,
+      "mode": "01-fixture",
+      "pair": 3,
+      "container_memory_peak_bytes": 5233999872,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3392276,
+      "process_wall_seconds": 122.511,
+      "input_dimensions": {
+        "artifact_bytes": 376,
+        "units": 19,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 259
+      },
+      "report": "results/2048-01-fixture-pair3.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 58917.960554,
+          "generation_ms": 58908.75037299999,
+          "measurement_planning_ms": 2.375135,
+          "extra_revalidation_ms": 0.049884,
+          "unisolated_remaining_overhead_ms": 6.78516200000947,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3222.029862,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 60214.524389,
+          "generation_ms": 60205.73793600001,
+          "measurement_planning_ms": 2.088675,
+          "extra_revalidation_ms": 0.049233,
+          "unisolated_remaining_overhead_ms": 6.6485449999860675,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3562.38943,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3212.772815,
+      "reported_peak_rss_kib": 3392276,
+      "process_total_ms": 122345.375841,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 2048,
+      "mode": "02-x4",
+      "pair": 1,
+      "container_memory_peak_bytes": 5233999872,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3313196,
+      "process_wall_seconds": 477.516,
+      "input_dimensions": {
+        "artifact_bytes": 1495,
+        "units": 76,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 1036
+      },
+      "report": "results/2048-02-x4-pair1.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 238648.946272,
+          "generation_ms": 238614.14582100004,
+          "measurement_planning_ms": 7.97837,
+          "extra_revalidation_ms": 0.17534,
+          "unisolated_remaining_overhead_ms": 26.646740999959142,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3959.897355,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 235603.001451,
+          "generation_ms": 235568.23153900003,
+          "measurement_planning_ms": 7.379361,
+          "extra_revalidation_ms": 0.17009,
+          "unisolated_remaining_overhead_ms": 27.220460999959734,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3316.306246,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3107.80837,
+      "reported_peak_rss_kib": 3313196,
+      "process_total_ms": 477359.843349,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 2048,
+      "mode": "02-x4",
+      "pair": 2,
+      "container_memory_peak_bytes": 5233999872,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3661992,
+      "process_wall_seconds": 473.292,
+      "input_dimensions": {
+        "artifact_bytes": 1495,
+        "units": 76,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 1036
+      },
+      "report": "results/2048-02-x4-pair2.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 234897.211543,
+          "generation_ms": 234862.186253,
+          "measurement_planning_ms": 7.652534,
+          "extra_revalidation_ms": 0.219864,
+          "unisolated_remaining_overhead_ms": 27.152892000019595,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3273.685734,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 235086.182017,
+          "generation_ms": 235051.01665799995,
+          "measurement_planning_ms": 7.929054,
+          "extra_revalidation_ms": 0.160984,
+          "unisolated_remaining_overhead_ms": 27.0753210000642,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3254.731086,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3152.178154,
+      "reported_peak_rss_kib": 3661992,
+      "process_total_ms": 473135.95761,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 2048,
+      "mode": "02-x4",
+      "pair": 3,
+      "container_memory_peak_bytes": 5233999872,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3454460,
+      "process_wall_seconds": 473.139,
+      "input_dimensions": {
+        "artifact_bytes": 1495,
+        "units": 76,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 1036
+      },
+      "report": "results/2048-02-x4-pair3.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 234848.755931,
+          "generation_ms": 234813.66282699996,
+          "measurement_planning_ms": 8.21945,
+          "extra_revalidation_ms": 0.161074,
+          "unisolated_remaining_overhead_ms": 26.712580000028687,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3213.800932,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 234907.070115,
+          "generation_ms": 234872.654373,
+          "measurement_planning_ms": 7.229335,
+          "extra_revalidation_ms": 0.194677,
+          "unisolated_remaining_overhead_ms": 26.991730000011962,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3241.99875,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3204.401143,
+      "reported_peak_rss_kib": 3454460,
+      "process_total_ms": 472960.60419,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 2048,
+      "mode": "03-x16",
+      "pair": 1,
+      "container_memory_peak_bytes": 5242634240,
+      "returncode": -9,
+      "watchdog_kill": "1800-second process wall limit",
+      "observed_peak_rss_kib": 3775232,
+      "process_wall_seconds": 1800.147,
+      "input_dimensions": {
+        "artifact_bytes": 5971,
+        "units": 304,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 4144
+      },
+      "report": "results/2048-03-x16-pair1.json",
+      "status": "interrupted",
+      "runs": [],
+      "run_completion": "unknown: pair stdout was not emitted before watchdog interruption",
+      "validation_failures": null,
+      "validation_denominator": null
+    },
+    {
+      "target": 2048,
+      "mode": "03-x16",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5971,
+        "units": 304,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 4144
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "03-x16",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5971,
+        "units": 304,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 4144
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "04-x64",
+      "pair": 1,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 23875,
+        "units": 1216,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 16576
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "04-x64",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 23875,
+        "units": 1216,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 16576
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "04-x64",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 23875,
+        "units": 1216,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 16576
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "single-1024",
+      "pair": 1,
+      "container_memory_peak_bytes": 5242634240,
+      "returncode": 1,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3537324,
+      "process_wall_seconds": 75.357,
+      "input_dimensions": {
+        "artifact_bytes": 5159,
+        "units": 1,
+        "max_unit_bytes": 5150,
+        "total_text_bytes": 5150
+      },
+      "report": "results/2048-single-1024-pair1.json",
+      "status": "failed",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 72078.991884,
+          "generation_ms": 72076.615007,
+          "measurement_planning_ms": 1.287595,
+          "extra_revalidation_ms": 0.00021,
+          "unisolated_remaining_overhead_ms": 1.0890720000024232,
+          "segments": 1,
+          "accepted_units": 0,
+          "validation_failures": 0,
+          "validation_denominator": 0,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 0,
+          "validation_count_basis": "observed generate error at zero-based unit 0; preceding units passed Core checks",
+          "prompt_tokens": 1238,
+          "output_tokens": 512,
+          "request_count": 1,
+          "max_request_generation_ms": 72076.615007,
+          "finishes": {
+            "max_tokens": 1
+          },
+          "error": "localize generate failed for unit 0: generation did not finish with stop"
+        }
+      ],
+      "load_ms": 3152.063283,
+      "reported_peak_rss_kib": 3535428,
+      "process_total_ms": 75231.351956,
+      "error": "localize generate failed for unit 0",
+      "run_completion": "cold failed; warm unrun"
+    },
+    {
+      "target": 2048,
+      "mode": "single-1024",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5159,
+        "units": 1,
+        "max_unit_bytes": 5150,
+        "total_text_bytes": 5150
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "single-1024",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5159,
+        "units": 1,
+        "max_unit_bytes": 5150,
+        "total_text_bytes": 5150
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "single-2048",
+      "pair": 1,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 10259,
+        "units": 1,
+        "max_unit_bytes": 10250,
+        "total_text_bytes": 10250
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "single-2048",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 10259,
+        "units": 1,
+        "max_unit_bytes": 10250,
+        "total_text_bytes": 10250
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "single-2048",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 10259,
+        "units": 1,
+        "max_unit_bytes": 10250,
+        "total_text_bytes": 10250
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "single-4096",
+      "pair": 1,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 20509,
+        "units": 1,
+        "max_unit_bytes": 20500,
+        "total_text_bytes": 20500
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "single-4096",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 20509,
+        "units": 1,
+        "max_unit_bytes": 20500,
+        "total_text_bytes": 20500
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 2048,
+      "mode": "single-4096",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 20509,
+        "units": 1,
+        "max_unit_bytes": 20500,
+        "total_text_bytes": 20500
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "00-short",
+      "pair": 1,
+      "container_memory_peak_bytes": 5242634240,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3730580,
+      "process_wall_seconds": 9.59,
+      "input_dimensions": {
+        "artifact_bytes": 29,
+        "units": 1,
+        "max_unit_bytes": 20,
+        "total_text_bytes": 20
+      },
+      "report": "results/4096-00-short-pair1.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 3098.346801,
+          "generation_ms": 3097.841678,
+          "measurement_planning_ms": 0.332967,
+          "extra_revalidation_ms": 0.002966,
+          "unisolated_remaining_overhead_ms": 0.16919000000036702,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3097.841678,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 3208.705609,
+          "generation_ms": 3208.245692,
+          "measurement_planning_ms": 0.30207,
+          "extra_revalidation_ms": 0.003196,
+          "unisolated_remaining_overhead_ms": 0.15465100000013224,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3208.245692,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3142.83294,
+      "reported_peak_rss_kib": 3730580,
+      "process_total_ms": 9450.070267,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 4096,
+      "mode": "00-short",
+      "pair": 2,
+      "container_memory_peak_bytes": 5242634240,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3666672,
+      "process_wall_seconds": 9.619,
+      "input_dimensions": {
+        "artifact_bytes": 29,
+        "units": 1,
+        "max_unit_bytes": 20,
+        "total_text_bytes": 20
+      },
+      "report": "results/4096-00-short-pair2.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 3175.908872,
+          "generation_ms": 3175.380715,
+          "measurement_planning_ms": 0.338929,
+          "extra_revalidation_ms": 0.002986,
+          "unisolated_remaining_overhead_ms": 0.1862420000001921,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3175.380715,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 3241.75796,
+          "generation_ms": 3241.22205,
+          "measurement_planning_ms": 0.356162,
+          "extra_revalidation_ms": 0.002986,
+          "unisolated_remaining_overhead_ms": 0.1767620000000581,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3241.22205,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3033.506743,
+      "reported_peak_rss_kib": 3666672,
+      "process_total_ms": 9451.353283,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 4096,
+      "mode": "00-short",
+      "pair": 3,
+      "container_memory_peak_bytes": 5277130752,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3792516,
+      "process_wall_seconds": 9.506,
+      "input_dimensions": {
+        "artifact_bytes": 29,
+        "units": 1,
+        "max_unit_bytes": 20,
+        "total_text_bytes": 20
+      },
+      "report": "results/4096-00-short-pair3.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 3136.893416,
+          "generation_ms": 3136.396811,
+          "measurement_planning_ms": 0.320625,
+          "extra_revalidation_ms": 0.002955,
+          "unisolated_remaining_overhead_ms": 0.17302499999981766,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3136.396811,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 3230.325356,
+          "generation_ms": 3229.858686,
+          "measurement_planning_ms": 0.296449,
+          "extra_revalidation_ms": 0.003286,
+          "unisolated_remaining_overhead_ms": 0.1669349999997945,
+          "segments": 1,
+          "accepted_units": 1,
+          "validation_failures": 0,
+          "validation_denominator": 1,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 1,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 110,
+          "output_tokens": 5,
+          "request_count": 1,
+          "max_request_generation_ms": 3229.858686,
+          "finishes": {
+            "stop": 1
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 2984.895871,
+      "reported_peak_rss_kib": 3790924,
+      "process_total_ms": 9352.193842,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 4096,
+      "mode": "01-fixture",
+      "pair": 1,
+      "container_memory_peak_bytes": 5277130752,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3719944,
+      "process_wall_seconds": 120.615,
+      "input_dimensions": {
+        "artifact_bytes": 376,
+        "units": 19,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 259
+      },
+      "report": "results/4096-01-fixture-pair1.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 58861.683484,
+          "generation_ms": 58853.12313000001,
+          "measurement_planning_ms": 1.954595,
+          "extra_revalidation_ms": 0.049583,
+          "unisolated_remaining_overhead_ms": 6.556175999993822,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3360.321282,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 58634.246017,
+          "generation_ms": 58625.76732499999,
+          "measurement_planning_ms": 1.992215,
+          "extra_revalidation_ms": 0.046608,
+          "unisolated_remaining_overhead_ms": 6.43986900000423,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3202.110184,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 2953.900426,
+      "reported_peak_rss_kib": 3719944,
+      "process_total_ms": 120449.905499,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 4096,
+      "mode": "01-fixture",
+      "pair": 2,
+      "container_memory_peak_bytes": 5277130752,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3508004,
+      "process_wall_seconds": 121.044,
+      "input_dimensions": {
+        "artifact_bytes": 376,
+        "units": 19,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 259
+      },
+      "report": "results/4096-01-fixture-pair2.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 58954.693703,
+          "generation_ms": 58945.974984,
+          "measurement_planning_ms": 2.065073,
+          "extra_revalidation_ms": 0.055645,
+          "unisolated_remaining_overhead_ms": 6.598000999996781,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3208.604718,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 58978.489285,
+          "generation_ms": 58969.10723100001,
+          "measurement_planning_ms": 2.07965,
+          "extra_revalidation_ms": 0.048721,
+          "unisolated_remaining_overhead_ms": 7.253682999994242,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3233.341417,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 2983.950805,
+      "reported_peak_rss_kib": 3507412,
+      "process_total_ms": 120917.205056,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 4096,
+      "mode": "01-fixture",
+      "pair": 3,
+      "container_memory_peak_bytes": 5277130752,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3588112,
+      "process_wall_seconds": 120.684,
+      "input_dimensions": {
+        "artifact_bytes": 376,
+        "units": 19,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 259
+      },
+      "report": "results/4096-01-fixture-pair3.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 58825.600783,
+          "generation_ms": 58816.57157800001,
+          "measurement_planning_ms": 2.216898,
+          "extra_revalidation_ms": 0.048211,
+          "unisolated_remaining_overhead_ms": 6.764095999991634,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3217.943521,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 58541.464329,
+          "generation_ms": 58532.885281,
+          "measurement_planning_ms": 2.054171,
+          "extra_revalidation_ms": 0.049985,
+          "unisolated_remaining_overhead_ms": 6.474891999999602,
+          "segments": 19,
+          "accepted_units": 19,
+          "validation_failures": 0,
+          "validation_denominator": 19,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 19,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 2066,
+          "output_tokens": 94,
+          "request_count": 19,
+          "max_request_generation_ms": 3202.856786,
+          "finishes": {
+            "stop": 19
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3152.070982,
+      "reported_peak_rss_kib": 3588112,
+      "process_total_ms": 120519.222016,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 4096,
+      "mode": "02-x4",
+      "pair": 1,
+      "container_memory_peak_bytes": 5277130752,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3666424,
+      "process_wall_seconds": 472.821,
+      "input_dimensions": {
+        "artifact_bytes": 1495,
+        "units": 76,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 1036
+      },
+      "report": "results/4096-02-x4-pair1.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 234974.438072,
+          "generation_ms": 234940.525935,
+          "measurement_planning_ms": 7.051798,
+          "extra_revalidation_ms": 0.198273,
+          "unisolated_remaining_overhead_ms": 26.66206599997752,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3352.280332,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 234561.995471,
+          "generation_ms": 234527.83623600003,
+          "measurement_planning_ms": 7.264907,
+          "extra_revalidation_ms": 0.158569,
+          "unisolated_remaining_overhead_ms": 26.735758999970066,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3262.180073,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3138.625339,
+      "reported_peak_rss_kib": 3666424,
+      "process_total_ms": 472675.553615,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 4096,
+      "mode": "02-x4",
+      "pair": 2,
+      "container_memory_peak_bytes": 5277130752,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3581980,
+      "process_wall_seconds": 472.656,
+      "input_dimensions": {
+        "artifact_bytes": 1495,
+        "units": 76,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 1036
+      },
+      "report": "results/4096-02-x4-pair2.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 234684.784958,
+          "generation_ms": 234650.28626599995,
+          "measurement_planning_ms": 7.552788,
+          "extra_revalidation_ms": 0.172735,
+          "unisolated_remaining_overhead_ms": 26.77316900005196,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3282.596155,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 234664.377794,
+          "generation_ms": 234630.13805299997,
+          "measurement_planning_ms": 7.666632,
+          "extra_revalidation_ms": 0.166043,
+          "unisolated_remaining_overhead_ms": 26.4070660000267,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3220.713758,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3146.004075,
+      "reported_peak_rss_kib": 3581980,
+      "process_total_ms": 472495.53528,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 4096,
+      "mode": "02-x4",
+      "pair": 3,
+      "container_memory_peak_bytes": 5277130752,
+      "returncode": 0,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3592560,
+      "process_wall_seconds": 472.641,
+      "input_dimensions": {
+        "artifact_bytes": 1495,
+        "units": 76,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 1036
+      },
+      "report": "results/4096-02-x4-pair3.json",
+      "status": "success",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 234308.213675,
+          "generation_ms": 234274.18745999993,
+          "measurement_planning_ms": 7.181697,
+          "extra_revalidation_ms": 0.181993,
+          "unisolated_remaining_overhead_ms": 26.662525000078084,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3234.435631,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        },
+        {
+          "name": "warm",
+          "total_ms": 235008.707565,
+          "generation_ms": 234974.81170299998,
+          "measurement_planning_ms": 7.027477,
+          "extra_revalidation_ms": 0.19125,
+          "unisolated_remaining_overhead_ms": 26.677135000004853,
+          "segments": 76,
+          "accepted_units": 76,
+          "validation_failures": 0,
+          "validation_denominator": 76,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 76,
+          "validation_count_basis": "accepted Core outputs",
+          "prompt_tokens": 8264,
+          "output_tokens": 376,
+          "request_count": 76,
+          "max_request_generation_ms": 3428.576266,
+          "finishes": {
+            "stop": 76
+          },
+          "error": null
+        }
+      ],
+      "load_ms": 3138.069789,
+      "reported_peak_rss_kib": 3592560,
+      "process_total_ms": 472455.219309,
+      "error": null,
+      "run_completion": "complete cold+warm pair"
+    },
+    {
+      "target": 4096,
+      "mode": "03-x16",
+      "pair": 1,
+      "container_memory_peak_bytes": 5549846528,
+      "returncode": -9,
+      "watchdog_kill": "1800-second process wall limit",
+      "observed_peak_rss_kib": 3766348,
+      "process_wall_seconds": 1800.185,
+      "input_dimensions": {
+        "artifact_bytes": 5971,
+        "units": 304,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 4144
+      },
+      "report": "results/4096-03-x16-pair1.json",
+      "status": "interrupted",
+      "runs": [],
+      "run_completion": "unknown: pair stdout was not emitted before watchdog interruption",
+      "validation_failures": null,
+      "validation_denominator": null
+    },
+    {
+      "target": 4096,
+      "mode": "03-x16",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5971,
+        "units": 304,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 4144
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "03-x16",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5971,
+        "units": 304,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 4144
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "04-x64",
+      "pair": 1,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 23875,
+        "units": 1216,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 16576
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "04-x64",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 23875,
+        "units": 1216,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 16576
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "04-x64",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 23875,
+        "units": 1216,
+        "max_unit_bytes": 19,
+        "total_text_bytes": 16576
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "single-1024",
+      "pair": 1,
+      "container_memory_peak_bytes": 5549846528,
+      "returncode": 1,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3475192,
+      "process_wall_seconds": 107.972,
+      "input_dimensions": {
+        "artifact_bytes": 5159,
+        "units": 1,
+        "max_unit_bytes": 5150,
+        "total_text_bytes": 5150
+      },
+      "report": "results/4096-single-1024-pair1.json",
+      "status": "failed",
+      "runs": [
+        {
+          "name": "cold",
+          "total_ms": 104673.906442,
+          "generation_ms": 104671.091358,
+          "measurement_planning_ms": 1.48067,
+          "extra_revalidation_ms": 0.000301,
+          "unisolated_remaining_overhead_ms": 1.3341130000016614,
+          "segments": 1,
+          "accepted_units": 0,
+          "validation_failures": 0,
+          "validation_denominator": 0,
+          "raw_validation_failures": 0,
+          "raw_validation_denominator": 0,
+          "validation_count_basis": "observed generate error at zero-based unit 0; preceding units passed Core checks",
+          "prompt_tokens": 1238,
+          "output_tokens": 1024,
+          "request_count": 1,
+          "max_request_generation_ms": 104671.091358,
+          "finishes": {
+            "max_tokens": 1
+          },
+          "error": "localize generate failed for unit 0: generation did not finish with stop"
+        }
+      ],
+      "load_ms": 3135.035646,
+      "reported_peak_rss_kib": 3475192,
+      "process_total_ms": 107809.740482,
+      "error": "localize generate failed for unit 0",
+      "run_completion": "cold failed; warm unrun"
+    },
+    {
+      "target": 4096,
+      "mode": "single-1024",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5159,
+        "units": 1,
+        "max_unit_bytes": 5150,
+        "total_text_bytes": 5150
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "single-1024",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 5159,
+        "units": 1,
+        "max_unit_bytes": 5150,
+        "total_text_bytes": 5150
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "single-2048",
+      "pair": 1,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 10259,
+        "units": 1,
+        "max_unit_bytes": 10250,
+        "total_text_bytes": 10250
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "single-2048",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 10259,
+        "units": 1,
+        "max_unit_bytes": 10250,
+        "total_text_bytes": 10250
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "single-2048",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 10259,
+        "units": 1,
+        "max_unit_bytes": 10250,
+        "total_text_bytes": 10250
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "single-4096",
+      "pair": 1,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 20509,
+        "units": 1,
+        "max_unit_bytes": 20500,
+        "total_text_bytes": 20500
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "single-4096",
+      "pair": 2,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 20509,
+        "units": 1,
+        "max_unit_bytes": 20500,
+        "total_text_bytes": 20500
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    },
+    {
+      "target": 4096,
+      "mode": "single-4096",
+      "pair": 3,
+      "status": "unrun",
+      "input_dimensions": {
+        "artifact_bytes": 20509,
+        "units": 1,
+        "max_unit_bytes": 20500,
+        "total_text_bytes": 20500
+      },
+      "reason": "unrun: earlier failure in condition",
+      "report": null
+    }
+  ]
+}

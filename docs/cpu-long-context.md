@@ -261,3 +261,266 @@ comparison, host CPU/load, unit-test output and LSP diagnostics (zero errors).
 This establishes short-input model compatibility and natural translation only;
 representative input quality, repeated scaling measurements and product limits
 remain the next #14 tasks.
+
+
+## Natural Index translation measurement (#14, 2026-10-10)
+
+The independent `cpuspike translate` research mode uses the existing real
+`goinfer.Open` → `NewSegmentedCore` → protection, exact-budget segment planning,
+sequential generation, restoration, validation and artifact preparation path.
+It supplies separate `unit.Session` records rather than concatenating labels.
+TM is explicitly absent: this calls `Core.Generate`, performs no lookup/commit,
+and the warm run is another generation through the same loaded model.
+The original Coder probes and their defaults above remain available.
+
+The CLI accepts a JSON array of English unit strings:
+
+```sh
+CGO_ENABLED=0 go build -o /tmp/yakuori-issue14-cpuspike ./tools/cpuspike
+/tmp/yakuori-issue14-cpuspike translate \
+  --model /local/Index-Translate-2B.Q4_K_M.gguf \
+  --fixture docs/evidence/cpu-long-context/index-translate/fixtures/00-short.json \
+  --context-tokens 1024 --max-output-tokens 256 \
+  --request-timeout 300s --generation-timeout 1500s
+```
+
+JSON goes to stdout and diagnostics to stderr; failures exit nonzero. The reader's
+2 MiB/4,096-unit frame bounds this research import only and is **not a product
+limit**. Malformed/empty fixtures and unsupported ambient `GOINFER_*` tuning fail.
+No production Core, model default or configuration is changed by this probe.
+
+The [committed inputs](evidence/cpu-long-context/index-translate/fixtures/) distinguish
+one authored short sentence, all 19 English BetterKeybinds labels, synthetic
+4×/16×/64× repetitions (76/304/1,216 separate units), and single English units
+extended to around 1K/2K/4K source tokens. Labels are extracted from column four
+of `tools/w3spike/testdata/better-keybinds/en.source.csv`, splitting only the first
+three `|` delimiters. Original source and MIT notice remain in that directory;
+[existing rights/source records](research/w3strings-roundtrip.md#external-modsample-fixtures)
+apply. These are real English labels; the authored `testdata/en.csv` is not used.
+Long single-unit inputs are repeated ordinary English sentences and test
+segmentation/scale, not representative narrative quality.
+
+The trial host is Ryzen 7 7700X, Linux amd64, Go 1.27.1 (`nodwarf5` build),
+CPU/int4, greedy, thinking=false, no retry. Runtime Docker has
+`--cpus=16 --memory=16g --memory-swap=16g`; the supervisor uses GOMAXPROCS=16,
+GOMEMLIMIT=14336MiB, a sampled 16GiB RSS watchdog and a 1GiB host-available floor.
+Ambient GOINFER variables are removed. The supervisor retains its legacy
+defaults (GOMEMLIMIT=2300MiB, RSS watchdog=3072MiB, process wall=360s); the
+recorded translate command explicitly overrides all three. They are independent
+of the Docker 16GiB memory frame. 16GiB is a reversible experimental cgroup
+frame, not an RSS guarantee. Trial request/generation/process budgets are
+300/1500/1800 seconds, **not adopted product values**. Every run receives a fresh
+generation context; cancellation is drained before a fresh context is used for
+reuse. Each context/output pair (1024/256, 2048/512, 4096/1024) gets three fresh
+process/model loads with a cold generation and a same-model warm rerun. Cold
+means a fresh process/model; OS page cache is not flushed. A failed
+condition stops later pairs/stages in that size family and explicitly records
+unrun entries. Single-unit stages are a separate family. Watchdog kills are
+interruptions, never successful cooperative cancellation.
+
+Reports retain per-unit source bytes, artifact/total text bytes, all planned
+segments (including pieces not requiring generation), per-request prompt/output
+tokens and text, load/generation/total/warm times, RSS and validation outcomes.
+`cold.total_ms` excludes the separately recorded `load_ms`; add the two for
+load-inclusive cold elapsed. `revalidation_ms` times a separate real validation of
+accepted output; Core also validates and prepares the artifact inside its total.
+It must not be interpreted as the whole Core validation/export cost.
+`validation_denominator` counts units passing Core mechanical checks before an
+error, plus the failed restore/validation attempt when one occurs. The failed
+unit ID identifies the earlier validated units even though Core returns no
+accepted subset. A generation failure is separately
+recorded and does not fabricate a validation failure. Raw partial backend text is
+retained for diagnosis but `accepted_units=0` on any Core failure.
+`container_memory_peak_bytes` is the container-wide cumulative peak through that
+case, while `peak_rss_kib` and sampled RSS belong to the child process.
+
+
+The staged matrix was started with the initial measurement binary before a
+reporting correction: its raw `validation_ms` means the extra revalidation time,
+and its raw failure denominator omits earlier validated units because Core
+returns no accepted subset. Raw JSON is preserved. The comparison below derives
+correct failure denominators from the observed `localize.Error` unit ID and
+fixture order; this changes reporting only and does not regenerate failed input.
+The final probe calls that field `revalidation_ms` and directly computes the
+correct denominator. No model/Core/generation setting changed for this correction.
+
+The actual staged invocation (after supplying a Python-capable Debian bookworm
+measurement image) is:
+
+```sh
+docker run --rm --name yakuori-issue14-natural \
+  --cpus=16 --memory=16g --memory-swap=16g \
+  -v "$PWD:/src" -v /tmp/yakuori-issue14-cpuspike:/probe:ro \
+  -v "$HOME/.cache/yakuori/models:/local:ro" \
+  --entrypoint python3 yakuori-issue14-measure \
+  /src/ci/run-long-context.py /probe \
+  /local/Index-Translate-2B.Q4_K_M.gguf \
+  /src/docs/evidence/cpu-long-context/index-translate/results \
+  --translate-fixtures /src/docs/evidence/cpu-long-context/index-translate/fixtures \
+  --process-wall-seconds 1800 --request-timeout-seconds 300 \
+  --generation-timeout-seconds 1500 --rss-limit-mib 16384 \
+  --go-memory-limit-mib 14336
+```
+
+The local measurement image extends the existing Debian bookworm
+`yakuori-publication-probe` image with `apt-get install --no-install-recommends
+python3`; the runtime uses the mounted CGO=0 binary and local model. See
+[environment](evidence/cpu-long-context/index-translate/environment.json) and
+[resident load sample](evidence/cpu-long-context/index-translate/host-load.txt).
+Build/tests/SQLite measurements are excluded while a model measurement runs.
+The host still has its normal desktop/Codex processes; this is not an isolated
+bare-metal benchmark or an SLO.
+
+`artifact_bytes` is the imported JSON fixture's UTF-8 byte count. It must not be
+confused with the source MOD's 952-byte `en.w3strings` binary or its source CSV.
+This measures the experimental Session boundary, not a production w3strings
+adapter, compressed binary admission or full MOD compatibility.
+
+The final probe's `deadline_overrun_ms` uses the backend's effective deadline
+(the earlier of the parent generation budget and request budget), measured
+through drain/classification return. The staged matrix's initial raw reports do
+not contain that metric; no request-only subtraction is used to invent a zero
+parent-deadline overrun. A watchdog interruption supplies no cooperative drain
+measurement.
+
+Mechanical acceptance is not a quality decision. In the real-label pair1 warm
+samples at all three contexts (with identical 19 outputs), `Cast Aard`, `Cast Axii`, and `Sheathe Auto` are unchanged (3/19).
+`Cast Igni` becomes `カスト・イグニ`, `Cancel Aiming` becomes
+`エイメイをキャンセルする`, and `Switch Pocket1` retains the English `Pocket`.
+The labels therefore expose untranslated words, transliteration and unnatural
+renderings despite zero mechanical failures. These measurements do not approve
+the model or output quality for production. The authored short sentence does
+translate to `村は安全です。`; that observation does not establish label or
+narrative quality.
+
+### Completed short/label conditions
+
+All three contexts completed three cold+warm pairs for each short/label stage.
+The dimensions below describe the imported research JSON and real Session units;
+they are separate observed cases, not a generic prose limit.
+
+| Input | Artifact bytes | Units | Maximum unit bytes | Total source text bytes | Planned segments per run |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Authored short sentence | 29 | 1 | 20 | 20 | 1 |
+| Real English MOD labels | 376 | 19 | 19 | 259 | 19 |
+| 4× repeated labels | 1495 | 76 | 19 | 1036 | 76 |
+
+The largest completed label batch has five observed bounds of **1495 artifact
+bytes, 76 units, 19 maximum unit bytes, 1036 total source text bytes, and 76
+segments**. The separate authored short sentence is 20 bytes. Neither case
+establishes a general sentence-length or narrative limit. The source MOD binary
+is 952 bytes; that number is not the measured JSON artifact size.
+
+Elapsed ranges are across three pairs. Cold includes model load; warm is a
+same-model generation with a fresh generation context. RSS is the larger of the
+child's reported kernel peak and the supervisor's observed peak, in MiB.
+
+| Context | Input | Completed pairs | Cold including load (s) | Warm (s) | Maximum child RSS (MiB) |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 1024 | 00-short | 3/3 | 6.271–6.472 | 3.197–3.226 | 3634.8 |
+| 1024 | 01-fixture | 3/3 | 61.634–62.835 | 58.511–59.837 | 3581.4 |
+| 1024 | 02-x4 | 3/3 | 237.108–238.022 | 234.032–234.730 | 3564.8 |
+| 2048 | 00-short | 3/3 | 6.093–6.611 | 3.165–3.238 | 3665.0 |
+| 2048 | 01-fixture | 3/3 | 62.008–62.144 | 58.559–60.215 | 3462.0 |
+| 2048 | 02-x4 | 3/3 | 238.049–241.757 | 234.907–235.603 | 3576.2 |
+| 4096 | 00-short | 3/3 | 6.122–6.241 | 3.209–3.242 | 3703.6 |
+| 4096 | 01-fixture | 3/3 | 61.816–61.978 | 58.541–58.978 | 3632.8 |
+| 4096 | 02-x4 | 3/3 | 237.446–238.113 | 234.562–235.009 | 3580.5 |
+
+Across these completed pairs, the maximum single request was 3.959897s,
+maximum load was 4.179474s, and additional revalidation took
+0.002786–0.219864ms per run. The other Core overhead includes planning,
+protection, restoration, validation and export preparation; it is not an isolated
+validation measurement. The cumulative container peak reached 5549846528 bytes
+through the entire staged matrix, rather than an independent peak for each row.
+
+### Failed and unrun stages
+
+The [all-case summary](evidence/cpu-long-context/index-translate/summary.json) and
+[unaltered supervisor results](evidence/cpu-long-context/index-translate/results/supervisor.json)
+record all **72 planned pairs: 27 complete successes, 3 process-wall
+interruptions, 3 generation failures, and 39 unrun pairs**. Each context has nine
+complete short/label pairs, one interrupted 304-unit pair and one failed single
+unit pair. Later pairs of the failed stage and all higher stages in that family
+are unrun. No failed generation was retried.
+
+| Context/output | 304-unit pair1 | Near-1K single-unit cold | Single prompt/output tokens | Accepted long units |
+| --- | --- | --- | --- | ---: |
+| 1024/256 | wall interruption at 1800.192s | MaxTokens after 36.596s | 768/256 | 0 |
+| 2048/512 | wall interruption at 1800.147s | MaxTokens after 72.077s | 1238/512 | 0 |
+| 4096/1024 | wall interruption at 1800.185s | MaxTokens after 104.671s | 1238/1024 | 0 |
+
+Interrupted pair stdout is empty because the CLI emits its report only when the
+pair returns. Cold/warm completion and validation counts inside those interrupted
+pairs are **unknown**, even if elapsed time suggests that cold may have finished.
+They are not request timeouts, cooperative cancellation successes, completed
+304-unit translations or accepted partial output. The 1,216-unit stage has no
+executed pair at any context.
+
+Every long single-unit family failed at its first 5150-byte source unit
+(5159-byte JSON artifact); the larger 10250/20500-byte units are unrun. At
+4096/1024 the 1238-token prompt fits the context but generation reaches the
+1024-token output reservation. This demonstrates insufficient output reservation
+under this trial policy, not an input-context rejection. At 2048/512 the same
+prompt reaches 512 output tokens; at 1024/256 the two-segment plan fails on its
+first 768-token prompt reaching 256 output tokens. No long unit is accepted.
+Mechanical validation failures are 0/0 for each of these first-unit generation
+failures; generation failures remain a separate category.
+
+The evidence supports comparing a **limited short-label workload** with the five
+observed bounds above. It cannot establish general prose limits: a single
+20-byte sentence succeeds, while the first measured extended prose unit fails.
+Another option is an owner-approved limited experiment with a larger output
+reservation, such as context/output 4096/2048. That experiment and any resulting
+limit/model adoption are deferred; neither is performed or implied here.
+
+### Cancellation, bounded input and reporting QA
+
+The corrected probe was built with
+`CGO_ENABLED=0 go build -o /tmp/yakuori-issue14-cpuspike-final ./tools/cpuspike`.
+The staged results above retain the earlier reporting implementation; no failed
+natural generation was repeated. New reports call the extra validation pass
+`revalidation_ms`, and derive the validated denominator from the failing unit's
+position when Core discards previously accepted results. Core's own validation
+cost remains part of its combined overhead.
+
+For the deadline check, a temporary fixture directory contained only copies of
+`00-short.json` and `02-x4.json`. The same Docker invocation and mounts as the
+matrix used the corrected binary, that directory as `--translate-fixtures`, and
+`--contexts 1024 --pairs 1 --deadline-probe`, retaining all explicit resource and
+time budgets. Each process first requested a 100ms deadline, returned after drain,
+and then reused the loaded model with a **fresh** 1500s generation context and
+normal 300s request timeout. The [deadline reports](evidence/cpu-long-context/index-translate/deadline/supervisor.json)
+show both processes returned zero without watchdog interruption.
+
+| Input | Timed request/drain ms | Effective deadline overrun ms | Fresh warm total s | Warm accepted/validated |
+| --- | ---: | ---: | ---: | ---: |
+| Short sentence | 102.502 | 2.502 | 3.231 | 1/1 |
+| 76 labels, largest successful batch | 113.900 | 13.900 | 234.789 | 76/76 |
+
+These are cooperative cancellation measurements, not hard-wall guarantees. The
+overrun uses the earlier of the enclosing generation deadline and request
+budget. The original matrix predates this field and cannot establish its overrun.
+
+A separate intentional reporting QA used
+`translate --model /local/Index-Translate-2B.Q4_K_M.gguf --fixture /inputs/late-failure.json --context-tokens 1024 --max-output-tokens 8 --request-timeout 300s --generation-timeout 1500s`
+inside the same 16CPU/16GiB container. Its
+[saved input](evidence/cpu-long-context/index-translate/qa/late-unit-input.json)
+and [report](evidence/cpu-long-context/index-translate/qa/late-unit-failure.json)
+show first-unit Stop followed by second-unit MaxTokens, exit 1, zero accepted
+output, and **0 validation failures / 1 validated unit**. This tests the corrected
+denominator and is not a performance matrix retry. An input of 2MiB+1 spaces
+with output reservation 256 returned exit 1 and
+[JSON error](evidence/cpu-long-context/index-translate/qa/oversized.json)
+`research fixture exceeds 2 MiB` before model load (`load_ms=0`). The research
+reader guard does not establish a product artifact limit.
+
+`CGO_ENABLED=0 go test ./internal/sqliteprobe ./tools/cpuspike -count=1 -v`
+passed with the measured-results opt-in enabled, including the existing busy,
+operation cancellation and rollback scenarios. The six supervisor tests passed
+with `python3 ci/test-long-context-supervisor.py`, including process-wall, RSS,
+host-memory-floor interruption and preservation of failures/unrun stages.
+`gopls check` on the five changed Go files returned zero errors (one optional
+`fmt.Appendf` style suggestion). These checks and actual CLI exit statuses are
+captured under `.omo/evidence/issue-14-task2/`; reproducible model outputs and
+supervisor observables are the linked JSON artifacts above.

@@ -164,7 +164,7 @@ Local results: PASS module verification, all tests (five spike runs), CGO-free
 dependency checks, build, vet, Linux arm64 CLI cross-build and explicit arm64
 SQLite-bearing test binary compilation. The expected negative cgo-guard fixture
 prints `exit status 1` inside an intentionally caught failure; the script succeeds.
-Docker is unavailable on this local executor; the PR's exact-head CI provides the
+Docker was unavailable on that initial local executor; the PR's exact-head CI provides the
 clean-image result. The tests run in the existing required Linux CI, and the
 arm64 probe compilation was added because the ordinary CLI does not yet link SQLite.
 
@@ -172,3 +172,45 @@ Not executed/claimed: arm64 runtime, real game files/translation/acceptance,
 maximum-workload benchmarks, WAL/concurrent file replacement, process-kill recovery,
 power-loss tests, TM integration, security audit, release or deployment. Later
 failures must not erase user assets, publish output or turn into a cache miss.
+
+## Natural translation batch experiment (#14)
+
+`TestMeasuredTranslationBatches` imports successful warm parent translations from
+`YAKUORI_MEASURED_TRANSLATIONS`, opens a fresh test-owned SQLite fixture for each
+batch, and inserts those actual UTF-8 outputs through the existing dedicated
+connection transaction probe. It verifies the committed row count and reports
+rows, translated bytes and transaction/commit elapsed time. It does not use
+backend partial output from failed/interrupted translation and does not implement
+production TM, source/profile serialization or cache lookup.
+
+The trial conditions remain `busy_timeout=100ms`, operation context 1s (including
+connection acquisition and COMMIT), separate cleanup context 1s, retry=0. These
+are initial measurement conditions, not a new product-budget adoption. Existing
+busy/rollback tests remain the contention and cleanup evidence. Translation CPU
+measurement and DB measurement run sequentially to avoid load contamination.
+The test-owned databases are under this host's `/tmp` (`tmpfs`,
+`rw,noatime,inode64,huge=advise`); these commit timings do not demonstrate slow
+persistent-filesystem performance.
+
+```sh
+YAKUORI_MEASURED_TRANSLATIONS="$PWD/docs/evidence/cpu-long-context/index-translate/results" \
+  CGO_ENABLED=0 go test ./internal/sqliteprobe ./tools/cpuspike -count=1 -v
+```
+
+The [measured batch results](evidence/cpu-long-context/index-translate/sqlite-batches.json)
+contain 27 successful warm batches (three contexts × three inputs × three pairs).
+The full SQLite and CLI-probe test invocation above passed, including existing
+writer/commit busy, cancellation, rollback and operation-budget checks. Each
+measured database committed exactly its expected rows; failed/interrupted CPU
+reports supply no batch.
+
+| Rows per batch | Measured batches | UTF-8 translated bytes per batch | Transaction + commit range (ms) |
+| ---: | ---: | ---: | ---: |
+| 1 | 9 | 21 | 0.052148–0.069541 |
+| 19 | 9 | 440 | 0.143651–0.159791 |
+| 76 | 9 | 1760 | 0.431723–0.523306 |
+
+All observed transaction/commit times fit the initial 1s operation budget on
+this tmpfs host fixture. These values do not establish a persistent-disk SLO,
+production TM capacity, serialization cost, cache-hit behavior or the cost of
+larger unmeasured batches. No new database budget is adopted by this experiment.

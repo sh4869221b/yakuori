@@ -1,0 +1,90 @@
+{
+  "host_cpu": "AMD Ryzen 7 7700X 8-Core Processor",
+  "logical_cpus": 16,
+  "platform": "Linux-7.3.0-rc6-2-cachyos-rc-x86_64-with-glibc2.44",
+  "meminfo": "MemTotal:       32549000 kB\nMemFree:        18981440 kB\nMemAvailable:   20674892 kB\nBuffers:             968 kB\nCached:          1773184 kB\nSwapCached:      2258276 kB\nActive:          3047268 kB\nInactive:        5666772 kB\nActive(anon):    2848200 kB\nInactive(anon):  4387056 kB\nActive(file):     199068 kB\nInactive(file):  1279716 kB\nUnevictable:      327588 kB\nMlocked:               0 kB\nSwapTotal:      41943036 kB\nSwapFree:       26909980 kB\nZswap:           1992552 kB\nZswapped:        5511704 kB\nDirty:              2488 kB\nWriteback:             0 kB\nAnonPages:       7217780 kB\nMapped:           853364 kB\nShmem:             32756 kB\nKReclaimable:     679360 kB\nSlab:            1268172 kB\nSReclaimable:     679360 kB\nSUnreclaim:       588812 kB\nKernelStack:       73808 kB\nPageTables:       262556 kB\nSecPageTables:      6380 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    58217536 kB\nCommitted_AS:   64207024 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:      191540 kB\nVmallocChunk:          0 kB\nPercpu:            21248 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:    874496 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nCmaTotal:              0 kB\nCmaFree:               0 kB\nUnaccepted:            0 kB\nBalloon:               0 kB\nGPUActive:             0 kB\nGPUReclaim:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:     2227484 kB\nDirectMap2M:    31023104 kB\nDirectMap1G:     1048576 kB\n",
+  "other_resident_processes": [
+    {
+      "pid": 2021,
+      "comm": "Hyprland"
+    },
+    {
+      "pid": 2516,
+      "comm": "electron"
+    },
+    {
+      "pid": 2734,
+      "comm": "electron"
+    },
+    {
+      "pid": 2739,
+      "comm": "electron"
+    },
+    {
+      "pid": 2763,
+      "comm": "electron"
+    },
+    {
+      "pid": 2849,
+      "comm": "electron"
+    },
+    {
+      "pid": 2855,
+      "comm": "electron"
+    },
+    {
+      "pid": 2894,
+      "comm": "electron"
+    },
+    {
+      "pid": 3249,
+      "comm": "electron"
+    },
+    {
+      "pid": 3814,
+      "comm": "steam"
+    },
+    {
+      "pid": 13065,
+      "comm": "firefox"
+    },
+    {
+      "pid": 168017,
+      "comm": "codex"
+    },
+    {
+      "pid": 461826,
+      "comm": "python3"
+    },
+    {
+      "pid": 597726,
+      "comm": "codex"
+    },
+    {
+      "pid": 644977,
+      "comm": "python3"
+    },
+    {
+      "pid": 645429,
+      "comm": "probe"
+    },
+    {
+      "pid": 645792,
+      "comm": "python3"
+    }
+  ],
+  "loadavg_at_recording": "7.39 3.08 1.38 8/4604 645793",
+  "docker_cpu_limit": 16,
+  "docker_memory_bytes": 17179869184,
+  "docker_memory_swap_bytes": 17179869184,
+  "gomaxprocs": 16,
+  "go_memory_limit_mib": 14336,
+  "goinfer_environment": "removed by supervisor; refused by child",
+  "measurement_concurrency": "one natural probe at a time; no concurrent build/test/DB measurement",
+  "supervisor_rss_limit_mib": 16384,
+  "supervisor_host_available_floor_mib": 1024,
+  "request_timeout_seconds": 300,
+  "generation_timeout_seconds": 1500,
+  "process_wall_seconds": 1800,
+  "process_wall_scope": "entire cold+warm process pair, including model load"
+}
