@@ -24,6 +24,9 @@ var (
 	ErrDeclinedTokenizer  = errors.New("tokenizer declined model")
 	ErrUnknownTemplate    = errors.New("unknown chat template")
 	ErrUnknownStop        = errors.New("unresolved template stop token")
+	ErrBusy               = errors.New("inference engine is busy")
+	ErrContextLimit       = errors.New("generation exceeds model context")
+	ErrInvalidOutput      = errors.New("invalid generation output")
 )
 
 type modelBackend interface {
@@ -31,6 +34,7 @@ type modelBackend interface {
 	EffectiveBackend() string
 	Quant() string
 	Close() error
+	generate(context.Context, generationInput) tokenStream
 }
 
 type requestTokenizer interface {
@@ -38,6 +42,7 @@ type requestTokenizer interface {
 	PreTokenizerDecline() string
 	TokenID(string) (int, bool)
 	EncodeSegments([]tokenizer.Segment, bool) ([]int, error)
+	Decode([]int) (string, error)
 }
 
 type loaders struct {
@@ -46,20 +51,28 @@ type loaders struct {
 }
 
 type Engine struct {
-	mu        sync.Mutex
-	model     modelBackend
-	tokenizer requestTokenizer
-	template  *chat.Template
-	info      inference.ModelInfo
-	stopIDs   []int
-	closed    bool
-	closeErr  error
+	mu           sync.Mutex
+	tokenizerMu  sync.Mutex
+	model        modelBackend
+	tokenizer    requestTokenizer
+	template     *chat.Template
+	info         inference.ModelInfo
+	stopIDs      []int
+	closing      bool
+	closeDone    chan struct{}
+	closeErr     error
+	activeCancel context.CancelFunc
+	activeDone   chan struct{}
 }
 
 func Open(ctx context.Context, modelPath, computeQuant string) (*Engine, error) {
 	return open(ctx, modelConfig{path: modelPath, quant: computeQuant}, loaders{
 		model: func(path string, options decoder.Options) (modelBackend, error) {
-			return decoder.Load(path, options)
+			model, err := decoder.Load(path, options)
+			if err != nil {
+				return nil, err
+			}
+			return &decoderModel{Model: model}, nil
 		},
 		tokenizer: func(path string) (requestTokenizer, error) { return tokenizer.LoadGGUF(path) },
 	})
@@ -68,7 +81,7 @@ func Open(ctx context.Context, modelPath, computeQuant string) (*Engine, error) 
 func (e *Engine) Info(ctx context.Context) (inference.ModelInfo, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.closed {
+	if e.closing {
 		return inference.ModelInfo{}, ErrClosed
 	}
 	if err := ctx.Err(); err != nil {
@@ -77,19 +90,11 @@ func (e *Engine) Info(ctx context.Context) (inference.ModelInfo, error) {
 	return e.info, nil
 }
 
-func (e *Engine) Close() error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if !e.closed {
-		e.closed = true
-		e.closeErr = e.model.Close()
-	}
-	return e.closeErr
-}
-
 func (e *Engine) identity() inference.RequestIdentity {
 	return inference.RequestIdentity{
 		ModelSHA256: e.info.ModelSHA256, Tokenizer: e.info.Tokenizer,
 		Template: e.info.Template, PromptSchema: prompt.SchemaV1,
 	}
 }
+
+var _ inference.Engine = (*Engine)(nil)

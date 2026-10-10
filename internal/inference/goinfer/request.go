@@ -13,8 +13,17 @@ import (
 
 func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy inference.GenerationPolicy) (inference.GenerationRequest, error) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.closed {
+	closing := e.closing
+	e.mu.Unlock()
+	if closing {
+		return inference.GenerationRequest{}, ErrClosed
+	}
+	e.tokenizerMu.Lock()
+	defer e.tokenizerMu.Unlock()
+	e.mu.Lock()
+	closing = e.closing
+	e.mu.Unlock()
+	if closing {
 		return inference.GenerationRequest{}, ErrClosed
 	}
 	if err := ctx.Err(); err != nil {
@@ -47,7 +56,7 @@ func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy infe
 func (e *Engine) CountTokens(ctx context.Context, request inference.GenerationRequest) (int, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.closed {
+	if e.closing {
 		return 0, ErrClosed
 	}
 	if err := ctx.Err(); err != nil {
