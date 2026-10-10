@@ -13,6 +13,7 @@ import (
 	textadapter "github.com/sh4869221b/yakuori/internal/adapter/text"
 	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
+	"github.com/sh4869221b/yakuori/internal/segment"
 	"github.com/sh4869221b/yakuori/internal/unit"
 )
 
@@ -20,6 +21,72 @@ type commonEngine struct {
 	inference.Engine
 	count    func(context.Context, inference.GenerationRequest) (int, error)
 	generate func(context.Context, inference.GenerationRequest) (inference.GenerationResult, error)
+}
+
+func TestInferenceCorePreflightsAllRequests(t *testing.T) {
+	injected := errors.New("request preparation failed")
+	for _, failure := range []string{"context", "policy", "build", "count", "success"} {
+		t.Run(failure, func(t *testing.T) {
+			var events []string
+			backend := commonEngine{
+				count: func(_ context.Context, request inference.GenerationRequest) (int, error) {
+					text := request.RenderedPrompt()
+					events = append(events, "count "+text)
+					if text == "two" {
+						if failure == "count" {
+							return 0, injected
+						}
+						if failure == "context" {
+							return config.DefaultLimits().ContextTokens, nil
+						}
+					}
+					return 3, nil
+				},
+				generate: func(_ context.Context, request inference.GenerationRequest) (inference.GenerationResult, error) {
+					events = append(events, "generate "+request.RenderedPrompt())
+					return inference.GenerationResult{Text: "訳文", Finish: inference.Stop, PromptTokens: 3}, nil
+				},
+			}
+			engine := NewInferenceEngine(backend, func(_ context.Context, _ unit.UnitID, text string) (inference.GenerationRequest, error) {
+				events = append(events, "build "+text)
+				if text == "two" && failure == "build" {
+					return inference.GenerationRequest{}, injected
+				}
+				if text == "two" && failure == "policy" {
+					policy, err := inference.NewGenerationPolicy(1, config.DefaultLimits().MaxOutputTokens+1, time.Second)
+					if err != nil {
+						t.Fatal(err)
+					}
+					return inference.NewGenerationRequest(inference.PreparedRequest{RenderedPrompt: text, TokenIDs: []int{1, 2, 3}}, policy)
+				}
+				return inferenceRequest(t, text), nil
+			})
+			session, profile := generationFixture(t, []string{"one", "two"}, nil)
+			accepted, err := NewCore(engine).Generate(context.Background(), session, profile)
+			if failure == "success" {
+				want := []string{"build one", "count one", "build two", "count two", "generate one", "generate two"}
+				if err != nil || len(accepted) != 2 || !slices.Equal(events, want) {
+					t.Fatalf("accepted=%v err=%v events=%v", accepted, err, events)
+				}
+				return
+			}
+			wantErr := injected
+			if failure == "context" {
+				wantErr = segment.ErrContextLimit
+			} else if failure == "policy" {
+				wantErr = inference.ErrInvalidPolicy
+			}
+			var diagnostic *Error
+			if !errors.Is(err, wantErr) || !errors.As(err, &diagnostic) || diagnostic.Phase != "plan" || diagnostic.UnitID != session.Units()[1].ID() || accepted != nil {
+				t.Fatalf("accepted=%v err=%v", accepted, err)
+			}
+			for _, event := range events {
+				if strings.HasPrefix(event, "generate ") {
+					t.Fatalf("generation before preflight completed: %v", events)
+				}
+			}
+		})
+	}
 }
 
 func TestInferenceCoreUsesSelectedLimits(t *testing.T) {

@@ -56,25 +56,33 @@ func (e *Error) Unwrap() error { return e.Err }
 type Core struct {
 	limits    config.Limits
 	engine    Engine
+	inference *InferenceEngine
 	segmented *segmentedGenerator
 }
 
-func NewCore(engine Engine) Core { return Core{engine: engine, limits: config.DefaultLimits()} }
+func NewCore(engine Engine) Core {
+	return newCore(engine, config.DefaultLimits())
+}
 
 func NewCoreWithLimits(engine Engine, limits config.Limits) (Core, error) {
 	if err := limits.Check(); err != nil {
 		return Core{}, err
 	}
+	return newCore(engine, limits), nil
+}
+
+func newCore(engine Engine, limits config.Limits) Core {
+	core := Core{engine: engine, limits: limits}
 	switch e := engine.(type) {
 	case InferenceEngine:
 		e.limits = limits
-		engine = e
+		core.inference = &e
 	case *InferenceEngine:
 		copy := *e
 		copy.limits = limits
-		engine = &copy
+		core.inference = &copy
 	}
-	return Core{engine: engine, limits: limits}, nil
+	return core
 }
 
 // Generate returns no usable subset when any unit fails.
@@ -101,6 +109,7 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 	// Finish every unit's protection and plan before any generation starts.
 	preparedUnits := make([]protect.Prepared, 0, len(units))
 	plans := make([]segment.Plan, 0, len(units))
+	inferencePlans := make([]inferencePlan, len(units))
 	segments := 0
 	for _, u := range units {
 		id := u.ID()
@@ -128,6 +137,12 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 			if err := c.limits.CheckSegments(segments); err != nil {
 				return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 			}
+			if c.inference != nil && prepared.GenerationRequired() {
+				inferencePlans[len(preparedUnits)], err = c.inference.plan(ctx, id, prepared.Text())
+				if err != nil {
+					return nil, &Error{Phase: "plan", UnitID: id, Err: err}
+				}
+			}
 		}
 		preparedUnits = append(preparedUnits, prepared)
 		plans = append(plans, plan)
@@ -147,7 +162,11 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 			} else {
 				requestCtx, cancelRequest := context.WithTimeout(ctx, c.limits.RequestTimeout)
 				if err = requestCtx.Err(); err == nil {
-					generated, err = c.engine.Generate(requestCtx, id, candidate)
+					if c.inference != nil {
+						generated, err = c.inference.generate(requestCtx, inferencePlans[i])
+					} else {
+						generated, err = c.engine.Generate(requestCtx, id, candidate)
+					}
 				}
 				err = errors.Join(err, requestCtx.Err())
 				cancelRequest()

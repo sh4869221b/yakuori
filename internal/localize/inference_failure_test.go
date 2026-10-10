@@ -79,7 +79,11 @@ func TestInferenceCoreFailure(t *testing.T) {
 				t.Fatalf("result = %+v, error = %v, writes = %d, commits = %d, rows = %v", result, err, sink.calls, memory.calls, memory.rows)
 			}
 			var diagnostic *Error
-			if !errors.As(err, &diagnostic) || (tt.stage != "" && diagnostic.Phase != "generate") || (tt.stage != "" && diagnostic.UnitID.StableID() != "document") {
+			phase := "generate"
+			if tt.stage == "build" || tt.stage == "count" {
+				phase = "plan"
+			}
+			if !errors.As(err, &diagnostic) || (tt.stage != "" && diagnostic.Phase != phase) || (tt.stage != "" && diagnostic.UnitID.StableID() != "document") {
 				t.Fatalf("diagnostic = %v", err)
 			}
 			wantCounts, wantGenerates := 1, 1

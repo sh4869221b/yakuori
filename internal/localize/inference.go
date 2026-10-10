@@ -2,6 +2,7 @@ package localize
 
 import (
 	"context"
+	"errors"
 
 	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
@@ -21,26 +22,49 @@ func NewInferenceEngine(engine inference.Engine, buildRequest func(context.Conte
 }
 
 func (e InferenceEngine) Generate(ctx context.Context, id unit.UnitID, text string) (Generation, error) {
+	plan, err := e.plan(ctx, id, text)
+	if err != nil {
+		if errors.Is(err, segment.ErrContextLimit) {
+			return Generation{Finish: ContextLimit}, err
+		}
+		if errors.Is(err, inference.ErrInvalidPolicy) {
+			return Generation{Finish: InvalidOutput}, err
+		}
+		return Generation{}, err
+	}
+	return e.generate(ctx, plan)
+}
+
+type inferencePlan struct {
+	request inference.GenerationRequest
+	count   int
+}
+
+func (e InferenceEngine) plan(ctx context.Context, id unit.UnitID, text string) (inferencePlan, error) {
 	request, err := e.buildRequest(ctx, id, text)
 	if err != nil {
-		return Generation{}, err
+		return inferencePlan{}, err
 	}
 	limits := e.limits
 	policy := request.Policy()
 	if policy.MaxOutputTokens > limits.MaxOutputTokens || policy.RequestTimeout > limits.RequestTimeout {
-		return Generation{Finish: InvalidOutput}, inference.ErrInvalidPolicy
+		return inferencePlan{}, inference.ErrInvalidPolicy
 	}
 	count, err := e.engine.CountTokens(ctx, request)
 	if err != nil {
-		return Generation{}, err
+		return inferencePlan{}, err
 	}
 	if count > limits.ContextTokens-policy.MaxOutputTokens {
-		return Generation{Finish: ContextLimit}, segment.ErrContextLimit
+		return inferencePlan{}, segment.ErrContextLimit
 	}
+	return inferencePlan{request: request, count: count}, ctx.Err()
+}
+
+func (e InferenceEngine) generate(ctx context.Context, plan inferencePlan) (Generation, error) {
 	if err := ctx.Err(); err != nil {
 		return Generation{}, err
 	}
-	result, err := e.engine.Generate(ctx, request)
+	result, err := e.engine.Generate(ctx, plan.request)
 	generation := Generation{Text: result.Text}
 	switch result.Finish {
 	case inference.Stop:
@@ -60,7 +84,7 @@ func (e InferenceEngine) Generate(ctx context.Context, id unit.UnitID, text stri
 	default:
 		generation.Finish = InvalidOutput
 	}
-	if result.PromptTokens != count {
+	if result.PromptTokens != plan.count {
 		generation.Finish = InvalidOutput
 	}
 	return generation, err
