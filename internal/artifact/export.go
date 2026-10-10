@@ -16,7 +16,7 @@ var (
 
 type ExpectedTranslations struct {
 	session unit.Session
-	profile [32]byte
+	profile validate.Profile
 	texts   map[unit.UnitID]string
 }
 
@@ -41,7 +41,7 @@ func PrepareExport(session unit.Session, profile validate.Profile, accepted []va
 	if len(texts) != len(session.Units()) {
 		return ExpectedTranslations{}, ErrIncompleteExport
 	}
-	return ExpectedTranslations{session: session, profile: profile.Digest(), texts: texts}, nil
+	return ExpectedTranslations{session: session, profile: profile, texts: texts}, nil
 }
 
 func (e ExpectedTranslations) Text(id unit.UnitID) (string, bool) {

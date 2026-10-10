@@ -13,7 +13,15 @@ var (
 )
 
 type Profile struct {
-	digest [32]byte
+	digest       [32]byte
+	segmentation SegmentationInput
+}
+
+// SegmentationInput identifies the schema and boundary fixtures associated with
+// a profile. The digest remains caller-provided and is not derived here.
+type SegmentationInput struct {
+	Schema           string
+	BoundaryFixtures string
 }
 
 func NewProfile(digest [32]byte) (Profile, error) {
@@ -23,13 +31,22 @@ func NewProfile(digest [32]byte) (Profile, error) {
 	return Profile{digest: digest}, nil
 }
 
-func (p Profile) Digest() [32]byte { return p.digest }
+func NewProfileWithSegmentation(digest [32]byte, input SegmentationInput) (Profile, error) {
+	if digest == ([32]byte{}) || input.Schema == "" || input.BoundaryFixtures == "" {
+		return Profile{}, ErrInvalidProfile
+	}
+	return Profile{digest: digest, segmentation: input}, nil
+}
+
+func (p Profile) Digest() [32]byte                { return p.digest }
+func (p Profile) Segmentation() SegmentationInput { return p.segmentation }
 
 type binding struct {
-	session unit.Session
-	unitID  unit.UnitID
-	source  [32]byte
-	profile [32]byte
+	session      unit.Session
+	unitID       unit.UnitID
+	source       [32]byte
+	profile      [32]byte
+	segmentation SegmentationInput
 }
 
 type AcceptedTranslation struct {
@@ -54,7 +71,7 @@ func CheckBinding(session unit.Session, id unit.UnitID, profile Profile, accepte
 		return ErrInvalidAccepted
 	}
 	b := accepted.binding
-	if !session.SameImport(b.session) || id != b.unitID || u.SourceDigest() != b.source || profile.digest != b.profile {
+	if !session.SameImport(b.session) || id != b.unitID || u.SourceDigest() != b.source || profile.digest != b.profile || profile.segmentation != b.segmentation {
 		return ErrBindingMismatch
 	}
 	return nil

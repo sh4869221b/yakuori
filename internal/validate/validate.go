@@ -36,10 +36,11 @@ func Validate(session unit.Session, id unit.UnitID, profile Profile, candidate s
 	return AcceptedTranslation{
 		text: candidate,
 		binding: binding{
-			session: session,
-			unitID:  id,
-			source:  u.SourceDigest(),
-			profile: profile.digest,
+			session:      session,
+			unitID:       id,
+			source:       u.SourceDigest(),
+			profile:      profile.digest,
+			segmentation: profile.segmentation,
 		},
 		validated: true,
 		review:    reviewContent(u, source, candidate),
