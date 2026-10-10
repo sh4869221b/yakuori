@@ -1,0 +1,3 @@
+=== RUN   TestCUDAEvaluationContracts
+--- PASS: TestCUDAEvaluationContracts (33.98s)
+PASS

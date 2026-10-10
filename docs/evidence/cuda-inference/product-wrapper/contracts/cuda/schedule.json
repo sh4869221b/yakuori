@@ -1,0 +1,8 @@
+[
+  {
+    "backend": "cuda",
+    "fixture": "None",
+    "pair": 0,
+    "status": "passed"
+  }
+]

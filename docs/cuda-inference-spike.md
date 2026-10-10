@@ -1,6 +1,217 @@
-# CUDA inference evaluation and adoption constraints (#23)
+# CUDA inference evaluation: #23 spike and #52 product wrapper
 
-## Scope and current finding
+## Current #52 product wrapper result (2026-10-10)
+
+Issue #52 connects explicit CPU/CUDA selection to the shared inference Engine.
+The product-wrapper measurements below use the same Engine, request construction,
+token counting, segmented Core path and configured defaults on both backends.
+The original #23 spike report follows as historical evidence from before this
+integration; its harness limits and results are not the #52 product results.
+
+### Selection and effective context
+
+[`goinfer.OpenWithOptions`](../internal/inference/goinfer/engine.go) accepts an
+explicit `cpu` or `cuda` backend, `int4` compute quantization and a positive
+configured context. Invalid options are rejected before the model snapshot is
+read. The compatibility `Open(ctx, modelPath, computeQuant)` entry point remains
+CPU-only and retains the model-declared context behavior. There is no automatic
+backend selection, CPU fallback, or generation retry.
+
+CUDA registration is compiled only for `cuda && linux && amd64`; ordinary CPU
+builds do not import the CUDA module, including the existing Linux arm64 CPU
+build. The runtime requires an NVIDIA device and host driver (`libcuda.so.1`); the build
+does not install or bundle a driver. An explicit CUDA load fails with the
+concrete setup reason if CUDA is not built, the driver is unavailable, the
+upstream loader selects CPU, or resident context is inactive or unknown.
+
+For the new options entry point, effective context is the minimum of model
+context, configured context and (for CUDA) active resident context. The tested
+metadata reported model context 262,144, configured and resident cap 4,096,
+effective context 4,096, effective backend `cuda`, resident active, compute
+quantization `int4`, and resident KV precision `f32`. `ModelInfo` also exposes
+requested/effective backend, backend pins and a residency decline reason. It
+does not implement the canonical #15 SourceIdentity/Profile/TM key; the backend
+is not added to immutable request identity. The existing module pins are
+`goinfer@v0.22.0` and `goinfer/cuda@v0.22.0`.
+
+Both backends use the same `DefaultLimits` values from
+[`internal/config/limits.go`](../internal/config/limits.go): artifact 1,495 B,
+76 units, 980 B per unit, 1,036 B total text, 76 segments, context 4,096,
+maximum output 2,048 tokens, 30 s request timeout, 300 s generation timeout,
+1 s database operation and cleanup timeouts, and zero retries. The CUDA matrix
+uses these defaults without the earlier spike's 2 MiB artifact or extended
+experiment timeouts.
+
+### Reproduction and environment
+
+Run from the repository root on Linux amd64 with Docker, Python 3, at least 16
+allowed CPUs, the existing model file, an NVIDIA driver for the actual CUDA
+run, and the official Go `1.27.1` build image. The model is
+`IndexTeam/Index-Translate-2B-GGUF`'s `Index-Translate-2B.Q4_K_M.gguf`; the GGUF
+quantization is `Q4_K_M` and the Engine compute quantization is `int4`. The
+already-present local model is used; this procedure does not fetch model
+weights. An immutable model-repository revision is not pinned.
+
+The recorded host was Linux amd64 with an NVIDIA GeForce RTX 4070, driver
+`615.78.08`, and 12,282 MiB reported GPU memory. This is the only CUDA
+configuration exercised here. The tagged image used official Go `1.27.1` with
+`CGO_ENABLED=0`; its compiler/toolkit absence check is captured in the
+[tagged CUDA build log](evidence/cuda-inference/product-wrapper/tagged-cuda-build.log).
+The accompanying [host driver and model capture](evidence/cuda-inference/product-wrapper/environment/host-driver-model.log)
+records the device/driver sample, `libcuda.so.1` presence and local model file.
+The runner used the first 16 allowed CPUs, `GOMAXPROCS=16`,
+`GOMEMLIMIT=14336MiB`, a sampled RSS ceiling of 16,384 MiB and a host available
+memory floor of 1,024 MiB. Those memory bounds are monitored; no hard cgroup
+memory bound was present. Inherited `GOINFER_*` settings were cleared. Matrix
+requests used the product's 30 s/300 s request/generation budgets; the separate
+runner watchdog is not a product timeout.
+
+```sh
+docker build --progress=plain -f ci/cuda-spike.Dockerfile -t yakuori-issue52-cuda .
+container=$(docker create yakuori-issue52-cuda /bin/true)
+docker cp "$container:/cuda-evaluation.test" /tmp/yakuori-issue52-cuda.test
+docker rm "$container"
+
+model=/home/sh4869/.cache/yakuori/models/Index-Translate-2B.Q4_K_M.gguf
+out=$(mktemp -d)
+python3 ci/run-cuda-evaluation.py --binary /tmp/yakuori-issue52-cuda.test \
+  --model "$model" --output-dir "$out/contracts-cpu" \
+  --mode contracts --backend cpu
+python3 ci/run-cuda-evaluation.py --binary /tmp/yakuori-issue52-cuda.test \
+  --model "$model" --output-dir "$out/contracts-cuda" \
+  --mode contracts --backend cuda
+python3 ci/run-cuda-evaluation.py --binary /tmp/yakuori-issue52-cuda.test \
+  --model "$model" --output-dir "$out/matrix" \
+  --mode matrix --backend both
+```
+
+The captured host outputs are retained under
+[`docs/evidence/cuda-inference/product-wrapper/`](evidence/cuda-inference/product-wrapper/);
+the commands above write a fresh reproduction under `$out` and do not replace
+those captured reports.
+Contract mode's `policy_scope` records that cancellation/deadline/lifecycle
+probes use explicit test budgets; the matrix is the evidence for product
+defaults. The driver-free checks mount only the read-only model and no NVIDIA
+runtime/device. These are the recorded invocations; each result is also kept in
+the `driver-free/` evidence directory.
+
+```sh
+docker run --rm --network none --memory 16g --memory-swap 16g --cpus 16 \
+  -v /home/sh4869/.cache/yakuori/models/Index-Translate-2B.Q4_K_M.gguf:/model.gguf:ro \
+  -v /home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/.omo/evidence/issue-52-cuda-engine:/evidence \
+  -e GOMAXPROCS=16 -e YAKUORI_CUDA_MODEL=/model.gguf \
+  -e YAKUORI_CUDA_BACKEND=cpu -e YAKUORI_CUDA_REPORT=/evidence/driver-free-cpu.json \
+  --entrypoint /cuda-evaluation.test yakuori-issue52-cuda:latest \
+  -test.run '^TestCUDAEvaluationContracts$' -test.v -test.count=1 -test.timeout=1800s \
+  > .omo/evidence/issue-52-cuda-engine/driver-free-cpu.log 2>&1
+
+docker run --rm --network none --memory 4g --memory-swap 4g --cpus 2 \
+  -v /home/sh4869/.cache/yakuori/models/Index-Translate-2B.Q4_K_M.gguf:/model.gguf:ro \
+  -v /home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/.omo/evidence/issue-52-cuda-engine:/evidence \
+  -e YAKUORI_CUDA_MODEL=/model.gguf -e YAKUORI_CUDA_BACKEND=cuda \
+  -e YAKUORI_CUDA_REPORT=/evidence/driver-free-cuda.json \
+  --entrypoint /cuda-evaluation.test yakuori-issue52-cuda:latest \
+  -test.run '^TestCUDAEvaluationContracts$' -test.v -test.count=1 -test.timeout=1800s \
+  > .omo/evidence/issue-52-cuda-engine/driver-free-cuda.log 2>&1
+```
+
+The [CPU contract invocation](evidence/cuda-inference/product-wrapper/driver-free/driver-free-cpu.log)
+returned zero with all 11 scenarios passed. The explicit CUDA invocation
+returned nonzero as expected: `libcuda.so.1` was unavailable, effective backend
+was empty, residency was inactive and cap was zero. The recorded
+[CUDA rejection report](evidence/cuda-inference/product-wrapper/driver-free/driver-free-cuda.json)
+shows the reason. CPU success in this driver-free control is not CUDA evidence.
+
+### Product-wrapper contract and paired matrix results
+
+The actual CUDA [contract report](evidence/cuda-inference/product-wrapper/contracts/cuda/cuda.json)
+and CPU [contract report](evidence/cuda-inference/product-wrapper/contracts/cpu/cpu.json)
+each show all 11 scenarios passed. These cover exact request counting and
+markers, natural Stop, output limit, context boundary equality/overflow,
+cancellation and deadline drain/reuse, close while generating, and idempotent
+Close. These are cooperative cancellation/deadline checks, not hard real-time
+interruption guarantees. CUDA reported requested/effective `cuda`, active
+residency, cap 4,096 and KV precision `f32`; CPU reported effective `cpu` and
+nonresident. The two contract reports record the shared rendered request,
+spans, token IDs, identity, policy and count fields.
+
+The [matrix schedule](evidence/cuda-inference/product-wrapper/matrix/schedule.json)
+contains 26 passing processes: four representative fixtures across three CPU /
+CUDA pairs, plus one pair for the 76-label fixture. Each process records cold
+and warm results, for 52 passing runs total. The planned request objects match
+exactly across all 13 CPU/CUDA pairs. Each backend accepted 284 of 284 units
+with zero mechanical `Validation` failures. The maximum fixture contains 76
+labels, 1,495 artifact bytes and 1,036 total text bytes; the prose fixture has
+one 980-byte text unit and 985 artifact bytes.
+
+The table shows medians across the three pairs (the 76-label fixture has one
+pair). Load includes model snapshot, decoder and tokenizer setup. Generation is
+the sum of Engine `Generate` time for that fixture's units. TTFT is measured
+from the `Generate` call to its first stream token and summarized across cold
+and warm requests; it is not exact prefill time.
+
+| Fixture | Pairs | Load CPU / CUDA (ms) | Cold generation CPU / CUDA (s) | Warm generation CPU / CUDA (s) | TTFT CPU / CUDA (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Short prose | 3 | 3,195.9 / 5,645.4 | 3.82 / 0.11 | 3.75 / 0.10 | 3,337.8 / 53.8 |
+| 19 labels | 3 | 3,354.2 / 5,761.4 | 61.35 / 1.38 | 61.17 / 1.36 | 3,030.9 / 47.6 |
+| Medium prose | 3 | 3,267.2 / 5,631.8 | 7.62 / 0.39 | 7.31 / 0.39 | 4,542.1 / 70.0 |
+| Long prose | 3 | 3,280.8 / 5,694.0 | 20.15 / 1.41 | 19.84 / 1.35 | 8,881.9 / 130.4 |
+| 76 labels | 1 | 3,372.8 / 5,701.3 | 246.60 / 5.79 | 244.30 / 5.59 | 3,010.5 / 48.1 |
+
+The 76-label CPU generations completed within the 300 s generation budget. Its
+[CPU report](evidence/cuda-inference/product-wrapper/matrix/02-x4-pair1-cpu.json)
+records 246.599 s cold and 244.302 s warm generation; the paired
+[CUDA report](evidence/cuda-inference/product-wrapper/matrix/02-x4-pair1-cuda.json)
+records 5.789 s and 5.589 s. The 980-byte prose case completed in both modes
+under the same product limits.
+
+| Fixture | Process RSS high-water CPU / CUDA (KiB) | CUDA sampled process VRAM maximum (MiB) |
+| --- | ---: | ---: |
+| Short prose | 3,815,732 / 3,736,400 | 1,782 |
+| 19 labels | 3,754,256 / 3,761,148 | 1,782 |
+| Medium prose | 3,813,260 / 3,712,800 | 1,792 |
+| Long prose | 3,754,020 / 3,723,560 | 1,838 |
+| 76 labels | 3,823,580 / 3,633,048 | 1,782 |
+
+RSS is the process `getrusage` high-water value. VRAM is a sampled child-process
+maximum (nominal 100 ms interval plus query latency), not a continuous peak;
+device-wide samples include the existing display/device baseline. The raw
+per-process JSON and stdout captures, supervisor resource samples and schedule
+are available in the linked `matrix/` directory. The RSS values are the maximum
+process high-water among each fixture's pairs.
+
+The measurements show speed and mechanical acceptance, not language quality.
+The short fixture is identical on both backends (`北の門のそばに灯りを置いてください。`).
+The 19-label outputs differ (`ヤルデンをキャストする` vs `Yrdenをキャストする`,
+and `カスト・イグニ` vs `Igniをキャストする`). Both long-prose outputs include
+the malformed `物資を船で送し` and `狭い水路をクルーを案内`; CUDA also has the
+wording `手を振う`, while CPU has `手を振る`. Full current-run outputs are in
+the [CPU long report](evidence/cuda-inference/product-wrapper/matrix/02-long-pair1-cpu.json)
+and [CUDA long report](evidence/cuda-inference/product-wrapper/matrix/02-long-pair1-cuda.json).
+`Validation` is structural/mechanical and is not a human translation review or
+a quality score.
+
+Exact prefill/decode phase times and the path taken by an individual request
+remain unavailable; TTFT and static backend capability do not prove either.
+The test did not trigger a real GPU OOM, compare other GPUs/drivers/models or
+quantizations, exercise TM/commit/publication, or establish broad support beyond
+the one Linux amd64 RTX 4070 configuration. #15 still owns canonical
+SourceIdentity/Profile/TM identity and must decide how the reported backend,
+pin, effective context, KV precision and template/tokenizer facts should inform
+it. The latest [#23 owner decision](https://github.com/sh4869221b/yakuori/issues/23)
+accepts the unavailable phase/path data as documented limitations and does not
+make them or an intentional real OOM completion blockers; #23 is closed. They
+remain unverified and are not counted as passing observations.
+
+## Historical #23 spike report (captured before #52 product integration)
+
+The sections below preserve the original #23 evaluation, its measurements and
+acceptance status as they were recorded before the shared product wrapper was
+connected. Those results use the historical test-only harness and experiment
+limits. Current #52 runtime behavior and product-limit measurements are in the
+section above.
+
+## Historical scope and finding
 
 This report records an opt-in evaluation of the existing Index Translate GGUF
 through the test-only `cuda && cudasmoke` harness. The reports show a resident
@@ -12,15 +223,14 @@ fixtures. The long-prose examples also expose shared
 translation errors and a CUDA-specific typo, so speed and mechanical Validation
 do not establish language-quality approval. This is evidence for the
 configuration below, not a production GPU integration or a general CUDA support
-declaration. Production GPU integration and any upper-limit change remain #52
-work. Exact prefill/decode phase times and request-specific prefill path remain
-unverified.
+declaration. At the time of this #23 report, production GPU integration and any
+upper-limit change remained #52 work. Exact prefill/decode phase times and
+request-specific prefill path remain unverified.
 
-For #52, this measured configuration is a recommended implementation candidate:
-it meets the observed request/lifecycle contracts and materially reduces
-generation time. This recommendation does not declare product support or approve
-translation quality automatically; product limits and quality acceptance remain
-for their respective follow-up decisions.
+At the time of the original #23 report, this measured configuration was a
+recommended implementation candidate; that recommendation is superseded by
+the current #52 results above. It did not declare product support or approve
+translation quality automatically.
 
 ## Evaluated configuration
 
@@ -264,23 +474,22 @@ The #15 issue remains the authority for a future exact SourceIdentity/Profile
 contract; a TM hit must not skip current-unit validation. These are downstream
 requirements, not claims that #15's contract has been implemented here.
 
-### #52 supported scope and selection
+### #52 proposal in the historical #23 report
 
-The only CUDA configuration evidenced here is Linux amd64 on the observed RTX
-4070/driver `615.78.08`, with the named Index Translate Q4_K_M GGUF loaded as
-`int4`, effective CUDA backend, active residency and a 4,096-token resident
-context cap. No other GPU, driver, model or quantization is validated. The
-4,096 context, 2,048 output-token policy, 300-second request and 1,500-second
-generation timeout are harness experiment bounds, not newly adopted product
-limits. No production maximum or existing CPU limit is changed by this report.
+This subsection records what the original #23 report proposed for the then
+future #52 work. The CUDA configuration observed in that spike was Linux amd64
+on the RTX 4070/driver `615.78.08`, with the Index Translate Q4_K_M GGUF loaded
+as `int4`, effective CUDA backend, active residency and a 4,096-token resident
+context cap. That spike's 4,096 context, 2,048 output-token policy, 300-second
+request and 1,500-second generation timeout were experiment bounds. The current
+#52 implementation uses the shared defaults documented at the start of this
+file, including 30 s request and 300 s generation timeouts. Other GPUs, drivers,
+models and quantizations remain unevaluated.
 
-For #52 implementation, explicit CUDA selection should fail with its concrete
-setup/admission reason when CUDA, residency, or the required context is
-unavailable; it should not retry or fall back during generation. Explicit CPU
-selection remains available. If #52 later adopts automatic selection, any CPU
-choice should occur before generation and expose its reason. The evidence here
-does not establish production automatic selection, fallback behavior, or GPU
-upper-limit expansion.
+The proposal recommended explicit CPU/CUDA selection and a concrete failure
+when CUDA residency or context was unavailable. The current #52 implementation
+and its driver-free rejection are described above. Automatic selection, mid-run
+fallback, retries and GPU upper-limit expansion are outside #52 scope.
 
 ## Remaining evidence gaps and ownership
 
@@ -289,7 +498,7 @@ unverified. This run also did not exercise a real GPU OOM, other GPU/driver/mode
 configurations, or independent human translation review. The report supports
 only the observed configuration and the limited injected rejection cases above.
 
-Production GPU integration and any context/output/time/memory limit expansion
-remain #52 work. The #15 identity and Translation Memory contract remains a
-proposal for that issue to decide. This report does not complete GPU v1
-acceptance or authorize closure of #23.
+The product-wrapper integration is documented at the start of this file. The
+old statement that this report did not authorize #23 closure predates the
+owner's completion decision above; #23 is now closed. The #15 identity and
+Translation Memory contract remains for that issue to decide.

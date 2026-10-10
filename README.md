@@ -4,7 +4,7 @@
 
 ## 状態
 
-#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）と、全件生成・保護復元・最終artifact検証・一括TM commitを接続するCore（#11）、CPU inference EngineとCore adapter（#12）を実装しています。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使い、取消し後のdrainを終えてから再利用・Closeします。text Adapterは全文1unitを扱い、最終検証とcommit後に訳bytesをstdoutへ一括出力します。通常の `localize` はEngine・TM未接続のため、出力指定の解析後も `localize pipeline is not implemented` でno-I/O終了します。SQLite TM接続・hit再検証、実ゲーム検証、翻訳modelの品質選定、releaseはまだありません。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)を参照してください。
+#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）と、全件生成・保護復元・最終artifact検証・一括TM commitを接続するCore（#11）、明示的にCPU/CUDAを選べるinference EngineとCore adapter（#12/#52）を実装しています。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverを必要とします。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使い、取消し後のdrainを終えてから再利用・Closeします。text Adapterは全文1unitを扱い、最終検証とcommit後に訳bytesをstdoutへ一括出力します。通常の `localize` はEngine・TM未接続のため、出力指定の解析後も `localize pipeline is not implemented` でno-I/O終了します。SQLite TM接続・hit再検証、実ゲーム検証、翻訳modelの品質選定、releaseはまだありません。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 
@@ -12,7 +12,7 @@
 
 ## v1の採用方針
 
-- Linuxのみ。Go 1.27 baseline、`CGO_ENABLED=0`、CPUを基盤にoptional CUDA
+- Linuxのみ。Go 1.27 baseline、`CGO_ENABLED=0`、通常のCPU buildに加え、明示選択するLinux amd64向けoptional CUDA（`-tags cuda`、NVIDIA driverが必要）
 - goinferはwrapper内へ閉じ、TMは`database/sql`とCGO-free SQLite。具体pin・model・形式fixture・上限は実現性gateで確定
 - 未検証candidateを確定せず、1 unitでも失敗なら成果fileを公開しない。生成の自動retryなし
 - TMはsource/profileの完全一致＋現在unitでの再検証

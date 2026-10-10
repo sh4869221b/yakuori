@@ -1,0 +1,81 @@
+{
+  "go": "go1.27.1",
+  "setup": {
+    "requested_backend": "cuda",
+    "effective_backend": "",
+    "backend_pin": "",
+    "cuda_backend_pin": "",
+    "quant": "",
+    "resident_active": false,
+    "resident_decline": "",
+    "resident_context_cap": 0,
+    "model_context_tokens": 0,
+    "configured_context_tokens": 0,
+    "context_tokens": 0,
+    "static_prefill_batched": false,
+    "static_prefill_reason": "",
+    "resident_kv_precision": "",
+    "tuning_policy": "upstream defaults; inherited GOINFER_* cleared by runner; configured context 4096; CUDA resident context pinned to 4096",
+    "load_ms": 14154.909661
+  },
+  "status": "failed",
+  "policy_scope": "contract-only boundary, cancellation, deadline and lifecycle probes use explicit test budgets; product defaults are evaluated by the matrix",
+  "scenarios": [
+    {
+      "name": "exact_count_and_literal_markers",
+      "status": "unrun: earlier failure",
+      "generation_calls": 0
+    },
+    {
+      "name": "natural_stop",
+      "status": "unrun: earlier failure",
+      "generation_calls": 0
+    },
+    {
+      "name": "small_output_max_tokens",
+      "status": "unrun: earlier failure",
+      "generation_calls": 0
+    },
+    {
+      "name": "boundary_equality",
+      "status": "unrun: earlier failure",
+      "generation_calls": 0
+    },
+    {
+      "name": "one_token_overflow",
+      "status": "unrun: earlier failure",
+      "generation_calls": 0
+    },
+    {
+      "name": "partial_cancel_and_drain",
+      "status": "unrun: earlier failure",
+      "generation_calls": 0
+    },
+    {
+      "name": "reuse_after_cancel",
+      "status": "unrun: earlier failure",
+      "generation_calls": 0
+    },
+    {
+      "name": "deadline_and_drain",
+      "status": "unrun: earlier failure",
+      "generation_calls": 0
+    },
+    {
+      "name": "reuse_after_deadline",
+      "status": "unrun: earlier failure",
+      "generation_calls": 0
+    },
+    {
+      "name": "close_during_generation",
+      "status": "unrun: earlier failure",
+      "generation_calls": 0
+    },
+    {
+      "name": "idempotent_close",
+      "status": "unrun: earlier failure",
+      "generation_calls": 0
+    }
+  ],
+  "error": "unsupported resident CUDA: active=false cap=0 decline=cuda: cuda: driver init: cuda: load library: libcuda.so.1: libcuda.so.1: cannot open shared object file: No such file or directory\n/usr/lib/x86_64-linux-gnu/libcuda.so.1: /usr/lib/x86_64-linux-gnu/libcuda.so.1: cannot open shared object file: No such file or directory\n/usr/lib/wsl/lib/libcuda.so.1: /usr/lib/wsl/lib/libcuda.so.1: cannot open shared object file: No such file or directory"
+}
