@@ -95,6 +95,32 @@ class SupervisorTests(unittest.TestCase):
                 if not options:
                     self.assertEqual((output/'1024-stop.json').read_text(), 'started\n')
 
+    def test_translate_failure_records_unrun_and_keeps_other_context(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            fake = root / 'fake'
+            fake.write_text('#!/bin/sh\necho "$GOMAXPROCS ${GOINFER_TEST-unset}"\nexit 3\n')
+            fake.chmod(0o700)
+            fixtures = root / 'fixtures'
+            fixtures.mkdir()
+            for name in ('00-short', '01-fixture'):
+                (fixtures / (name+'.json')).write_text('["Hello"]')
+            output = root / 'result'
+            run = subprocess.run([sys.executable, str(SCRIPT), str(fake), 'model', str(output),
+                                  '--translate-fixtures', str(fixtures), '--contexts', '1024,2048',
+                                  '--pairs', '3'], capture_output=True, text=True,
+                                 env=dict(os.environ, GOINFER_TEST='ambient'))
+            self.assertNotEqual(run.returncode, 0)
+            records = json.loads((output/'supervisor.json').read_text())
+            attempted = [r for r in records if 'returncode' in r]
+            self.assertEqual([r['target'] for r in attempted], [1024,2048])
+            self.assertEqual(len([r for r in records if 'status' in r]), 10)
+            for record in attempted:
+                command = record['command']
+                self.assertEqual(command[1], 'translate')
+                self.assertIn('--generation-timeout', command)
+                self.assertEqual((output/f"{record['target']}-00-short-pair1.json").read_text(), '16 unset\n')
+
     def test_existing_evidence_not_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
