@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/sh4869221b/yakuori/internal/config"
 	"golang.org/x/sys/unix"
 )
 
@@ -41,10 +42,22 @@ type Run struct {
 // Prepare recovers interrupted publication before taking the source snapshot.
 // It must complete before generation/import.
 func Prepare(ctx context.Context, options Options) (*Run, error) {
-	return prepare(ctx, options, unix.Renameat2)
+	return PrepareWithLimits(ctx, options, config.DefaultLimits())
 }
 
-func prepare(ctx context.Context, options Options, rename renameFunc) (_ *Run, err error) {
+// PrepareWithLimits bounds the source snapshot; existing output observations are unchanged.
+func PrepareWithLimits(ctx context.Context, options Options, limits config.Limits) (*Run, error) {
+	if err := limits.Check(); err != nil {
+		return nil, err
+	}
+	return prepareWithLimits(ctx, options, unix.Renameat2, limits)
+}
+
+func prepare(ctx context.Context, options Options, rename renameFunc) (*Run, error) {
+	return prepareWithLimits(ctx, options, rename, config.DefaultLimits())
+}
+
+func prepareWithLimits(ctx context.Context, options Options, rename renameFunc, limits config.Limits) (_ *Run, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -86,7 +99,7 @@ func prepare(ctx context.Context, options Options, rename renameFunc) (_ *Run, e
 	if err = r.recoverPendingRecords(ctx); err != nil {
 		return nil, err
 	}
-	r.snapshot, err = observe(&r.source)
+	r.snapshot, err = observeLimit(&r.source, limits.ArtifactBytes)
 	if err != nil {
 		return nil, fmt.Errorf("source: %w", err)
 	}

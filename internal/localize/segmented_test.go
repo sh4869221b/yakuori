@@ -244,14 +244,18 @@ func TestSegmentedContextLimit(t *testing.T) {
 	session, _ := generationFixture(t, []string{"unbreakable"}, nil)
 	accepted, err := core.Generate(context.Background(), session, segmentedProfile(t))
 	var diagnostic *Error
-	if accepted != nil || !errors.Is(err, segment.ErrContextLimit) || !errors.As(err, &diagnostic) || diagnostic.Phase != "generate" || diagnostic.UnitID != session.Units()[0].ID() {
+	if accepted != nil || !errors.Is(err, segment.ErrContextLimit) || !errors.As(err, &diagnostic) || diagnostic.Phase != "plan" || diagnostic.UnitID != session.Units()[0].ID() {
 		t.Fatalf("accepted=%v err=%v", accepted, err)
 	}
 	p, err := protect.Prepare(session, session.Units()[0].ID())
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := core.segmented.generate(context.Background(), session.Units()[0].ID(), p)
+	plan, err := core.segmented.plan(context.Background(), session.Units()[0].ID(), p, core.limits)
+	result, err := segmentedFailure(err)
+	if err == nil {
+		result, err = core.segmented.generate(context.Background(), plan)
+	}
 	if result.Finish != ContextLimit || !errors.Is(err, segment.ErrContextLimit) {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}

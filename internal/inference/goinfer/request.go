@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/townsendmerino/goinfer/chat"
+	"github.com/townsendmerino/goinfer/tokenizer"
 
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/prompt"
@@ -33,7 +34,20 @@ func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy infe
 		return inference.GenerationRequest{}, inference.ErrInvalidPolicy
 	}
 	messages := prompt.Build(input)
+	if e.info.Template.Source == indexChatTemplate {
+		messages = prompt.BuildIndex(input)
+		messages.System = strings.TrimSpace(messages.System)
+		messages.User = strings.TrimSpace(messages.User)
+	}
 	segments := e.template.RenderSegments(messages.System, []chat.Turn{{Role: "user", Content: messages.User}})
+	if e.info.Template.Source == indexChatTemplate {
+		// The official disabled-thinking generation prefix closes an empty block.
+		segments = append(segments,
+			tokenizer.Segment{Text: "<think>", Special: true},
+			tokenizer.Segment{Text: "\n\n"},
+			tokenizer.Segment{Text: "</think>", Special: true},
+			tokenizer.Segment{Text: "\n\n"})
+	}
 	ids, err := e.tokenizer.EncodeSegments(segments, false)
 	if err != nil {
 		return inference.GenerationRequest{}, fmt.Errorf("encode request: %w", err)

@@ -1,0 +1,249 @@
+{
+  "filesystem": "host /tmp tmpfs rw,noatime,inode64,huge=advise",
+  "measurement": "fresh existing probe database per successful measured warm batch; not production TM",
+  "batches": [
+    {
+      "fixture": "1024-00-short-pair1.json",
+      "rows": 1,
+      "translated_bytes": 21,
+      "transaction_commit_ms": 0.058861,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "1024-00-short-pair2.json",
+      "rows": 1,
+      "translated_bytes": 21,
+      "transaction_commit_ms": 0.054252,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "1024-00-short-pair3.json",
+      "rows": 1,
+      "translated_bytes": 21,
+      "transaction_commit_ms": 0.058751,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "1024-01-fixture-pair1.json",
+      "rows": 19,
+      "translated_bytes": 440,
+      "transaction_commit_ms": 0.157657,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "1024-01-fixture-pair2.json",
+      "rows": 19,
+      "translated_bytes": 440,
+      "transaction_commit_ms": 0.159791,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "1024-01-fixture-pair3.json",
+      "rows": 19,
+      "translated_bytes": 440,
+      "transaction_commit_ms": 0.156335,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "1024-02-x4-pair1.json",
+      "rows": 76,
+      "translated_bytes": 1760,
+      "transaction_commit_ms": 0.471989,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "1024-02-x4-pair2.json",
+      "rows": 76,
+      "translated_bytes": 1760,
+      "transaction_commit_ms": 0.523306,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "1024-02-x4-pair3.json",
+      "rows": 76,
+      "translated_bytes": 1760,
+      "transaction_commit_ms": 0.446822,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "2048-00-short-pair1.json",
+      "rows": 1,
+      "translated_bytes": 21,
+      "transaction_commit_ms": 0.05313,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "2048-00-short-pair2.json",
+      "rows": 1,
+      "translated_bytes": 21,
+      "transaction_commit_ms": 0.052148,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "2048-00-short-pair3.json",
+      "rows": 1,
+      "translated_bytes": 21,
+      "transaction_commit_ms": 0.054322,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "2048-01-fixture-pair1.json",
+      "rows": 19,
+      "translated_bytes": 440,
+      "transaction_commit_ms": 0.145975,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "2048-01-fixture-pair2.json",
+      "rows": 19,
+      "translated_bytes": 440,
+      "transaction_commit_ms": 0.143851,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "2048-01-fixture-pair3.json",
+      "rows": 19,
+      "translated_bytes": 440,
+      "transaction_commit_ms": 0.146617,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "2048-02-x4-pair1.json",
+      "rows": 76,
+      "translated_bytes": 1760,
+      "transaction_commit_ms": 0.445419,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "2048-02-x4-pair2.json",
+      "rows": 76,
+      "translated_bytes": 1760,
+      "transaction_commit_ms": 0.441201,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "2048-02-x4-pair3.json",
+      "rows": 76,
+      "translated_bytes": 1760,
+      "transaction_commit_ms": 0.475145,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-00-short-pair1.json",
+      "rows": 1,
+      "translated_bytes": 21,
+      "transaction_commit_ms": 0.069541,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-00-short-pair2.json",
+      "rows": 1,
+      "translated_bytes": 21,
+      "transaction_commit_ms": 0.055054,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-00-short-pair3.json",
+      "rows": 1,
+      "translated_bytes": 21,
+      "transaction_commit_ms": 0.052599,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-01-fixture-pair1.json",
+      "rows": 19,
+      "translated_bytes": 440,
+      "transaction_commit_ms": 0.147398,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-01-fixture-pair2.json",
+      "rows": 19,
+      "translated_bytes": 440,
+      "transaction_commit_ms": 0.14859,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-01-fixture-pair3.json",
+      "rows": 19,
+      "translated_bytes": 440,
+      "transaction_commit_ms": 0.143651,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-02-x4-pair1.json",
+      "rows": 76,
+      "translated_bytes": 1760,
+      "transaction_commit_ms": 0.436041,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-02-x4-pair2.json",
+      "rows": 76,
+      "translated_bytes": 1760,
+      "transaction_commit_ms": 0.433537,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-02-x4-pair3.json",
+      "rows": 76,
+      "translated_bytes": 1760,
+      "transaction_commit_ms": 0.431723,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    }
+  ]
+}

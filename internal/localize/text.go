@@ -9,6 +9,11 @@ import (
 )
 
 func (c Core) Text(ctx context.Context, input []byte, adapter Adapter, profile validate.Profile, tm TM, writer io.Writer) (result Result, err error) {
+	// The caller already owns input; reject before Import can retain additional copies.
+	if err := c.limits.CheckArtifactBytes(len(input)); err != nil {
+		return result, &Error{Phase: "input", Err: err}
+	}
+
 	session, err := adapter.Import(input, profile)
 	if err != nil {
 		return result, &Error{Phase: "import", Err: err}
@@ -29,10 +34,10 @@ func (c Core) Text(ctx context.Context, input []byte, adapter Adapter, profile v
 	if err := final.check(bytes.NewReader(finalBytes), adapter); err != nil {
 		return result, err
 	}
-	if err := final.commit(ctx, tm); err != nil {
+	result.TMCommitted, err = final.commit(ctx, tm, c.limits.DBOperationTimeout)
+	if err != nil {
 		return result, err
 	}
-	result.TMCommitted = true
 	if err := ctx.Err(); err != nil {
 		return result, &Error{Phase: "write", Err: err}
 	}

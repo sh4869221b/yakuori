@@ -164,7 +164,7 @@ Local results: PASS module verification, all tests (five spike runs), CGO-free
 dependency checks, build, vet, Linux arm64 CLI cross-build and explicit arm64
 SQLite-bearing test binary compilation. The expected negative cgo-guard fixture
 prints `exit status 1` inside an intentionally caught failure; the script succeeds.
-Docker is unavailable on this local executor; the PR's exact-head CI provides the
+Docker was unavailable on that initial local executor; the PR's exact-head CI provides the
 clean-image result. The tests run in the existing required Linux CI, and the
 arm64 probe compilation was added because the ordinary CLI does not yet link SQLite.
 
@@ -172,3 +172,97 @@ Not executed/claimed: arm64 runtime, real game files/translation/acceptance,
 maximum-workload benchmarks, WAL/concurrent file replacement, process-kill recovery,
 power-loss tests, TM integration, security audit, release or deployment. Later
 failures must not erase user assets, publish output or turn into a cache miss.
+
+## Natural translation batch experiment (#14)
+
+`TestMeasuredTranslationBatches` imports successful warm parent translations from
+`YAKUORI_MEASURED_TRANSLATIONS`, opens a fresh test-owned SQLite fixture for each
+batch, and inserts those actual UTF-8 outputs through the existing dedicated
+connection transaction probe. It verifies the committed row count and reports
+rows, translated bytes and transaction/commit elapsed time. It does not use
+backend partial output from failed/interrupted translation and does not implement
+production TM, source/profile serialization or cache lookup.
+
+The trial conditions remain `busy_timeout=100ms`, operation context 1s (including
+connection acquisition and COMMIT), separate cleanup context 1s, retry=0. These
+are initial measurement conditions, not a new product-budget adoption. Existing
+busy/rollback tests remain the contention and cleanup evidence. Translation CPU
+measurement and DB measurement run sequentially to avoid load contamination.
+The test-owned databases are under this host's `/tmp` (`tmpfs`,
+`rw,noatime,inode64,huge=advise`); these commit timings do not demonstrate slow
+persistent-filesystem performance.
+
+```sh
+YAKUORI_MEASURED_TRANSLATIONS="$PWD/docs/evidence/cpu-long-context/index-translate/results" \
+  CGO_ENABLED=0 go test ./internal/sqliteprobe ./tools/cpuspike -count=1 -v
+```
+
+The [measured batch results](evidence/cpu-long-context/index-translate/sqlite-batches.json)
+contain 27 successful warm batches (three contexts × three inputs × three pairs).
+The full SQLite and CLI-probe test invocation above passed, including existing
+writer/commit busy, cancellation, rollback and operation-budget checks. Each
+measured database committed exactly its expected rows; failed/interrupted CPU
+reports supply no batch.
+
+| Rows per batch | Measured batches | UTF-8 translated bytes per batch | Transaction + commit range (ms) |
+| ---: | ---: | ---: | ---: |
+| 1 | 9 | 21 | 0.052148–0.069541 |
+| 19 | 9 | 440 | 0.143651–0.159791 |
+| 76 | 9 | 1760 | 0.431723–0.523306 |
+
+All observed transaction/commit times fit the initial 1s operation budget on
+this tmpfs host fixture. These values do not establish a persistent-disk SLO,
+production TM capacity, serialization cost, cache-hit behavior or the cost of
+larger unmeasured batches. No new database budget is adopted by this experiment.
+
+The owner-approved task8 output-reservation experiment on the existing 5150-byte
+single unit produced no accepted output: its first cold run reached MaxTokens
+at context4096/output2048, and warm/later pairs were unrun. Therefore it supplied
+**no additional successful batch** to the opt-in SQLite measurement. The
+27 measured task2 batches above remain the available database evidence; task8
+did not run a database measurement or establish a new transaction bound. See the
+[additional CPU summary](evidence/cpu-long-context/index-translate/reserve2048/summary.json).
+
+For task9's nonrepeated prose, the existing probe measured all nine successful
+warm outputs after CPU measurement ended:
+
+```sh
+YAKUORI_MEASURED_TRANSLATIONS="$PWD/docs/evidence/cpu-long-context/index-translate/prose/results" \
+  CGO_ENABLED=0 go test ./internal/sqliteprobe \
+  -run '^TestMeasuredTranslationBatches$' -count=1 -v
+```
+
+All nine fresh transactions passed and committed one row each. Output sizes were
+54 bytes (short),342 bytes (medium),1146 bytes (long). Maximum observed
+transaction+commit time was **0.066195ms**, with the unchanged initial busy100ms,
+operation1000ms and cleanup1000ms budgets, no retry. The
+[individual measurements](evidence/cpu-long-context/index-translate/prose/sqlite-batches.json)
+record each batch. Database files were on host `/tmp` tmpfs
+(`rw,noatime,inode64,huge=advise`), as in task2; these observations do not establish
+a persistent-disk SLO or production TM performance. No database job ran alongside
+model inference. The opt-in experiment passed; unchanged full CI was not rerun.
+
+## Adopted operation and cleanup budgets (#14)
+
+The owner's candidate A adopts `DBOperationTimeout=1s` and
+`DBCleanupTimeout=1s` in `config.DefaultLimits()`, with retry0. Core finalization
+passes a fresh operation child context from the caller to TM.Commit, covering
+connection acquisition and work performed by the implementation. It does not
+reuse the generation child context. A cancelled/failed commit prevents later
+publication/writing; the generic TM interface cannot perform SQLite rollback.
+
+The measured busy100ms value remains an **initial SQLite research condition**,
+not a new product default or connection setting applied by Core. Real busy wait,
+transaction rollback and independent cleanup implementation remain owned by #16;
+the adopted cleanup field does not imply that connection exists today. The
+27 label/sentence and nine prose batch measurements above used fresh test-owned
+databases on `/tmp` tmpfs. They inform these budgets without establishing
+persistent-disk performance, production TM throughput or a hard wall when an
+implementation ignores context. Existing busy/cancel/rollback and finalization
+boundary tests remain the behavioral evidence.
+
+If a TM implementation returns nil after its operation context expires, Core
+retains `TMCommitted=true` to report that actual return honestly. The expired
+operation still returns an error and prevents subsequent write/publication.
+This does not assert rollback of a commit that may already have happened; the
+existing finalization test covers this distinction.

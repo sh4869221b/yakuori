@@ -129,3 +129,6 @@ func (u TranslationUnit) SourceDigest() [32]byte    { return u.sourceDigest }
 func (u TranslationUnit) ProtectionSpans() []ProtectionSpan {
 	return slices.Clone(u.protectionSpans)
 }
+
+// SourceBytes returns the original UTF-8 byte count without copying source.
+func (u TranslationUnit) SourceBytes() int { return len(u.source) }

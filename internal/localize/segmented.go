@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/protect"
 	"github.com/sh4869221b/yakuori/internal/segment"
@@ -17,7 +18,17 @@ type segmentedGenerator struct {
 
 // NewSegmentedCore plans all requests before sequential generation. The caller owns the engine.
 func NewSegmentedCore(engine inference.Engine, buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) Core {
-	return Core{segmented: &segmentedGenerator{engine: engine, buildRequest: buildRequest}}
+	return Core{segmented: &segmentedGenerator{engine: engine, buildRequest: buildRequest}, limits: config.DefaultLimits()}
+}
+
+// NewSegmentedCoreWithLimits keeps explicit finite experimental limits separate from product defaults.
+func NewSegmentedCoreWithLimits(engine inference.Engine, buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error), limits config.Limits) (Core, error) {
+	if err := limits.Check(); err != nil {
+		return Core{}, err
+	}
+	core := NewSegmentedCore(engine, buildRequest)
+	core.limits = limits
+	return core, nil
 }
 
 func segmentedFailure(err error) (Generation, error) {
@@ -33,17 +44,17 @@ func segmentedFailure(err error) (Generation, error) {
 	return Generation{Finish: finish}, err
 }
 
-func (g *segmentedGenerator) generate(ctx context.Context, id unit.UnitID, prepared protect.Prepared) (Generation, error) {
+func (g *segmentedGenerator) plan(ctx context.Context, id unit.UnitID, prepared protect.Prepared, limits config.Limits) (segment.Plan, error) {
 	info, err := g.engine.Info(ctx)
 	if err != nil {
-		return segmentedFailure(err)
+		return segment.Plan{}, err
 	}
-	plan, err := segment.Build(ctx, id, prepared, info, func(ctx context.Context, text string) (inference.GenerationRequest, error) {
+	return segment.BuildWithLimits(ctx, id, prepared, info, func(ctx context.Context, text string) (inference.GenerationRequest, error) {
 		return g.buildRequest(ctx, id, text)
-	}, g.engine.CountTokens)
-	if err != nil {
-		return segmentedFailure(err)
-	}
+	}, g.engine.CountTokens, limits)
+}
+
+func (g *segmentedGenerator) generate(ctx context.Context, plan segment.Plan) (Generation, error) {
 	var results []segment.Result
 	for _, piece := range plan.Segments() {
 		if err := ctx.Err(); err != nil {
@@ -51,7 +62,15 @@ func (g *segmentedGenerator) generate(ctx context.Context, id unit.UnitID, prepa
 		}
 		text := piece.Text()
 		if piece.GenerationRequired() {
-			result, err := g.engine.Generate(ctx, piece.Request())
+			request := piece.Request()
+			requestCtx, cancel := context.WithTimeout(ctx, request.Policy().RequestTimeout)
+			if err := requestCtx.Err(); err != nil {
+				cancel()
+				return segmentedFailure(err)
+			}
+			result, err := g.engine.Generate(requestCtx, request)
+			err = errors.Join(err, requestCtx.Err())
+			cancel()
 			if err != nil {
 				switch result.Finish {
 				case inference.ContextLimit:

@@ -1,5 +1,5 @@
 // Command cpuspike is an explicit, model-required feasibility probe for issue #3.
-// It is not the production Engine, a translator, or a model downloader.
+// It is not a production command or a model downloader.
 package main
 
 import (
@@ -271,6 +271,9 @@ func probe(path string) (r report, err error) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "translate" {
+		os.Exit(translateMain(os.Args[2:]))
+	}
 	if len(os.Args) > 1 && os.Args[1] == "long" {
 		os.Exit(longMain(os.Args[2:]))
 	}

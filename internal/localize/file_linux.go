@@ -28,7 +28,7 @@ type preparePublication func(context.Context, publication.Options) (publicationR
 
 func (c Core) File(ctx context.Context, options publication.Options, adapter Adapter, profile validate.Profile, tm TM) (Result, error) {
 	return c.file(ctx, options, adapter, profile, tm, func(ctx context.Context, options publication.Options) (publicationRun, error) {
-		return publication.Prepare(ctx, options)
+		return publication.PrepareWithLimits(ctx, options, c.limits)
 	})
 }
 
@@ -62,10 +62,10 @@ func (c Core) file(ctx context.Context, options publication.Options, adapter Ada
 	}); err != nil {
 		return result, &Error{Phase: "stage", Err: err}
 	}
-	if err := final.commit(ctx, tm); err != nil {
+	result.TMCommitted, err = final.commit(ctx, tm, c.limits.DBOperationTimeout)
+	if err != nil {
 		return result, err
 	}
-	result.TMCommitted = true
 	if err := ctx.Err(); err != nil {
 		return result, &Error{Phase: "publish", Err: err}
 	}

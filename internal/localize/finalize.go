@@ -5,12 +5,16 @@ import (
 	"errors"
 	"io"
 	"slices"
+	"time"
 
 	"github.com/sh4869221b/yakuori/internal/artifact"
 	"github.com/sh4869221b/yakuori/internal/unit"
 	"github.com/sh4869221b/yakuori/internal/validate"
 )
 
+// Import implementations must enforce their limits before additional retention.
+// Core can reject a generic Adapter's returned session before protection/planning,
+// but cannot bound allocations already performed inside Import.
 type Adapter interface {
 	Import([]byte, validate.Profile) (unit.Session, error)
 	Export(io.Writer, unit.Session, validate.Profile, []validate.AcceptedTranslation) (artifact.Manifest, error)
@@ -66,15 +70,20 @@ func (f *finalization) check(reader io.Reader, adapter Adapter) error {
 	return nil
 }
 
-func (f *finalization) commit(ctx context.Context, tm TM) error {
+func (f *finalization) commit(ctx context.Context, tm TM, timeout time.Duration) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	if !f.valid {
-		return &Error{Phase: "commit", Err: ErrFinalUnvalidated}
+		return false, &Error{Phase: "commit", Err: ErrFinalUnvalidated}
 	}
 	if err := ctx.Err(); err != nil {
-		return &Error{Phase: "commit", Err: err}
+		return false, &Error{Phase: "commit", Err: err}
 	}
 	if err := tm.Commit(ctx, f.session, f.profile, f.accepted); err != nil {
-		return &Error{Phase: "commit", Err: err}
+		return false, &Error{Phase: "commit", Err: err}
 	}
-	return nil
+	if err := ctx.Err(); err != nil {
+		return true, &Error{Phase: "commit", Err: err}
+	}
+	return true, nil
 }

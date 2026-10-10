@@ -1,0 +1,29 @@
+[
+  {
+    "target": 4096,
+    "mode": "02-long",
+    "pair": 1,
+    "command": [
+      "/probe",
+      "translate",
+      "--model",
+      "/local/Index-Translate-2B.Q4_K_M.gguf",
+      "--fixture",
+      "/deadline-input/02-long.json",
+      "--context-tokens",
+      "4096",
+      "--max-output-tokens",
+      "2048",
+      "--request-timeout",
+      "300s",
+      "--generation-timeout",
+      "1500s",
+      "--deadline-probe"
+    ],
+    "container_memory_peak_bytes": 4483239936,
+    "returncode": 0,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 3507828,
+    "process_wall_seconds": 22.379
+  }
+]

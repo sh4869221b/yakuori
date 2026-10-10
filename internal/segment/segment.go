@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/prompt"
 	"github.com/sh4869221b/yakuori/internal/protect"
@@ -96,6 +97,17 @@ func (p Plan) LeadingPreparedRange() protect.ByteRange {
 // Build finishes admission for every segment before returning a usable plan.
 // Candidates are tested longest first without assuming monotonic token counts.
 func Build(ctx context.Context, parent unit.UnitID, prepared protect.Prepared, info inference.ModelInfo, build func(context.Context, string) (inference.GenerationRequest, error), count func(context.Context, inference.GenerationRequest) (int, error)) (Plan, error) {
+	return BuildWithLimits(ctx, parent, prepared, info, build, count, config.DefaultLimits())
+}
+
+// BuildWithLimits bounds source bytes before whole-unit tokenization and bounds
+// retained segment requests while planning against the smaller context cap.
+func BuildWithLimits(ctx context.Context, parent unit.UnitID, prepared protect.Prepared, info inference.ModelInfo, build func(context.Context, string) (inference.GenerationRequest, error), count func(context.Context, inference.GenerationRequest) (int, error), limits config.Limits) (Plan, error) {
+	if err := limits.Check(); err != nil {
+		return Plan{}, err
+	}
+	info.ContextTokens = min(info.ContextTokens, limits.ContextTokens)
+
 	if err := ctx.Err(); err != nil {
 		return Plan{}, err
 	}
@@ -107,6 +119,9 @@ func Build(ctx context.Context, parent unit.UnitID, prepared protect.Prepared, i
 	}
 	whole, err := prepared.Slice(0, len(prepared.Text()))
 	if err != nil {
+		return Plan{}, err
+	}
+	if err := limits.CheckUnitTextBytes(len(whole.Source())); err != nil {
 		return Plan{}, err
 	}
 	d := &planData{parent: parent, prepared: prepared}
@@ -132,7 +147,7 @@ func Build(ctx context.Context, parent unit.UnitID, prepared protect.Prepared, i
 			return inference.GenerationRequest{}, 0, false, err
 		}
 		id, p := request.Identity(), request.Policy()
-		if id.ModelSHA256 != info.ModelSHA256 || id.Tokenizer != info.Tokenizer || id.Template != info.Template || id.PromptSchema != prompt.SchemaV1 || p.Schema != info.PolicySchema || p.Schema != inference.PolicySchemaV1 || p.MaxOutputTokens <= 0 || p.RequestTimeout <= 0 {
+		if id.ModelSHA256 != info.ModelSHA256 || id.Tokenizer != info.Tokenizer || id.Template != info.Template || id.PromptSchema != prompt.SchemaV1 || p.Schema != info.PolicySchema || p.Schema != inference.PolicySchemaV1 || p.MaxOutputTokens <= 0 || p.MaxOutputTokens > limits.MaxOutputTokens || p.RequestTimeout <= 0 || p.RequestTimeout > limits.RequestTimeout {
 			return inference.GenerationRequest{}, 0, false, ErrInvalidRequest
 		}
 		if initialized && (id != identity || !reflect.DeepEqual(p, policy)) {
@@ -188,6 +203,9 @@ func Build(ctx context.Context, parent unit.UnitID, prepared protect.Prepared, i
 		cuts = append(cuts, protect.Cut{End: end, Next: end})
 	}
 	for start < end {
+		if err := limits.CheckSegments(len(d.segments) + 1); err != nil {
+			return Plan{}, err
+		}
 		selected := false
 		for i := len(cuts) - 1; i >= 0; i-- {
 			cut := cuts[i]

@@ -1,0 +1,54 @@
+[
+  {
+    "target": 4096,
+    "mode": "00-label",
+    "pair": 1,
+    "command": [
+      "/operational",
+      "translate",
+      "--model",
+      "/local/Index-Translate-2B.Q4_K_M.gguf",
+      "--fixture",
+      "/inputs/00-label.json",
+      "--context-tokens",
+      "4096",
+      "--max-output-tokens",
+      "2048",
+      "--request-timeout",
+      "30s",
+      "--generation-timeout",
+      "300s"
+    ],
+    "container_memory_peak_bytes": 4621688832,
+    "returncode": 0,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 3584508,
+    "process_wall_seconds": 473.682
+  },
+  {
+    "target": 4096,
+    "mode": "01-prose",
+    "pair": 1,
+    "command": [
+      "/operational",
+      "translate",
+      "--model",
+      "/local/Index-Translate-2B.Q4_K_M.gguf",
+      "--fixture",
+      "/inputs/01-prose.json",
+      "--context-tokens",
+      "4096",
+      "--max-output-tokens",
+      "2048",
+      "--request-timeout",
+      "30s",
+      "--generation-timeout",
+      "300s"
+    ],
+    "container_memory_peak_bytes": 4634165248,
+    "returncode": 0,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 3402912,
+    "process_wall_seconds": 41.403
+  }
+]

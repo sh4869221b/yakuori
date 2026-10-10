@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sh4869221b/yakuori/internal/config"
 	"golang.org/x/sys/unix"
 )
 
@@ -114,7 +115,10 @@ func openParent(path string) (_ leaf, err error) {
 	return leaf{parent: &directory{f, id, filepath.Dir(abs)}, name: name, path: abs, lookupPath: lookupPath}, nil
 }
 
-func observe(l *leaf) (_ []byte, err error) {
+func observe(l *leaf) ([]byte, error) { return observeLimit(l, 0) }
+
+// A zero limit is used only for existing output/recovery observations.
+func observeLimit(l *leaf, limit int) (_ []byte, err error) {
 	// O_NONBLOCK avoids hanging on a FIFO before its file type is checked.
 	fd, err := unix.Openat(int(l.parent.file.Fd()), l.name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 	if errors.Is(err, unix.ENOENT) {
@@ -132,7 +136,12 @@ func observe(l *leaf) (_ []byte, err error) {
 	if id.Mode&unix.S_IFMT != unix.S_IFREG || id.Nlink != 1 {
 		return nil, ErrInvalidPath
 	}
-	b, err := io.ReadAll(f)
+	var b []byte
+	if limit > 0 {
+		b, err = readSource(f, id.Size, limit)
+	} else {
+		b, err = io.ReadAll(f)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("read leaf: %w", err)
 	}
@@ -183,4 +192,19 @@ func filesystem(d *directory) (_ string, err error) {
 		return "", fmt.Errorf("scan mount information: %w", err)
 	}
 	return "", fmt.Errorf("mount not identified: %w", ErrUnsupportedFilesystem)
+}
+
+// readSource checks stat size before reading, then detects growth with one extra byte.
+func readSource(reader io.Reader, size int64, limit int) ([]byte, error) {
+	if size > int64(limit) {
+		return nil, &config.LimitError{Limit: "artifact bytes", Actual: int(size), Maximum: limit}
+	}
+	b, err := io.ReadAll(io.LimitReader(reader, int64(limit)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > limit {
+		return nil, &config.LimitError{Limit: "artifact bytes", Actual: len(b), Maximum: limit}
+	}
+	return b, nil
 }

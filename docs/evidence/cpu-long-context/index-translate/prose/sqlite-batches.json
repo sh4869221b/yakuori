@@ -1,0 +1,87 @@
+{
+  "filesystem": "host /tmp tmpfs rw,noatime,inode64,huge=advise",
+  "measurement": "Existing opt-in probe, fresh database per successful warm batch; not production TM or disk SLO",
+  "batches": [
+    {
+      "fixture": "4096-00-short-pair1.json",
+      "rows": 1,
+      "translated_bytes": 54,
+      "transaction_commit_ms": 0.066195,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-00-short-pair2.json",
+      "rows": 1,
+      "translated_bytes": 54,
+      "transaction_commit_ms": 0.054212,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-00-short-pair3.json",
+      "rows": 1,
+      "translated_bytes": 54,
+      "transaction_commit_ms": 0.053972,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-01-medium-pair1.json",
+      "rows": 1,
+      "translated_bytes": 342,
+      "transaction_commit_ms": 0.059632,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-01-medium-pair2.json",
+      "rows": 1,
+      "translated_bytes": 342,
+      "transaction_commit_ms": 0.056196,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-01-medium-pair3.json",
+      "rows": 1,
+      "translated_bytes": 342,
+      "transaction_commit_ms": 0.058029,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-02-long-pair1.json",
+      "rows": 1,
+      "translated_bytes": 1146,
+      "transaction_commit_ms": 0.063028,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-02-long-pair2.json",
+      "rows": 1,
+      "translated_bytes": 1146,
+      "transaction_commit_ms": 0.059733,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    },
+    {
+      "fixture": "4096-02-long-pair3.json",
+      "rows": 1,
+      "translated_bytes": 1146,
+      "transaction_commit_ms": 0.053961,
+      "busy_ms": 100,
+      "operation_ms": 1000,
+      "cleanup_ms": 1000
+    }
+  ]
+}
