@@ -55,7 +55,7 @@ class SupervisorTests(unittest.TestCase):
 
     def test_invalid_budgets_rejected_before_output_or_spawn(self):
         options = ('request-timeout-seconds', 'process-wall-seconds', 'rss-limit-mib',
-                   'host-available-min-mib', 'go-memory-limit-mib')
+                   'host-available-min-mib', 'go-memory-limit-mib', 'max-output-tokens')
         cases = [[f'--{name}', value] for name in options for value in ('0', '-1')]
         cases += [['--process-wall-seconds', '300'], ['--process-wall-seconds', '299']]
         for options in cases:
@@ -120,6 +120,24 @@ class SupervisorTests(unittest.TestCase):
                 self.assertEqual(command[1], 'translate')
                 self.assertIn('--generation-timeout', command)
                 self.assertEqual((output/f"{record['target']}-00-short-pair1.json").read_text(), '16 unset\n')
+
+    def test_translate_output_reservation_default_and_override(self):
+        for options, expected in (([], '1024'), (['--max-output-tokens', '2048'], '2048')):
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                fake = root / 'fake'
+                fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+                fake.chmod(0o700)
+                fixtures = root / 'fixtures'
+                fixtures.mkdir()
+                (fixtures / 'single.json').write_text('["Hello"]')
+                output = root / 'result'
+                run = subprocess.run([sys.executable, str(SCRIPT), str(fake), 'model', str(output),
+                                      '--translate-fixtures', str(fixtures), '--contexts', '4096',
+                                      '--pairs', '1', *options], capture_output=True, text=True)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                args = (output / '4096-single-pair1.json').read_text().splitlines()
+                self.assertEqual(args[args.index('--max-output-tokens')+1], expected)
 
     def test_existing_evidence_not_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:

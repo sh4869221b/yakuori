@@ -11,6 +11,7 @@ p.add_argument('--contexts', default='1024,2048,4096')
 p.add_argument('--generation-timeout-seconds', type=int, default=1500)
 p.add_argument('--pairs', type=int, default=3)
 p.add_argument('--deadline-probe', action='store_true')
+p.add_argument('--max-output-tokens', type=int, help='translate output reservation override (default: context / 4)')
 p.add_argument('--stages', default='1024,4096,8192,16384,32766')
 p.add_argument('--request-timeout-seconds', type=int, default=300)
 p.add_argument('--process-wall-seconds', type=int, default=360)
@@ -21,6 +22,8 @@ a = p.parse_args()
 for name in ('request_timeout_seconds', 'process_wall_seconds', 'rss_limit_mib', 'host_available_min_mib', 'go_memory_limit_mib'):
     if getattr(a, name) <= 0:
         p.error(f"--{name.replace('_', '-')} must be positive")
+if a.max_output_tokens is not None and a.max_output_tokens <= 0:
+    p.error('--max-output-tokens must be positive')
 if a.process_wall_seconds <= a.request_timeout_seconds:
     p.error('--process-wall-seconds must exceed --request-timeout-seconds')
 out = pathlib.Path(a.output)
@@ -57,7 +60,7 @@ for target, mode, pair, fixture in cases:
         with (out / (stem+'.json')).open('w') as stdout, (out / (stem+'.stderr')).open('w') as stderr:
             command = [a.binary, 'long', a.model, str(target), mode, f'--request-timeout={a.request_timeout_seconds}s']
             if fixture:
-                command = [a.binary, 'translate', '--model', a.model, '--fixture', str(fixture), '--context-tokens', str(target), '--max-output-tokens', str(target//4), '--request-timeout', f'{a.request_timeout_seconds}s', '--generation-timeout', f'{a.generation_timeout_seconds}s']
+                command = [a.binary, 'translate', '--model', a.model, '--fixture', str(fixture), '--context-tokens', str(target), '--max-output-tokens', str(a.max_output_tokens if a.max_output_tokens is not None else target//4), '--request-timeout', f'{a.request_timeout_seconds}s', '--generation-timeout', f'{a.generation_timeout_seconds}s']
                 if a.deadline_probe:
                     command.append('--deadline-probe')
             child = subprocess.Popen(command, stdout=stdout, stderr=stderr, env=env)
