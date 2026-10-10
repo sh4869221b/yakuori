@@ -8,6 +8,7 @@ import (
 
 	"github.com/sh4869221b/yakuori/internal/artifact"
 	"github.com/sh4869221b/yakuori/internal/protect"
+	"github.com/sh4869221b/yakuori/internal/segment"
 	"github.com/sh4869221b/yakuori/internal/unit"
 	"github.com/sh4869221b/yakuori/internal/validate"
 )
@@ -51,7 +52,10 @@ func (e *Error) Error() string {
 
 func (e *Error) Unwrap() error { return e.Err }
 
-type Core struct{ engine Engine }
+type Core struct {
+	engine    Engine
+	segmented *segmentedGenerator
+}
 
 func NewCore(engine Engine) Core { return Core{engine: engine} }
 
@@ -61,6 +65,9 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 		return nil, &Error{Phase: "input", Err: err}
 	}
 	if profile.Digest() == ([32]byte{}) {
+		return nil, &Error{Phase: "input", Err: validate.ErrInvalidProfile}
+	}
+	if c.segmented != nil && profile.Segmentation() != segment.ProfileInput() {
 		return nil, &Error{Phase: "input", Err: validate.ErrInvalidProfile}
 	}
 	accepted := make([]validate.AcceptedTranslation, 0, len(session.Units()))
@@ -75,7 +82,12 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 		}
 		candidate := prepared.Text()
 		if prepared.GenerationRequired() {
-			generated, err := c.engine.Generate(ctx, id, candidate)
+			var generated Generation
+			if c.segmented != nil {
+				generated, err = c.segmented.generate(ctx, id, prepared)
+			} else {
+				generated, err = c.engine.Generate(ctx, id, candidate)
+			}
 			if err != nil {
 				return nil, &Error{Phase: "generate", UnitID: id, Err: err}
 			}
