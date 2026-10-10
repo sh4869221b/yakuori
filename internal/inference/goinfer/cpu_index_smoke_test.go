@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/prompt"
 	"github.com/sh4869221b/yakuori/internal/protect"
@@ -132,7 +133,10 @@ func TestCPUIndexSmoke(t *testing.T) {
 	}
 	testInfo := info
 	testInfo.ContextTokens = len(pieceRequest.TokenIDs()) + policy.MaxOutputTokens()
-	plan, err := segment.Build(ctx, parent, prepared, testInfo, builder, engine.CountTokens)
+	limits := config.DefaultLimits()
+	limits.ContextTokens, limits.MaxOutputTokens = testInfo.ContextTokens, policy.MaxOutputTokens()
+	limits.RequestTimeout = policy.RequestTimeout()
+	plan, err := segment.BuildWithLimits(ctx, parent, prepared, testInfo, builder, engine.CountTokens, limits)
 	if err != nil || len(plan.Segments()) != 2 {
 		t.Fatalf("split segments=%d error=%v", len(plan.Segments()), err)
 	}

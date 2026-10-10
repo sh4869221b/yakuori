@@ -11,6 +11,9 @@ import (
 	"github.com/sh4869221b/yakuori/internal/validate"
 )
 
+// Import implementations must enforce their limits before additional retention.
+// Core can reject a generic Adapter's returned session before protection/planning,
+// but cannot bound allocations already performed inside Import.
 type Adapter interface {
 	Import([]byte, validate.Profile) (unit.Session, error)
 	Export(io.Writer, unit.Session, validate.Profile, []validate.AcceptedTranslation) (artifact.Manifest, error)

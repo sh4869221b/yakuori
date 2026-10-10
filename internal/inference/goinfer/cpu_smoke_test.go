@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/prompt"
 	"github.com/sh4869221b/yakuori/internal/protect"
@@ -152,7 +153,10 @@ func TestCPUWrapperSmoke(t *testing.T) {
 			testInfo.ContextTokens = max(testInfo.ContextTokens, n+policy.MaxOutputTokens())
 			minCount = min(minCount, n)
 		}
-		plan, err := segment.Build(ctx, parent, prepared, testInfo, builder, engine.CountTokens)
+		limits := config.DefaultLimits()
+		limits.ContextTokens, limits.MaxOutputTokens = testInfo.ContextTokens, policy.MaxOutputTokens()
+		limits.RequestTimeout = policy.RequestTimeout()
+		plan, err := segment.BuildWithLimits(ctx, parent, prepared, testInfo, builder, engine.CountTokens, limits)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -181,7 +185,7 @@ func TestCPUWrapperSmoke(t *testing.T) {
 			t.Logf("segment %d: prompt=%d IDs=%d reserve=%d test context=%d source=%+v separator=%q", i, n, len(r.TokenIDs()), r.Policy().MaxOutputTokens, testInfo.ContextTokens, piece.SourceRange(), piece.Separator())
 		}
 		testInfo.ContextTokens = minCount + policy.MaxOutputTokens() - 1
-		failed, err := segment.Build(ctx, parent, prepared, testInfo, builder, engine.CountTokens)
+		failed, err := segment.BuildWithLimits(ctx, parent, prepared, testInfo, builder, engine.CountTokens, limits)
 		if !errors.Is(err, segment.ErrContextLimit) || len(failed.Segments()) != 0 {
 			t.Fatalf("too-small budget: segments=%d error=%v", len(failed.Segments()), err)
 		}

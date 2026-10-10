@@ -28,7 +28,7 @@ type preparePublication func(context.Context, publication.Options) (publicationR
 
 func (c Core) File(ctx context.Context, options publication.Options, adapter Adapter, profile validate.Profile, tm TM) (Result, error) {
 	return c.file(ctx, options, adapter, profile, tm, func(ctx context.Context, options publication.Options) (publicationRun, error) {
-		return publication.Prepare(ctx, options)
+		return publication.PrepareWithLimits(ctx, options, c.limits)
 	})
 }
 

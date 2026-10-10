@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/inference/goinfer"
 	"github.com/sh4869221b/yakuori/internal/localize"
@@ -75,6 +76,7 @@ func runTranslation(ctx context.Context, e *measuredEngine, engine *goinfer.Engi
 	if err != nil {
 		return r, err
 	}
+	limits := translationLimits(ctx, info, policy)
 	// Count every planned segment, including pieces requiring no generation.
 	planning := time.Now()
 	for _, u := range session.Units() {
@@ -83,9 +85,9 @@ func runTranslation(ctx context.Context, e *measuredEngine, engine *goinfer.Engi
 		if err != nil {
 			return r, err
 		}
-		plan, err := segment.Build(ctx, u.ID(), prepared, info, func(ctx context.Context, text string) (inference.GenerationRequest, error) {
+		plan, err := segment.BuildWithLimits(ctx, u.ID(), prepared, info, func(ctx context.Context, text string) (inference.GenerationRequest, error) {
 			return build(ctx, u.ID(), text)
-		}, e.CountTokens)
+		}, e.CountTokens, limits)
 		if err != nil {
 			r.Error = err.Error()
 			return r, err
@@ -97,7 +99,11 @@ func runTranslation(ctx context.Context, e *measuredEngine, engine *goinfer.Engi
 	if err != nil {
 		return r, err
 	}
-	accepted, err := localize.NewSegmentedCore(e, build).Generate(ctx, session, profile)
+	core, err := localize.NewSegmentedCoreWithLimits(e, build, limits)
+	if err != nil {
+		return r, err
+	}
+	accepted, err := core.Generate(ctx, session, profile)
 	// Core includes planning, protection, validation and export preparation.
 	// Measure a separate revalidation without attributing Core overhead to validation.
 	r.AcceptedUnits = len(accepted)
@@ -115,6 +121,19 @@ func runTranslation(ctx context.Context, e *measuredEngine, engine *goinfer.Engi
 		r.Error = fmt.Sprintf("%v: %v", err, errors.Unwrap(err))
 	}
 	return r, err
+}
+
+// Research admission matches the existing finite fixture reader and explicit trial flags.
+func translationLimits(ctx context.Context, info inference.ModelInfo, policy inference.GenerationPolicy) config.Limits {
+	limits := config.DefaultLimits()
+	limits.ArtifactBytes, limits.UnitTextBytes, limits.TotalTextBytes = 2<<20, 2<<20, 2<<20
+	limits.Units, limits.Segments = 4096, 2<<20
+	limits.ContextTokens, limits.MaxOutputTokens = info.ContextTokens, policy.MaxOutputTokens()
+	limits.RequestTimeout = policy.RequestTimeout()
+	if deadline, ok := ctx.Deadline(); ok {
+		limits.GenerationTimeout = max(time.Until(deadline), time.Nanosecond)
+	}
+	return limits
 }
 
 func translateMain(args []string) int {

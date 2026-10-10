@@ -91,3 +91,19 @@ func (s Session) ArtifactDigest() [32]byte {
 	}
 	return s.data.artifactDigest
 }
+
+// ArtifactBytes returns the retained byte count without copying the artifact.
+func (s Session) ArtifactBytes() int {
+	if s.data == nil {
+		return 0
+	}
+	return len(s.data.artifact)
+}
+
+// UnitCount returns the retained unit count without copying the unit slice.
+func (s Session) UnitCount() int {
+	if s.data == nil {
+		return 0
+	}
+	return len(s.data.units)
+}

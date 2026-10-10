@@ -108,7 +108,7 @@ func TestGenerateFailure(t *testing.T) {
 		{name: "partial plus error", source: "Secret", candidate: "途中", finish: Stop, engineError: backendError, want: backendError, phase: "generate", calls: 2},
 		{name: "broken protection", source: "Hello {p}", candidate: "こんにちは", finish: Stop, spans: []unit.ProtectionSpan{{Start: 6, End: 9, Kind: unit.Placeholder}}, want: protect.ErrInvalidCandidate, phase: "restore", calls: 2},
 		{name: "validation failure", source: "Secret", candidate: "Translation: 訳", finish: Stop, want: validate.ErrInvalidCandidate, phase: "validate", calls: 2},
-		{name: "invalid source", source: "\xff", want: protect.ErrInvalidSource, phase: "protect", calls: 1},
+		{name: "invalid source", source: "\xff", want: protect.ErrInvalidSource, phase: "protect", calls: 0},
 		{name: "cancel during generation", source: "Secret", candidate: "訳", finish: Stop, cancel: true, want: context.Canceled, phase: "generate", calls: 2},
 	}
 	for _, finish := range []Finish{"", "unknown", MaxTokens, ContextLimit, Timeout, Canceled, DecodeError, InvalidOutput} {

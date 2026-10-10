@@ -1,6 +1,7 @@
 package text
 
 import (
+	"github.com/sh4869221b/yakuori/internal/config"
 	"io"
 
 	"github.com/sh4869221b/yakuori/internal/artifact"
@@ -9,6 +10,7 @@ import (
 )
 
 type Adapter struct {
+	limits         config.Limits
 	sourceLanguage string
 	targetLanguage string
 	session        unit.Session
@@ -16,10 +18,24 @@ type Adapter struct {
 }
 
 func New(sourceLanguage, targetLanguage string) *Adapter {
-	return &Adapter{sourceLanguage: sourceLanguage, targetLanguage: targetLanguage}
+	return &Adapter{sourceLanguage: sourceLanguage, targetLanguage: targetLanguage, limits: config.DefaultLimits()}
+}
+
+// NewWithLimits applies explicit finite limits, including research conditions.
+func NewWithLimits(sourceLanguage, targetLanguage string, limits config.Limits) (*Adapter, error) {
+	if err := limits.Check(); err != nil {
+		return nil, err
+	}
+	return &Adapter{sourceLanguage: sourceLanguage, targetLanguage: targetLanguage, limits: limits}, nil
 }
 
 func (a *Adapter) Import(raw []byte, _ validate.Profile) (unit.Session, error) {
+	for _, err := range []error{a.limits.CheckArtifactBytes(len(raw)), a.limits.CheckUnits(1), a.limits.CheckUnitTextBytes(len(raw)), a.limits.CheckTotalTextBytes(len(raw))} {
+		if err != nil {
+			return unit.Session{}, err
+		}
+	}
+
 	id, err := unit.NewUnitID("text", "text-v1", "document")
 	if err != nil {
 		return unit.Session{}, err

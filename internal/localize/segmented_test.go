@@ -251,7 +251,11 @@ func TestSegmentedContextLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := core.segmented.generate(context.Background(), session.Units()[0].ID(), p)
+	plan, err := core.segmented.plan(context.Background(), session.Units()[0].ID(), p, core.limits)
+	result, err := segmentedFailure(err)
+	if err == nil {
+		result, err = core.segmented.generate(context.Background(), plan)
+	}
 	if result.Finish != ContextLimit || !errors.Is(err, segment.ErrContextLimit) {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
