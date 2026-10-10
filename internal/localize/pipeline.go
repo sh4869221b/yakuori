@@ -70,6 +70,8 @@ func NewCoreWithLimits(engine Engine, limits config.Limits) (Core, error) {
 
 // Generate returns no usable subset when any unit fails.
 func (c Core) Generate(ctx context.Context, session unit.Session, profile validate.Profile) ([]validate.AcceptedTranslation, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.limits.GenerationTimeout)
+	defer cancel()
 	if err := session.Check(); err != nil {
 		return nil, &Error{Phase: "input", Err: err}
 	}
@@ -134,7 +136,12 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 			if c.segmented != nil {
 				generated, err = c.segmented.generate(ctx, plans[i])
 			} else {
-				generated, err = c.engine.Generate(ctx, id, candidate)
+				requestCtx, cancelRequest := context.WithTimeout(ctx, c.limits.RequestTimeout)
+				if err = requestCtx.Err(); err == nil {
+					generated, err = c.engine.Generate(requestCtx, id, candidate)
+				}
+				err = errors.Join(err, requestCtx.Err())
+				cancelRequest()
 			}
 			if err != nil {
 				return nil, &Error{Phase: "generate", UnitID: id, Err: err}
@@ -161,6 +168,9 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 		return nil, &Error{Phase: "prepare_export", Err: err}
 	}
 	if _, err := artifact.PrepareExport(session, profile, accepted); err != nil {
+		return nil, &Error{Phase: "prepare_export", Err: err}
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, &Error{Phase: "prepare_export", Err: err}
 	}
 	return accepted, nil

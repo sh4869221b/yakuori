@@ -70,3 +70,32 @@ func TestGenerateAlreadyCanceled(t *testing.T) {
 		t.Fatalf("result=%+v error=%v calls=%d", result, err, calls)
 	}
 }
+
+func TestRequestDeadlineIncludesDecodeAndReuse(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		engine, _, tok, _ := generationFixture(t)
+		defer engine.Close()
+		policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, 2, time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request, err := engine.NewRequest(context.Background(), prompt.Input{Text: "hello"}, policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decode := tok.decode
+		tok.decode = func([]int) (string, error) {
+			<-time.After(2 * time.Second)
+			return "late translation", nil
+		}
+		result, err := engine.Generate(context.Background(), request)
+		if !errors.Is(err, context.DeadlineExceeded) || result.Finish != inference.Timeout {
+			t.Fatalf("result=%+v error=%v", result, err)
+		}
+		tok.decode = decode
+		result, err = engine.Generate(context.Background(), request)
+		if err != nil || result.Finish != inference.Stop {
+			t.Fatalf("reuse result=%+v error=%v", result, err)
+		}
+	})
+}

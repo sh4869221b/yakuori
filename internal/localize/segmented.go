@@ -62,7 +62,15 @@ func (g *segmentedGenerator) generate(ctx context.Context, plan segment.Plan) (G
 		}
 		text := piece.Text()
 		if piece.GenerationRequired() {
-			result, err := g.engine.Generate(ctx, piece.Request())
+			request := piece.Request()
+			requestCtx, cancel := context.WithTimeout(ctx, request.Policy().RequestTimeout)
+			if err := requestCtx.Err(); err != nil {
+				cancel()
+				return segmentedFailure(err)
+			}
+			result, err := g.engine.Generate(requestCtx, request)
+			err = errors.Join(err, requestCtx.Err())
+			cancel()
 			if err != nil {
 				switch result.Finish {
 				case inference.ContextLimit:

@@ -9,6 +9,7 @@ import (
 	"io"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/sh4869221b/yakuori/internal/artifact"
 	"github.com/sh4869221b/yakuori/internal/unit"
@@ -190,7 +191,7 @@ func finalizeFixture(t *testing.T) (*fakeAdapter, *finalization) {
 
 func TestFinalizeOrder(t *testing.T) {
 	a, f := finalizeFixture(t)
-	if err := f.commit(context.Background(), a.tm); !errors.Is(err, ErrFinalUnvalidated) || a.tm.calls != 0 {
+	if _, err := f.commit(context.Background(), a.tm, time.Second); !errors.Is(err, ErrFinalUnvalidated) || a.tm.calls != 0 {
 		t.Fatalf("commit before validation = %v, calls = %d", err, a.tm.calls)
 	}
 	var buffer bytes.Buffer
@@ -203,7 +204,7 @@ func TestFinalizeOrder(t *testing.T) {
 	if a.tm.calls != 0 || len(a.tm.rows) != 0 || !bytes.Equal(a.observed, buffer.Bytes()) {
 		t.Fatal("rows committed before exact final bytes validation")
 	}
-	if err := f.commit(context.Background(), a.tm); err != nil {
+	if _, err := f.commit(context.Background(), a.tm, time.Second); err != nil {
 		t.Fatal(err)
 	}
 	if a.tm.calls != 1 || a.tm.active || len(a.tm.rows) != 2 || a.tm.rows[0].Text() != "訳a" || a.tm.rows[1].Text() != "訳b" ||
@@ -241,7 +242,7 @@ func TestFinalizeRejects(t *testing.T) {
 				err = f.check(bytes.NewReader(buffer.Bytes()), a)
 			}
 			if err == nil {
-				err = f.commit(context.Background(), a.tm)
+				_, err = f.commit(context.Background(), a.tm, time.Second)
 			}
 			if !errors.Is(err, tt.want) || a.tm.calls != tt.calls || len(a.tm.rows) != 0 || a.tm.active {
 				t.Fatalf("error = %v, calls = %d, rows = %v, active = %v", err, a.tm.calls, a.tm.rows, a.tm.active)

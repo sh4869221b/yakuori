@@ -34,10 +34,10 @@ func (c Core) Text(ctx context.Context, input []byte, adapter Adapter, profile v
 	if err := final.check(bytes.NewReader(finalBytes), adapter); err != nil {
 		return result, err
 	}
-	if err := final.commit(ctx, tm); err != nil {
+	result.TMCommitted, err = final.commit(ctx, tm, c.limits.DBOperationTimeout)
+	if err != nil {
 		return result, err
 	}
-	result.TMCommitted = true
 	if err := ctx.Err(); err != nil {
 		return result, &Error{Phase: "write", Err: err}
 	}

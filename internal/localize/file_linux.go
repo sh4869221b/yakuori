@@ -62,10 +62,10 @@ func (c Core) file(ctx context.Context, options publication.Options, adapter Ada
 	}); err != nil {
 		return result, &Error{Phase: "stage", Err: err}
 	}
-	if err := final.commit(ctx, tm); err != nil {
+	result.TMCommitted, err = final.commit(ctx, tm, c.limits.DBOperationTimeout)
+	if err != nil {
 		return result, err
 	}
-	result.TMCommitted = true
 	if err := ctx.Err(); err != nil {
 		return result, &Error{Phase: "publish", Err: err}
 	}

@@ -3,7 +3,9 @@ package localize
 import (
 	"context"
 
+	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
+	"github.com/sh4869221b/yakuori/internal/segment"
 	"github.com/sh4869221b/yakuori/internal/unit"
 )
 
@@ -22,8 +24,19 @@ func (e InferenceEngine) Generate(ctx context.Context, id unit.UnitID, text stri
 	if err != nil {
 		return Generation{}, err
 	}
+	limits := config.DefaultLimits()
+	policy := request.Policy()
+	if policy.MaxOutputTokens > limits.MaxOutputTokens || policy.RequestTimeout > limits.RequestTimeout {
+		return Generation{Finish: InvalidOutput}, inference.ErrInvalidPolicy
+	}
 	count, err := e.engine.CountTokens(ctx, request)
 	if err != nil {
+		return Generation{}, err
+	}
+	if count > limits.ContextTokens-policy.MaxOutputTokens {
+		return Generation{Finish: ContextLimit}, segment.ErrContextLimit
+	}
+	if err := ctx.Err(); err != nil {
 		return Generation{}, err
 	}
 	result, err := e.engine.Generate(ctx, request)
