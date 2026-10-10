@@ -121,6 +121,25 @@ class SupervisorTests(unittest.TestCase):
                 self.assertIn('--generation-timeout', command)
                 self.assertEqual((output/f"{record['target']}-00-short-pair1.json").read_text(), '16 unset\n')
 
+    def test_translate_requires_nonempty_fixture_directory(self):
+        for kind in ('missing', 'empty', 'file'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                fixtures = root / 'fixtures'
+                if kind == 'empty':
+                    fixtures.mkdir()
+                    (fixtures / 'readme.txt').write_text('no JSON fixtures')
+                elif kind == 'file':
+                    fixtures.write_text('not a directory')
+                output = root / 'result'
+                run = subprocess.run([sys.executable, str(SCRIPT), 'missing-binary', 'model',
+                                      str(output), '--translate-fixtures', str(fixtures)],
+                                     capture_output=True, text=True)
+                self.assertEqual(run.returncode, 2, run.stderr)
+                self.assertIn('--translate-fixtures', run.stderr)
+                self.assertNotIn('Traceback', run.stderr)
+                self.assertFalse(output.exists())
+
     def test_translate_output_reservation_default_and_override(self):
         for options, expected in (([], '1024'), (['--max-output-tokens', '2048'], '2048')):
             with self.subTest(options=options), tempfile.TemporaryDirectory() as tmp:

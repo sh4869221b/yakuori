@@ -26,6 +26,12 @@ if a.max_output_tokens is not None and a.max_output_tokens <= 0:
     p.error('--max-output-tokens must be positive')
 if a.process_wall_seconds <= a.request_timeout_seconds:
     p.error('--process-wall-seconds must exceed --request-timeout-seconds')
+if a.translate_fixtures:
+    if not a.translate_fixtures.is_dir():
+        p.error('--translate-fixtures must be an existing directory')
+    fixtures = sorted(a.translate_fixtures.glob('*.json'))
+    if not fixtures:
+        p.error('--translate-fixtures must contain at least one JSON fixture')
 out = pathlib.Path(a.output)
 out.mkdir(parents=True, exist_ok=True)
 if any(out.iterdir()):
@@ -41,7 +47,7 @@ if a.translate_fixtures:
     if a.generation_timeout_seconds <= 0 or a.pairs <= 0:
         p.error('generation timeout and pairs must be positive')
     for context in map(int, a.contexts.split(',')):
-        for fixture in sorted(a.translate_fixtures.glob('*.json')):
+        for fixture in fixtures:
             for pair in range(1, a.pairs+1):
                 cases.append((context, fixture.stem, pair, fixture))
 else:
