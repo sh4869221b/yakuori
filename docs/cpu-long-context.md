@@ -195,6 +195,11 @@ change pure-Go requirements. If a hard cancellation deadline is required, proces
 isolation or a finer-grained upstream cancellation improvement must be evaluated
 separately; swapping to a C/C++ backend is not implied.
 
+> Historical baseline: the Index compatibility, natural-translation and adopted-limit
+> measurements below were captured on goinfer v0.20.0 / aikit v1.51.1 before #51.
+> “No dependency update was needed” records that earlier checkout. The separate
+> v0.22.0 comparison is appended below; the existing historical values are retained.
+
 ## Index-Translate-2B CPU compatibility (#14, 2026-10-10)
 
 The official `IndexTeam/Index-Translate-2B-GGUF` file
@@ -851,3 +856,86 @@ is not used as their proof. The exact disposable-container command and all
 results are captured in `.omo/evidence/issue-14-task6/ci-qualified-command.txt`,
 `verify-qualified.log` and `ci-qualified-result.txt` (`exit=0`); initial failure is
 `verify.log`. The final source was unchanged between these CI checks and commit.
+
+## goinfer v0.22.0 CPU regression (#51, 2026-10-10)
+
+This is a controlled comparison of goinfer v0.20.0 / aikit v1.51.1 against
+goinfer v0.22.0 / aikit v1.57.0 using the same local
+Index-Translate-2B.Q4_K_M.gguf, Ryzen 7 7700X host, and unchanged code-level
+operational limits. The model metadata declares 262,144 context tokens. This
+comparison sets a total context of 4096 tokens and reserves 2048 for output,
+leaving a 2048-token prompt budget.
+
+The four copied inputs were the [19 English labels](evidence/cpu-long-context/index-translate/fixtures/01-fixture.json)
+and the [short](evidence/cpu-long-context/index-translate/prose/fixtures/00-short.json),
+[medium](evidence/cpu-long-context/index-translate/prose/fixtures/01-medium.json),
+and [long prose](evidence/cpu-long-context/index-translate/prose/fixtures/02-long.json)
+fixtures. Each version ran three sequential fresh-process pairs per fixture. A pair
+contains one cold pass (model load plus first generation) and one warm pass; there
+was no page-cache flush. Both images used Linux amd64, Go 1.27.1, CGO=0, 16 CPUs,
+Docker memory and combined memory-plus-swap limits of 16 GiB each (no extra
+swap), no network, GOMAXPROCS=16, GOMEMLIMIT=14336 MiB,
+and removed ambient GOINFER_* tuning. The generation policy was greedy, seed 0,
+thinking disabled; request timeout 300s, generation timeout 1500s, process wall
+1800s, RSS limit 16384 MiB, and host-available floor 1024 MiB. Inputs and model
+were read-only mounts.
+
+The measurement invocation, with TASK_INPUTS, MODEL_CACHE and RESULTS pointing to
+the same retained inputs, local model directory and empty output directory for
+each run, was:
+
+```sh
+docker run --rm --network none --cpus=16 --memory=16g --memory-swap=16g \
+  -v "$TASK_INPUTS:/inputs:ro" -v "$RESULTS:/evidence" \
+  -v "$MODEL_CACHE:/local:ro" --entrypoint python3 "$IMAGE" \
+  /src/ci/run-long-context.py /cpuspike \
+  /local/Index-Translate-2B.Q4_K_M.gguf /evidence \
+  --translate-fixtures /inputs --contexts 4096 --max-output-tokens 2048 \
+  --pairs 3 --process-wall-seconds 1800 --request-timeout-seconds 300 \
+  --generation-timeout-seconds 1500 --rss-limit-mib 16384 \
+  --host-available-min-mib 1024 --go-memory-limit-mib 14336
+```
+
+The recorded old/new image names were yakuori-issue51-old and
+yakuori-issue51-new, with output directories E/old and E/new respectively.
+The original invocations and mount paths are in
+`.omo/evidence/issue-51-goinfer-release-update/task-2-runtime.txt` and
+`.omo/evidence/issue-51-goinfer-release-update/task-6-runtime.txt`. The permanent
+[v0.20.0 raw reports and empty stderr files](evidence/cpu-long-context/goinfer-v0.22.0/old/)
+and [v0.20.0 supervisor](evidence/cpu-long-context/goinfer-v0.22.0/old/supervisor.json)
+are paired with the [v0.22.0 raw reports and empty stderr files](evidence/cpu-long-context/goinfer-v0.22.0/new/)
+and [v0.22.0 supervisor](evidence/cpu-long-context/goinfer-v0.22.0/new/supervisor.json).
+
+Each version completed 12/12 pairs, 24/24 cold/warm passes, and 132/132 requests.
+All requests ended Stop; each 19-label pass was accepted at 19/19 with zero
+validation failures, and each one-unit prose pass was accepted at 1/1 with zero
+validation failures. In fixture, pair, cold/warm, and unit order, the 132
+request texts and 24 ordered output arrays matched exactly. Rendered prompts,
+source spans, token IDs, effective policy and StopIDs, finish, token counts, model
+identity, template source/family/schema, and output text were equal. The only
+request-identity differences were the expected goinfer backend pin and template
+renderer version (132 occurrences each). All 12 supervisor cases per version
+returned zero with no watchdog kill, and all 12 stderr files per version were
+empty.
+
+| Fixture | Cold load + run, ms (v0.20.0 → v0.22.0) | Warm run, ms (v0.20.0 → v0.22.0) | Per-process report peak RSS, KiB (v0.20.0 → v0.22.0) | Supervisor sampled peak RSS, KiB (v0.20.0 → v0.22.0) |
+| --- | ---: | ---: | ---: | ---: |
+| 19 labels | 61636.255–61727.898 → 62364.058–62481.620 | 58369.334–58535.023 → 58618.330–58997.552 | 3376736–3619720 → 3606164–3781160 | 3377732–3619720 → 3606164–3781160 |
+| Short prose | 6553.427–6688.357 → 6628.030–6846.421 | 3491.309–3508.504 → 3469.237–3553.960 | 3538732–3686896 → 3346288–3763856 | 3539844–3688472 → 3346876–3764452 |
+| Medium prose | 9941.889–10162.293 → 10022.921–10183.526 | 6843.327–6874.848 → 6846.770–6891.641 | 3297848–3682076 → 3172756–3610992 | 3297848–3682076 → 3172756–3611696 |
+| Long prose | 22041.801–22515.142 → 22284.528–22430.689 | 18944.635–19093.199 → 19034.904–19195.187 | 3292344–3574544 → 3466144–3583468 | 3292344–3574544 → 3466144–3583468 |
+
+Cold is load_ms plus the first run's total_ms; warm is the second run's total_ms.
+The report RSS is per child process; supervisor sampled RSS is a separate process
+observation, not cumulative container memory. These are three-run ranges under
+one host and fixed conditions, not a speed threshold or causal performance claim.
+The exact-equality result is limited to these fixtures and model. The 19-label
+quality caveats recorded above—including untranslated words and awkward
+transliterations such as Cast Aard, Cast Axii, and Sheathe Auto—remain; output
+equality is not translation-quality approval.
+
+There were no failed, killed, or unrun measurement pairs among the 12 per
+version. This comparison does not establish arm64 runtime, hard cancellation,
+natural 32K translation, GPU behavior, or performance/quality invariance for other
+inputs or models. The release's wrapper-smoke outcomes and their captured logs are
+in the [CPU release update](cpu-inference-spike.md#current-cpu-release-update-51-2026-10-10).

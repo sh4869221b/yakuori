@@ -1,0 +1,15 @@
+=== RUN   TestCPUWrapperSmoke
+    cpu_smoke_test.go:45: model context=32768 backend=cpu quant=int4 pin=github.com/townsendmerino/goinfer@v0.22.0
+    cpu_smoke_test.go:85: literal marker structural end IDs: base=2 literal=2
+    cpu_smoke_test.go:94: natural generation: finish=stop prompt=51 output=2
+    cpu_smoke_test.go:109: cooperative 1ms deadline: finish=timeout elapsed=14.858207ms output=0
+    cpu_smoke_test.go:110: reuse after deadline drain: finish=stop prompt=51 output=2
+=== RUN   TestCPUWrapperSmoke/real_tokenizer_segmentation
+    cpu_smoke_test.go:185: segment 0: prompt=79 IDs=79 reserve=128 test context=207 source={Start:0 End:30} separator="\r\n"
+    cpu_smoke_test.go:185: segment 1: prompt=79 IDs=79 reserve=128 test context=207 source={Start:32 End:62} separator=""
+    cpu_smoke_test.go:192: too-small budget: ContextLimit, no generation requests admitted or generated
+=== NAME  TestCPUWrapperSmoke
+    cpu_smoke_test.go:200: Close completed; model admission closed
+--- PASS: TestCPUWrapperSmoke (3.07s)
+    --- PASS: TestCPUWrapperSmoke/real_tokenizer_segmentation (0.00s)
+PASS

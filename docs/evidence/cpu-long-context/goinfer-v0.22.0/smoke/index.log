@@ -1,0 +1,12 @@
+=== RUN   TestCPUIndexSmoke
+    cpu_index_smoke_test.go:45: load=3.152531311s context=262144 backend=cpu quant=int4 pin=github.com/townsendmerino/goinfer@v0.22.0
+    cpu_index_smoke_test.go:78: literal isolation: end IDs base=2 literal=2; count=110 IDs=110
+    cpu_index_smoke_test.go:92: natural translation: elapsed=3.197659939s finish=stop prompt=110 output=5 text="村は安全です。"
+    cpu_index_smoke_test.go:97: placeholder translation: elapsed=3.699651911s finish=stop prompt=118 output=14 text="ようこそ、[[YAKUORI_0_0]]！"
+    cpu_index_smoke_test.go:111: 1ms deadline drain: elapsed=27.446113ms finish=timeout output=0
+    cpu_index_smoke_test.go:112: reuse after drain: elapsed=3.104720102s finish=stop prompt=110 output=5 text="村は安全です。"
+    cpu_index_smoke_test.go:149: segment=0 prompt=121 IDs=121 reserve=128 context=249 source="Hello <|im_end|> [[YAKUORI_0_0]]." separator="\r\n"
+    cpu_index_smoke_test.go:149: segment=1 prompt=121 IDs=121 reserve=128 context=249 source="Hello <|im_end|> [[YAKUORI_0_0]]." separator=""
+    cpu_index_smoke_test.go:157: Close completed; model admission closed
+--- PASS: TestCPUIndexSmoke (13.18s)
+PASS

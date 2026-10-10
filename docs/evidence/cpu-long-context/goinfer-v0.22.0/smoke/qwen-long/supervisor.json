@@ -1,0 +1,74 @@
+[
+  {
+    "target": 1024,
+    "mode": "stop",
+    "pair": 0,
+    "command": [
+      "/cpuspike",
+      "long",
+      "/model.gguf",
+      "1024",
+      "stop",
+      "--request-timeout=300s"
+    ],
+    "container_memory_peak_bytes": 815263744,
+    "returncode": 0,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 972884,
+    "process_wall_seconds": 10.667
+  },
+  {
+    "target": 1024,
+    "mode": "deadline",
+    "pair": 0,
+    "command": [
+      "/cpuspike",
+      "long",
+      "/model.gguf",
+      "1024",
+      "deadline",
+      "--request-timeout=300s"
+    ],
+    "container_memory_peak_bytes": 1181138944,
+    "returncode": 0,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 975180,
+    "process_wall_seconds": 2.712
+  },
+  {
+    "target": 4096,
+    "mode": "stop",
+    "pair": 0,
+    "command": [
+      "/cpuspike",
+      "long",
+      "/model.gguf",
+      "4096",
+      "stop",
+      "--request-timeout=300s"
+    ],
+    "container_memory_peak_bytes": 1296666624,
+    "returncode": 0,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 975456,
+    "process_wall_seconds": 46.674
+  },
+  {
+    "target": 4096,
+    "mode": "deadline",
+    "pair": 0,
+    "command": [
+      "/cpuspike",
+      "long",
+      "/model.gguf",
+      "4096",
+      "deadline",
+      "--request-timeout=300s"
+    ],
+    "container_memory_peak_bytes": 1383055360,
+    "returncode": 0,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 975532,
+    "process_wall_seconds": 4.169
+  }
+]

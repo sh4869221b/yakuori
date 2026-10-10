@@ -1,0 +1,130 @@
+{
+  "go": "go1.27.1",
+  "platform": "linux/amd64",
+  "model_sha256": "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32",
+  "template": "chatml",
+  "rendered_request": "\u003c|im_start|\u003esystem\nYou are a helpful assistant.\u003c|im_end|\u003e\n\u003c|im_start|\u003euser\nReply with only the word Hello.\u003c|im_end|\u003e\n\u003c|im_start|\u003eassistant\n",
+  "prompt_token_ids": [
+    151644,
+    8948,
+    198,
+    2610,
+    525,
+    264,
+    10950,
+    17847,
+    13,
+    151645,
+    198,
+    151644,
+    872,
+    198,
+    20841,
+    448,
+    1172,
+    279,
+    3409,
+    21927,
+    13,
+    151645,
+    198,
+    151644,
+    77091,
+    198
+  ],
+  "model_context": 32768,
+  "compute_quant": "int4",
+  "load_ms": 1970,
+  "cases": [
+    {
+      "name": "natural_cpu_generation",
+      "finish": "Stop",
+      "tokens": [
+        9707,
+        13
+      ],
+      "text": "Hello.",
+      "milliseconds": 203,
+      "backend_budget": 128,
+      "backend_budget_clamped": false
+    },
+    {
+      "name": "forced_stop",
+      "finish": "Stop",
+      "tokens": [
+        9707
+      ],
+      "text": "Hello",
+      "milliseconds": 193,
+      "backend_budget": 8,
+      "backend_budget_clamped": false
+    },
+    {
+      "name": "max_tokens",
+      "finish": "MaxTokens",
+      "tokens": [
+        9707
+      ],
+      "text": "Hello",
+      "milliseconds": 196,
+      "backend_budget": 1,
+      "backend_budget_clamped": false
+    },
+    {
+      "name": "cancel_after_partial",
+      "finish": "Canceled",
+      "tokens": [
+        9707
+      ],
+      "text": "Hello",
+      "error": "context canceled",
+      "milliseconds": 193,
+      "backend_budget": 32,
+      "backend_budget_clamped": false
+    },
+    {
+      "name": "deadline_during_generation",
+      "finish": "Timeout",
+      "tokens": [],
+      "text": "",
+      "error": "context deadline exceeded",
+      "milliseconds": 7,
+      "backend_budget": 0,
+      "backend_budget_clamped": false
+    },
+    {
+      "name": "healthy_after_cancel_and_deadline",
+      "finish": "Stop",
+      "tokens": [
+        9707
+      ],
+      "text": "Hello",
+      "milliseconds": 192,
+      "backend_budget": 8,
+      "backend_budget_clamped": false
+    }
+  ]
+}
+	Command being timed: "/cpuspike /model.gguf"
+	User time (seconds): 5.66
+	System time (seconds): 0.08
+	Percent of CPU this job got: 178%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:03.22
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 974896
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 16174
+	Voluntary context switches: 3365
+	Involuntary context switches: 97
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

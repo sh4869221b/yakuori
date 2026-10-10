@@ -1,0 +1,5 @@
+qwen_exit=0
+wrapper_exit=0
+index_exit=0
+qwen_long_exit=0
+missing_exit=1 (expected nonzero)
