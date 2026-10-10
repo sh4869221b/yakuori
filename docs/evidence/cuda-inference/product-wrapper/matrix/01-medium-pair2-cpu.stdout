@@ -1,0 +1,3 @@
+=== RUN   TestCUDAEvaluationMatrix
+--- PASS: TestCUDAEvaluationMatrix (17.72s)
+PASS

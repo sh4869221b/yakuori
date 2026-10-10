@@ -34,6 +34,7 @@ func TestCUDAEvaluationMatrix(t *testing.T) {
 	for _, name := range []string{"cold", "warm"} {
 		report.Runs = append(report.Runs, cudaMatrixRun{Name: name, Status: "unrun: earlier failure", Output: []string{}, Requests: []cudaRequest{}, PlannedRequests: []cudaRequest{}})
 	}
+	report.Limits = config.DefaultLimits()
 	started := time.Now()
 	defer func() {
 		report.ProcessTotalMS = float64(time.Since(started)) / float64(time.Millisecond)
@@ -82,7 +83,7 @@ func TestCUDAEvaluationMatrix(t *testing.T) {
 		}
 	}
 	for i := range report.Runs {
-		ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), config.DefaultLimits().GenerationTimeout)
 		runErr := cudaMatrixTranslation(ctx, engine, session, &report.Runs[i], func(planned []cudaRequest) error {
 			if backend == "cuda" {
 				if len(reference.Runs) != 2 || !reflect.DeepEqual(planned, reference.Runs[i].PlannedRequests) {
@@ -110,7 +111,8 @@ func cudaMatrixTranslation(ctx context.Context, engine *Engine, session unit.Ses
 			run.Error = err.Error()
 		}
 	}()
-	policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, 2048, 300*time.Second)
+	limits := config.DefaultLimits()
+	policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, limits.MaxOutputTokens, limits.RequestTimeout)
 	if err != nil {
 		return err
 	}
@@ -121,19 +123,14 @@ func cudaMatrixTranslation(ctx context.Context, engine *Engine, session unit.Ses
 	if err != nil {
 		return err
 	}
-	limits := config.DefaultLimits()
-	limits.ArtifactBytes, limits.UnitTextBytes, limits.TotalTextBytes = 2<<20, 2<<20, 2<<20
-	limits.Units, limits.Segments = 4096, 2<<20
-	limits.ContextTokens, limits.MaxOutputTokens = info.ContextTokens, 2048
-	limits.RequestTimeout, limits.GenerationTimeout = 300*time.Second, 1500*time.Second
 	for _, u := range session.Units() {
 		prepared, err := protect.Prepare(session, u.ID())
 		if err != nil {
 			return err
 		}
-		plan, err := segment.BuildWithLimits(ctx, u.ID(), prepared, info, func(ctx context.Context, text string) (inference.GenerationRequest, error) {
+		plan, err := segment.Build(ctx, u.ID(), prepared, info, func(ctx context.Context, text string) (inference.GenerationRequest, error) {
 			return build(ctx, u.ID(), text)
-		}, engine.CountTokens, limits)
+		}, engine.CountTokens)
 		if err != nil {
 			return err
 		}
@@ -152,10 +149,7 @@ func cudaMatrixTranslation(ctx context.Context, engine *Engine, session unit.Ses
 	if err != nil {
 		return err
 	}
-	core, err := localize.NewSegmentedCoreWithLimits(measured, build, limits)
-	if err != nil {
-		return err
-	}
+	core := localize.NewSegmentedCore(measured, build)
 	accepted, err := core.Generate(ctx, session, profile)
 	run.AcceptedUnits = len(accepted)
 	run.ValidationFailures, run.ValidationDenominator = cudaMechanicalCounts(session, len(accepted), err)

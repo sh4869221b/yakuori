@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/localize"
 	"github.com/sh4869221b/yakuori/internal/unit"
@@ -30,6 +31,7 @@ type cudaMatrixReport struct {
 	Go                string          `json:"go"`
 	GOMAXPROCS        int             `json:"gomaxprocs"`
 	Setup             cudaSetup       `json:"setup"`
+	Limits            config.Limits   `json:"limits"`
 	Fixture           string          `json:"fixture"`
 	Pair              string          `json:"pair"`
 	Status            string          `json:"status"`

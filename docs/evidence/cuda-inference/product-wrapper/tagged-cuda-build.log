@@ -1,0 +1,55 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from cuda-spike.Dockerfile
+#1 transferring dockerfile: 869B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#2 DONE 1.5s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 67B done
+#3 DONE 0.0s
+
+#4 [1/6] FROM docker.io/library/debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
+#4 resolve docker.io/library/debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 15.58MB 0.0s done
+#5 DONE 0.1s
+
+#6 [2/6] RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl     && rm -rf /var/lib/apt/lists/*
+#6 CACHED
+
+#7 [3/6] RUN curl -fsSL https://go.dev/dl/go1.27.1.linux-amd64.tar.gz -o /tmp/go.tar.gz     && echo '63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445  /tmp/go.tar.gz' | sha256sum -c -     && tar -xzf /tmp/go.tar.gz -C /usr/local && rm /tmp/go.tar.gz
+#7 CACHED
+
+#8 [4/6] WORKDIR /src
+#8 CACHED
+
+#9 [5/6] COPY . .
+#9 DONE 0.3s
+
+#10 [6/6] RUN for tool in cc gcc g++ c++ clang clang++ cmake nvcc; do       if command -v "$tool"; then exit 1; fi; done     && test "$(go env GOVERSION)" = go1.27.1     && go test -c -tags 'cuda,cudasmoke' -o /cuda-evaluation.test ./internal/inference/goinfer
+#10 0.114 go: downloading github.com/townsendmerino/goinfer v0.22.0
+#10 0.114 go: downloading github.com/townsendmerino/goinfer/cuda v0.22.0
+#10 0.125 go: downloading golang.org/x/sys v0.48.0
+#10 5.357 go: downloading golang.org/x/text v0.40.0
+#10 5.357 go: downloading github.com/townsendmerino/aikit v1.57.0
+#10 5.569 go: downloading github.com/eitamring/gocudrv v0.3.2
+#10 5.569 go: downloading github.com/townsendmerino/aikit/gpu v0.33.5
+#10 6.106 go: downloading github.com/ebitengine/purego v0.10.1
+#10 DONE 12.0s
+
+#11 exporting to image
+#11 exporting layers
+#11 exporting layers 3.2s done
+#11 exporting manifest sha256:eaae50b9eb06161d0327c5f06dc2510f22ac3ad903ebcaa3d310292bb6e932f4 done
+#11 exporting config sha256:5f4d715c5492ab551901912540f2438cdde4eb2bd03f8b443a69e1117a9d522c done
+#11 exporting attestation manifest sha256:3d4bda2403d41c2f7d1489e84cb014fadd025867531f6fe3bc7a89571c72c590 done
+#11 exporting manifest list sha256:ad0301598a78caaf4a6b0caa38a36395d501ce4f7f812cabab7a93024c8f0a26 done
+#11 naming to docker.io/library/yakuori-issue52-cuda:latest done
+#11 unpacking to docker.io/library/yakuori-issue52-cuda:latest
+#11 unpacking to docker.io/library/yakuori-issue52-cuda:latest 3.7s done
+#11 DONE 7.0s

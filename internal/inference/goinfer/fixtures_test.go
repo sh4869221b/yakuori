@@ -15,18 +15,26 @@ import (
 )
 
 type stubModel struct {
-	contextTokens int
-	backend       string
-	quant         string
-	closes        int
-	closeErr      error
-	start         func(context.Context, generationInput) tokenStream
-	onClose       func() error
+	contextTokens   int
+	backend         string
+	quant           string
+	residentActive  bool
+	residentCap     int
+	residentDecline string
+	kvPrecision     string
+	closes          int
+	closeErr        error
+	start           func(context.Context, generationInput) tokenStream
+	onClose         func() error
 }
 
-func (m *stubModel) Config() *decoder.Config  { return &decoder.Config{MaxPositions: m.contextTokens} }
-func (m *stubModel) EffectiveBackend() string { return m.backend }
-func (m *stubModel) Quant() string            { return m.quant }
+func (m *stubModel) Config() *decoder.Config     { return &decoder.Config{MaxPositions: m.contextTokens} }
+func (m *stubModel) EffectiveBackend() string    { return m.backend }
+func (m *stubModel) Quant() string               { return m.quant }
+func (m *stubModel) ResidentActive() bool        { return m.residentActive }
+func (m *stubModel) ResidentContextCap() int     { return m.residentCap }
+func (m *stubModel) ResidentDecline() string     { return m.residentDecline }
+func (m *stubModel) ResidentKVPrecision() string { return m.kvPrecision }
 func (m *stubModel) Close() error {
 	m.closes++
 	if m.onClose != nil {
@@ -93,7 +101,7 @@ func loadFixture(t *testing.T) (modelConfig, loaders, *stubModel, *stubTokenizer
 			return tok, nil
 		},
 	}
-	return modelConfig{path: path, quant: "int4"}, load, model, tok
+	return modelConfig{path: path, backend: "cpu", quant: "int4"}, load, model, tok
 }
 
 func generationFixture(t *testing.T) (*Engine, *stubModel, *stubTokenizer, inference.GenerationRequest) {

@@ -30,14 +30,22 @@ type TemplateIdentity struct {
 }
 
 type ModelInfo struct {
-	BackendPin    string
-	Backend       string
-	ComputeQuant  string
-	ModelSHA256   [32]byte
-	ContextTokens int
-	Template      TemplateIdentity
-	Tokenizer     TokenizerIdentity
-	PolicySchema  int
+	BackendPin              string
+	CUDABackendPin          string
+	RequestedBackend        string
+	Backend                 string
+	ComputeQuant            string
+	ModelSHA256             [32]byte
+	ModelContextTokens      int
+	ConfiguredContextTokens int
+	ContextTokens           int
+	ResidentActive          bool
+	ResidentContextCap      int
+	ResidentDecline         string
+	KVPrecision             string
+	Template                TemplateIdentity
+	Tokenizer               TokenizerIdentity
+	PolicySchema            int
 }
 
 type GenerationResult struct {

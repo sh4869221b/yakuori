@@ -54,8 +54,7 @@ def run_case(case: Case, args: argparse.Namespace, output: Path) -> bool:
     stem = f"{case.fixture.stem}-pair{case.pair}-{case.backend}" if case.fixture else case.backend
     env = {key: value for key, value in os.environ.items() if not key.startswith("GOINFER_")}
     env.update(GOMAXPROCS="16", GOMEMLIMIT="14336MiB", YAKUORI_CUDA_MODEL=str(args.model.resolve()),
-               YAKUORI_CUDA_BACKEND=case.backend, YAKUORI_CUDA_REPORT=str(output / f"{stem}.json"),
-               YAKUORI_CUDA_REQUEST_TIMEOUT="300s", YAKUORI_CUDA_GENERATION_TIMEOUT="1500s")
+               YAKUORI_CUDA_BACKEND=case.backend, YAKUORI_CUDA_REPORT=str(output / f"{stem}.json"))
     if case.fixture:
         env.update(YAKUORI_CUDA_FIXTURE=str(case.fixture), YAKUORI_CUDA_PAIR=str(case.pair))
         if case.backend == "cuda":
@@ -146,10 +145,10 @@ def main() -> int:
     cases = [Case(backend) for backend in backends]
     if args.mode == "matrix":
         root = Path(__file__).resolve().parents[1] / "docs/evidence/cpu-long-context/index-translate"
-        fixtures = [root / "fixtures/01-fixture.json", *(root / f"prose/fixtures/{name}.json" for name in ("00-short", "01-medium", "02-long"))]
-        if any(not fixture.is_file() for fixture in fixtures):
+        fixtures = [(root / "fixtures/01-fixture.json", 3), *((root / f"prose/fixtures/{name}.json", 3) for name in ("00-short", "01-medium", "02-long")), (root / "fixtures/02-x4.json", 1)]
+        if any(not fixture.is_file() for fixture, _ in fixtures):
             parser.error("matrix fixture missing")
-        cases = [Case(backend, fixture, pair) for fixture in fixtures for pair in range(1, 4) for backend in backends]
+        cases = [Case(backend, fixture, pair) for fixture, pairs in fixtures for pair in range(1, pairs + 1) for backend in backends]
     signal.signal(signal.SIGTERM, terminate)
     failed = False
     schedule: list[dict[str, str | int]] = []

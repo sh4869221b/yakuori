@@ -1,0 +1,158 @@
+[
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/fixtures/01-fixture.json",
+    "pair": 1,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/fixtures/01-fixture.json",
+    "pair": 1,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/fixtures/01-fixture.json",
+    "pair": 2,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/fixtures/01-fixture.json",
+    "pair": 2,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/fixtures/01-fixture.json",
+    "pair": 3,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/fixtures/01-fixture.json",
+    "pair": 3,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/00-short.json",
+    "pair": 1,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/00-short.json",
+    "pair": 1,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/00-short.json",
+    "pair": 2,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/00-short.json",
+    "pair": 2,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/00-short.json",
+    "pair": 3,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/00-short.json",
+    "pair": 3,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/01-medium.json",
+    "pair": 1,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/01-medium.json",
+    "pair": 1,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/01-medium.json",
+    "pair": 2,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/01-medium.json",
+    "pair": 2,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/01-medium.json",
+    "pair": 3,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/01-medium.json",
+    "pair": 3,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/02-long.json",
+    "pair": 1,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/02-long.json",
+    "pair": 1,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/02-long.json",
+    "pair": 2,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/02-long.json",
+    "pair": 2,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/02-long.json",
+    "pair": 3,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/02-long.json",
+    "pair": 3,
+    "status": "passed"
+  },
+  {
+    "backend": "cpu",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/fixtures/02-x4.json",
+    "pair": 1,
+    "status": "passed"
+  },
+  {
+    "backend": "cuda",
+    "fixture": "/home/sh4869/.codex/worktrees/issue-52-cuda-engine/yakuori/docs/evidence/cpu-long-context/index-translate/fixtures/02-x4.json",
+    "pair": 1,
+    "status": "passed"
+  }
+]

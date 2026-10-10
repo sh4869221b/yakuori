@@ -1,0 +1,9 @@
+=== RUN   TestCUDAEvaluationContracts
+[resident] BuildResident declined (ok=false err=resident path declined: cuda: cuda: driver init: cuda: load library: libcuda.so.1: libcuda.so.1: cannot open shared object file: No such file or directory
+/usr/lib/x86_64-linux-gnu/libcuda.so.1: /usr/lib/x86_64-linux-gnu/libcuda.so.1: cannot open shared object file: No such file or directory
+/usr/lib/wsl/lib/libcuda.so.1: /usr/lib/wsl/lib/libcuda.so.1: cannot open shared object file: No such file or directory) — continuing on the CPU/staged path
+    cuda_contracts_test.go:47: unsupported resident CUDA: active=false cap=0 decline=cuda: cuda: driver init: cuda: load library: libcuda.so.1: libcuda.so.1: cannot open shared object file: No such file or directory
+        /usr/lib/x86_64-linux-gnu/libcuda.so.1: /usr/lib/x86_64-linux-gnu/libcuda.so.1: cannot open shared object file: No such file or directory
+        /usr/lib/wsl/lib/libcuda.so.1: /usr/lib/wsl/lib/libcuda.so.1: cannot open shared object file: No such file or directory
+--- FAIL: TestCUDAEvaluationContracts (14.16s)
+FAIL

@@ -23,16 +23,17 @@ type cudaScenario struct {
 	Error           string       `json:"error,omitempty"`
 }
 type cudaContractReport struct {
-	Go        string         `json:"go"`
-	Setup     cudaSetup      `json:"setup"`
-	Status    string         `json:"status"`
-	Scenarios []cudaScenario `json:"scenarios"`
-	Error     string         `json:"error,omitempty"`
+	Go          string         `json:"go"`
+	Setup       cudaSetup      `json:"setup"`
+	Status      string         `json:"status"`
+	PolicyScope string         `json:"policy_scope"`
+	Scenarios   []cudaScenario `json:"scenarios"`
+	Error       string         `json:"error,omitempty"`
 }
 
 func TestCUDAEvaluationContracts(t *testing.T) {
 	model, backend := cudaEnvironment(t)
-	report := cudaContractReport{Go: runtime.Version(), Status: "failed"}
+	report := cudaContractReport{Go: runtime.Version(), Status: "failed", PolicyScope: "contract-only boundary, cancellation, deadline and lifecycle probes use explicit test budgets; product defaults are evaluated by the matrix"}
 	names := []string{"exact_count_and_literal_markers", "natural_stop", "small_output_max_tokens", "boundary_equality", "one_token_overflow", "partial_cancel_and_drain", "reuse_after_cancel", "deadline_and_drain", "reuse_after_deadline", "close_during_generation", "idempotent_close"}
 	for _, name := range names {
 		report.Scenarios = append(report.Scenarios, cudaScenario{Name: name, Status: "unrun: earlier failure"})
