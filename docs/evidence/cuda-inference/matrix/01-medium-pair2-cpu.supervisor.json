@@ -1,0 +1,614 @@
+{
+  "backend": "cpu",
+  "fixture": "/home/sh4869/.codex/worktrees/issue-23-cuda-evaluation/yakuori/docs/evidence/cpu-long-context/index-translate/prose/fixtures/01-medium.json",
+  "pair": 2,
+  "command": [
+    "/tmp/yakuori-cuda-evaluation.test",
+    "-test.run",
+    "^TestCUDAEvaluationMatrix$",
+    "-test.v",
+    "-test.count=1",
+    "-test.timeout=1800s"
+  ],
+  "pid": 1049039,
+  "returncode": 0,
+  "watchdog_kill": null,
+  "observed_peak_rss_kib": 3572400,
+  "process_wall_seconds": 17.982937758002663,
+  "cleanup": "process group terminated; child reaped",
+  "hard_cgroup_bounds": "absent; monitored bounds only; historical environment equivalence unverified",
+  "device_vram_baseline_mib": "0, 1466",
+  "device_vram_sampled_max_mib": {
+    "0": 1474
+  },
+  "process_vram_sampled_max_mib": null,
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "gomaxprocs": 16,
+  "go_memory_limit_mib": 14336,
+  "vram_nominal_sample_interval_seconds": 0.1,
+  "vram_samples": [
+    {
+      "elapsed_seconds": 0.02623984799720347,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 0.15244869599700905,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 0.27889908000361174,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 0.40448078799818177,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 0.5298283550073393,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 0.6549629310029559,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 0.7816520140040666,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 0.9068345410050824,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 1.0343384459993104,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 1.159533295998699,
+      "device_memory_used_mib": "0, 1474",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 1.2854682600009255,
+      "device_memory_used_mib": "0, 1474",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 1.412164916007896,
+      "device_memory_used_mib": "0, 1474",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 1.5385282049974194,
+      "device_memory_used_mib": "0, 1474",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 1.8776664559991332,
+      "device_memory_used_mib": "0, 1474",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 2.5218098540062783,
+      "device_memory_used_mib": "0, 1467",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 2.6662358710018452,
+      "device_memory_used_mib": "0, 1467",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 2.8027417700068327,
+      "device_memory_used_mib": "0, 1467",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 2.9392732580017764,
+      "device_memory_used_mib": "0, 1467",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 3.0738366020086687,
+      "device_memory_used_mib": "0, 1467",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 3.208732871004031,
+      "device_memory_used_mib": "0, 1467",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 3.3639864480064716,
+      "device_memory_used_mib": "0, 1467",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 3.5207925560098374,
+      "device_memory_used_mib": "0, 1467",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 3.6765962579956977,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 3.8319228110049153,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 3.988030926004285,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 4.1430565629998455,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 4.284031604009215,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 4.426845317007974,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 4.571863707999,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 4.7226043499977095,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 4.876371619000565,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 5.0313238380040275,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 5.200034934008727,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 5.361275058006868,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 5.519324285996845,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 5.673829505001777,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 5.828816078006639,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 5.98356129800959,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 6.138841264008079,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 6.2939012160059065,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 6.446560338998097,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 6.597918554005446,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 6.752184461001889,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 6.909422102005919,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 7.073609453000245,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 7.229986224003369,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 7.383574275008868,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 7.538086647007731,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 7.692214324008091,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 7.84912125300616,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 8.019898847996956,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 8.195289816998411,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 8.388096145004965,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 8.562695173008251,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 8.728841692005517,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 8.888197399995988,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 9.057745420999709,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 9.220735720009543,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 9.381767422004486,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 9.541910170999472,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 9.69923024700256,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 9.862884985996061,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 10.023613708006451,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 10.19998283800669,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 10.372517431009328,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 10.536818456996116,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 10.690628295997158,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 10.848115005996078,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 11.00269063700398,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 11.195475404005265,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 11.350406213998212,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 11.504694524002844,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 11.655658525996841,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 11.806263954000315,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 11.958431763006956,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 12.110433470006683,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 12.262782179008354,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 12.414218650999828,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 12.56580400299572,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 12.71282051599701,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 12.865228547001607,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 13.01670011600072,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 13.166614083005697,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 13.319118565006647,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 13.472679395999876,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 13.62193436200323,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 13.783386556009646,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 13.934120296005858,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 14.087709851010004,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 14.240689247002592,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 14.393516297001042,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 14.54800759900536,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 14.694484086008742,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 14.847012263009674,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 14.998926635002135,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 15.169360744999722,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 15.333035132003715,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 15.493365254005766,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 15.643604683005833,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 15.809407385007944,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 15.970425963008893,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 16.13519652299874,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 16.29489291200298,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 16.454146618008963,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 16.606735891007702,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 16.76196632400388,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 16.91856776800705,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 17.09675356799562,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 17.271819736008183,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 17.440355904007447,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 17.598530189003213,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 17.757767514005536,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    },
+    {
+      "elapsed_seconds": 17.882827451001504,
+      "device_memory_used_mib": "0, 1466",
+      "process_memory_used_mib": null
+    }
+  ],
+  "vram_scope": "device-wide and child PID samples; exact continuous peak unverified; process baseline absent before process exists"
+}
