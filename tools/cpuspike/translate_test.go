@@ -8,8 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/localize"
+	"github.com/sh4869221b/yakuori/internal/segment"
+	"github.com/sh4869221b/yakuori/internal/unit"
+	"github.com/sh4869221b/yakuori/internal/validate"
 )
 
 func TestTranslateFixtureCreatesSeparateUnits(t *testing.T) {
@@ -99,5 +104,77 @@ func TestOperationalProbeRejectsInputBeforeModelLoad(t *testing.T) {
 		if !errors.Is(err, config.ErrLimitExceeded) || report.LoadMS != 0 || len(report.Runs) != 0 {
 			t.Fatalf("error=%v report=%+v", err, report)
 		}
+	}
+}
+
+type metricsBackend struct {
+	inference.Engine
+	calls int
+}
+
+func (*metricsBackend) Info(context.Context) (inference.ModelInfo, error) {
+	return inference.ModelInfo{ContextTokens: 100, PolicySchema: 1}, nil
+}
+
+func (*metricsBackend) CountTokens(_ context.Context, r inference.GenerationRequest) (int, error) {
+	return len(r.TokenIDs()), nil
+}
+
+func (e *metricsBackend) Generate(context.Context, inference.GenerationRequest) (inference.GenerationResult, error) {
+	e.calls++
+	return inference.GenerationResult{}, errors.New("unexpected generation")
+}
+
+func TestMechanicalCountsBeforeGeneration(t *testing.T) {
+	for _, phase := range []string{"protect", "plan"} {
+		t.Run(phase, func(t *testing.T) {
+			var units []unit.TranslationUnit
+			for i, text := range []string{"one", "two", "three"} {
+				id, err := unit.NewUnitID("metrics", "v1", text)
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw := []byte(text)
+				if phase == "protect" && i == 2 {
+					raw = []byte{0xff}
+				}
+				u, err := unit.NewTranslationUnit(id, raw, "en", "ja", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				units = append(units, u)
+			}
+			session, err := unit.NewSession([]byte("fixture"), units)
+			if err != nil {
+				t.Fatal(err)
+			}
+			profile, err := validate.NewProfileWithSegmentation([32]byte{1}, segment.ProfileInput())
+			if err != nil {
+				t.Fatal(err)
+			}
+			limits := config.DefaultLimits()
+			if phase == "plan" {
+				limits.Segments = 2
+			}
+			backend := &metricsBackend{}
+			core, err := localize.NewSegmentedCoreWithLimits(backend, func(_ context.Context, _ unit.UnitID, text string) (inference.GenerationRequest, error) {
+				policy, err := inference.NewGenerationPolicy(1, 16, time.Second)
+				if err != nil {
+					return inference.GenerationRequest{}, err
+				}
+				return inference.NewGenerationRequest(inference.PreparedRequest{RenderedPrompt: text, TokenIDs: []int{1, 2, 3}, Identity: inference.RequestIdentity{PromptSchema: 1}}, policy)
+			}, limits)
+			if err != nil {
+				t.Fatal(err)
+			}
+			accepted, err := core.Generate(context.Background(), session, profile)
+			if err == nil || backend.calls != 0 || accepted != nil {
+				t.Fatalf("accepted=%v calls=%d err=%v", accepted, backend.calls, err)
+			}
+			failures, denominator := mechanicalCounts(session, 0, err)
+			if failures != 0 || denominator != 0 {
+				t.Fatalf("counts=%d/%d before generation: %v", failures, denominator, err)
+			}
+		})
 	}
 }

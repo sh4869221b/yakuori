@@ -92,6 +92,9 @@ func mechanicalCounts(session unit.Session, accepted int, err error) (failures, 
 	if !errors.As(err, &phase) {
 		return 0, 0
 	}
+	if phase.Phase == "input" || phase.Phase == "protect" || phase.Phase == "plan" {
+		return 0, 0
+	}
 	if phase.Phase == "prepare_export" {
 		return 0, len(session.Units())
 	}

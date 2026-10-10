@@ -105,7 +105,7 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 	for _, u := range units {
 		id := u.ID()
 		if err := ctx.Err(); err != nil {
-			return nil, &Error{Phase: "generate", UnitID: id, Err: err}
+			return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 		}
 		prepared, err := protect.Prepare(session, id)
 		if err != nil {
@@ -116,17 +116,17 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 			limits := c.limits
 			limits.Segments -= segments
 			if limits.Segments <= 0 {
-				return nil, &Error{Phase: "generate", UnitID: id, Err: c.limits.CheckSegments(segments + 1)}
+				return nil, &Error{Phase: "plan", UnitID: id, Err: c.limits.CheckSegments(segments + 1)}
 			}
 			plan, err = c.segmented.plan(ctx, id, prepared, limits)
 			if err != nil {
-				return nil, &Error{Phase: "generate", UnitID: id, Err: err}
+				return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 			}
 			segments += len(plan.Segments())
 		} else {
 			segments++
 			if err := c.limits.CheckSegments(segments); err != nil {
-				return nil, &Error{Phase: "generate", UnitID: id, Err: err}
+				return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 			}
 		}
 		preparedUnits = append(preparedUnits, prepared)
