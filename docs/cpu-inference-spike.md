@@ -18,6 +18,11 @@ A separate [bounded long-context experiment](cpu-long-context.md) stages actual
 token-counted prompts and records time, RSS, and deadline drain latency. Its measured
 results supplement this short-prompt report; neither report chooses #14 product caps.
 
+> Historical baseline: the original pin table and feasibility measurements predate
+> #51 and use
+> goinfer v0.20.0 / aikit v1.51.1. The current CPU wrapper uses goinfer v0.22.0 /
+> aikit v1.57.0; see [the current release update](#current-cpu-release-update-51-2026-10-10).
+
 ## Reproducible pins and rights
 
 | Component | Pin / source | License |
@@ -231,3 +236,77 @@ process isolation or an upstream API change; it is not silently assumed here.
   are a measured smaller supported cap, a context-aware upstream/fork improvement,
   or explicit process isolation. All preserve Go/CGO=0 in principle; switching to a
   C/C++ backend would change the approved pure-Go requirement and needs a user decision.
+
+## Current CPU release update (#51, 2026-10-10)
+
+The production CPU wrapper now pins goinfer v0.22.0 and its required aikit v1.57.0.
+The module still declares Go 1.27.0; the image build used Go 1.27.1 on Linux amd64
+with CGO disabled, and the real-model runtime checks disabled networking. The
+supported wrapper path remains
+explicit CPU/int4. It does not adopt the upstream CLI's auto-backend default or
+introduce GPU, embedding quantization, or a generation-policy change.
+
+### Scoped upstream API review
+
+The scoped v0.20.0-to-v0.21.0 source diff includes decoder backend/self-test and
+Chat changes. The inspected paths—decoder/model.go, decoder/backend.go, chat/,
+tokenizer/, and go.mod—are unchanged between v0.21.0 and v0.22.0. The CPU self-test
+and explicit auto-backend handling already exist in v0.21.0 and remain in v0.22.0;
+the v0.22.0 module requires aikit v1.57.0. This is a scoped comparison, not a
+claim that the whole releases are identical. LoadAbort and WithThinking were
+already present in v0.20.0; neither creates a hard load deadline or new guarantee.
+
+Five wrapper-owned safeguards therefore remain necessary:
+
+1. Explicit CPU/int4 selection and refusal unless the loaded effective backend
+   and quantization match; the library default and upstream CLI default differ.
+2. Exact template-source admission plus Index-specific BuildIndex trimming and
+   its disabled-thinking prompt prefix; family detection alone does not prove a
+   template is safe to render.
+3. Segmented encoding and frozen request token IDs; literal user control-marker
+   text must remain literal, and CountTokens and Generate use the same IDs.
+4. Application finish classification, partial-error refusal, and drain through
+   stream closure before reuse or Close; upstream nil-error completion alone does
+   not distinguish every accepted outcome.
+5. A private read-only model snapshot shared by weight and tokenizer loading;
+   the upstream loaders independently open the path and do not bind one immutable
+   caller-file version.
+
+### v0.22.0 build and CPU smoke
+
+The invocation `docker build --progress=plain -f ci/cpu-spike.Dockerfile -t yakuori-issue51-new .`
+passed. It ran the Go 1.27.1 CGO=0 build, test, and vet gate, the negative cgo
+guard self-test, and Linux amd64/arm64 CLI, SQLite, and wrapper test cross-builds.
+Cross-builds do not establish arm64 runtime support. The captured build output is
+in .omo/evidence/issue-51-goinfer-release-update/task-5-new-build.log.
+
+The recorded offline runtime checks were:
+
+| Scenario and invocation | Result |
+| --- | --- |
+| `docker run --rm --network none --memory 4g --cpus 2 yakuori-issue51-new` | Qwen CPU probe passed: natural and forced Stop, MaxTokens, cancellation/deadline, then healthy reuse; [captured output](evidence/cpu-long-context/goinfer-v0.22.0/smoke/qwen.log). |
+| `docker run --rm --network none --memory 4g --memory-swap 4g --cpus 2 -e YAKUORI_CPU_MODEL=/model.gguf --entrypoint /cpu-wrapper-smoke.test yakuori-issue51-new -test.run '^TestCPUWrapperSmoke$' -test.v -test.timeout 180s` | Passed with CPU/int4, exact prompt counts, literal-marker handling, segmentation, too-small-budget refusal, cooperative timeout/drain/reuse, and Close; [captured output](evidence/cpu-long-context/goinfer-v0.22.0/smoke/wrapper.log). |
+| `docker run --rm --network none --cpus 16 --memory 16g --memory-swap 16g -e GOMAXPROCS=16 -v /home/sh4869/.cache/yakuori/models:/local:ro -e YAKUORI_CPU_MODEL=/local/Index-Translate-2B.Q4_K_M.gguf --entrypoint /cpu-wrapper-smoke.test yakuori-issue51-new -test.run '^TestCPUIndexSmoke$' -test.v -test.timeout 30m` | Passed: literal isolation and exact counts, natural Stop, placeholder preservation, timeout drain/reuse, segmentation, and Close; [captured output](evidence/cpu-long-context/goinfer-v0.22.0/smoke/index.log). |
+| `docker run --rm --network none --memory 4g --memory-swap 4g --cpus 2 -v /home/sh4869/.codex/worktrees/issue-51-goinfer-update/yakuori/.omo/evidence/issue-51-goinfer-release-update/qwen-long:/evidence --entrypoint python3 yakuori-issue51-new /src/ci/run-long-context.py /cpuspike /model.gguf /evidence --stages 1024,4096` | Four Qwen synthetic Stop/deadline cases passed without watchdog kills; [captured supervisor results](evidence/cpu-long-context/goinfer-v0.22.0/smoke/qwen-long/supervisor.json). This is a control-flow smoke, not a translation-quality benchmark. |
+| `docker run --rm --network none --memory 4g --memory-swap 4g --cpus 2 -e YAKUORI_CPU_MODEL=/missing.gguf --entrypoint /cpu-wrapper-smoke.test yakuori-issue51-new -test.run '^TestCPUWrapperSmoke$' -test.v -test.timeout 180s` | Expected failure: open of /missing.gguf returned “no such file or directory”; exit 1, without a skip or download; [captured output](evidence/cpu-long-context/goinfer-v0.22.0/smoke/missing.log) and [exit results](evidence/cpu-long-context/goinfer-v0.22.0/smoke/exits.txt). |
+
+The wrapper fault classifications remain covered by fake-stream tests, including
+partial output followed by backend error; no native decoder fault was injected.
+The task-local test capture is .omo/evidence/issue-51-goinfer-release-update/task-3-tests.log.
+Only cooperative cancellation was observed. The tests do not establish hard
+cancellation, natural 32K generation, GPU behavior, arm64 execution, or universal
+speed or translation-quality invariance.
+
+The [current third-party inventory](../THIRD_PARTY_NOTICES.md),
+[goinfer v0.22.0 MIT license](../licenses/upstream/goinfer-v0.22.0/LICENSE), and
+[aikit v1.57.0 MIT license](../licenses/upstream/aikit-v1.57.0/LICENSE) retain
+the selected release notices. The
+[research-inference notice](../licenses/research-inference/README.md) still says
+the copied gguf-py codebook and Cephes source lineage is unresolved; its reference
+notices are not proof of copied-code provenance or distribution clearance.
+
+For a future inference, GPU, tokenizer, or loading release, review upstream API and
+dependency changes early, then adopt only when there is a measured benefit,
+compatible wrapper behavior, and a manageable representative CPU regression.
+Keep explicit CPU/int4 admission and rerun the offline build, wrapper smokes, and
+same-fixture request/output/validation/time/RSS comparison before changing pins.

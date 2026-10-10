@@ -1,6 +1,6 @@
 # Third-party notices
 
-Baseline: `5df2c9232c869aacb1489b67693482be3a72f651`, reviewed 2026-10-07.
+Initial inventory baseline: `5df2c9232c869aacb1489b67693482be3a72f651`, reviewed 2026-10-07.
 Original Yakuori code and documentation are covered by the root MIT LICENSE.
 Third-party material remains under its own terms; the root license does not
 relicense dependencies, MOD fixtures, model assets or the separate GPL oracle.
@@ -9,23 +9,25 @@ for future research binaries, vendor trees or model-bearing images.
 
 ## Scope and retained notices
 
-All 13 selected Go modules were obtained at the unchanged go.mod/go.sum versions
+All 13 selected Go modules were obtained at their current go.mod/go.sum versions
 from proxy.golang.org, with checksum verification enabled. Every selected module
-sum matches the baseline go.sum; `go mod verify` passed. Exact sums are retained
+sum matches the current go.sum; `go mod verify` passed. Exact sums are retained
 in `licenses/go-module-sums.json`. The nine GitHub-hosted root notices were also
 independently verified by blob hash; see `licenses/upstream-index.json`.
 Original full notices are retained under `licenses/`.
 The Go 1.27.1 toolchain's BSD-3-Clause notice is also retained there.
-Upstream goinfer/aikit NOTICE and THIRD_PARTY_LICENSES files are retained as
-context, unchanged. Their references to optional GPU modules and model-bearing
+Exact goinfer/aikit LICENSE, NOTICE and THIRD_PARTY_LICENSES files for the
+current pins are retained under `licenses/upstream/` and
+`licenses/research-inference/notices/`. Copies for the previous pins remain as
+historical evidence. Their references to optional GPU modules and model-bearing
 upstream assets do not mean those assets are included in Yakuori.
 
 | Component | Exact pin | Notice verified | Current use |
 |---|---|---|---|
 | Go runtime / standard library | 1.27.1 | BSD-3-Clause, retained | Built executables |
 | golang.org/x/sys | v0.48.0 | BSD-3-Clause, retained | Linux publisher in CLI |
-| github.com/townsendmerino/goinfer | v0.20.0 | MIT, retained | CPU research executable only |
-| github.com/townsendmerino/aikit | v1.51.1 | MIT, retained | CPU probe transitive dependency |
+| github.com/townsendmerino/goinfer | v0.22.0 | MIT, retained | CPU research executable only |
+| github.com/townsendmerino/aikit | v1.57.0 | MIT, retained | CPU probe transitive dependency |
 | golang.org/x/text | v0.40.0 | BSD-3-Clause, retained | CPU probe transitive dependency |
 | modernc.org/sqlite | v1.60.1 | BSD-3-Clause wrapper plus scoped engine/third-party notices, retained | SQLite test probe only |
 | modernc.org/libc | v1.77.1 | BSD-3-Clause root plus scoped third-party notices, retained | SQLite test dependency |

@@ -11,14 +11,19 @@ import (
 )
 
 type translationRequest struct {
-	Finish            inference.Finish `json:"finish"`
-	PromptTokens      int              `json:"prompt_tokens"`
-	OutputTokens      int              `json:"output_tokens"`
-	Text              string           `json:"text"`
-	Milliseconds      float64          `json:"generation_ms"`
-	RequestTimeoutMS  int64            `json:"request_timeout_ms"`
-	DeadlineOverrunMS float64          `json:"deadline_overrun_ms"`
-	Error             string           `json:"error,omitempty"`
+	RenderedPrompt    string                    `json:"rendered_prompt"`
+	Spans             []inference.PromptSpan    `json:"spans"`
+	TokenIDs          []int                     `json:"token_ids"`
+	Identity          inference.RequestIdentity `json:"identity"`
+	Policy            inference.EffectivePolicy `json:"policy"`
+	Finish            inference.Finish          `json:"finish"`
+	PromptTokens      int                       `json:"prompt_tokens"`
+	OutputTokens      int                       `json:"output_tokens"`
+	Text              string                    `json:"text"`
+	Milliseconds      float64                   `json:"generation_ms"`
+	RequestTimeoutMS  int64                     `json:"request_timeout_ms"`
+	DeadlineOverrunMS float64                   `json:"deadline_overrun_ms"`
+	Error             string                    `json:"error,omitempty"`
 }
 type translationRun struct {
 	Name                  string               `json:"name"`
@@ -69,7 +74,12 @@ func (e *measuredEngine) Generate(ctx context.Context, request inference.Generat
 	result, err := e.Engine.Generate(ctx, request)
 	finished := time.Now()
 	elapsed := float64(finished.Sub(started)) / float64(time.Millisecond)
-	record := translationRequest{Finish: result.Finish, PromptTokens: result.PromptTokens, OutputTokens: result.OutputTokens, Text: result.Text, Milliseconds: elapsed, RequestTimeoutMS: result.Policy.RequestTimeout.Milliseconds()}
+	record := translationRequest{
+		RenderedPrompt: request.RenderedPrompt(), Spans: request.Spans(), TokenIDs: request.TokenIDs(),
+		Identity: request.Identity(), Policy: request.Policy(),
+		Finish: result.Finish, PromptTokens: result.PromptTokens, OutputTokens: result.OutputTokens,
+		Text: result.Text, Milliseconds: elapsed, RequestTimeoutMS: result.Policy.RequestTimeout.Milliseconds(),
+	}
 	if result.Finish == inference.Timeout && !result.Deadline.IsZero() {
 		// The backend records the earlier of parent and request deadlines.
 		record.DeadlineOverrunMS = max(0, float64(finished.Sub(result.Deadline))/float64(time.Millisecond))

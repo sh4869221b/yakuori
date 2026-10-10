@@ -1,22 +1,22 @@
 [
   {
     "repository": "townsendmerino/goinfer",
-    "version_or_revision": "v0.20.0",
+    "version_or_revision": "v0.22.0",
     "license_file": "LICENSE",
     "git_blob_sha1": "0bdd7a2fb4a3982551d8fb6dce4835d0222a5e07",
     "sha256": "e6748a83fb6b323f85260b8979b0728c647a7ad6ae6772e7fcbc69301d3d1a0c",
     "classification": "MIT",
-    "source_url": "https://github.com/townsendmerino/goinfer/blob/v0.20.0/LICENSE",
+    "source_url": "https://github.com/townsendmerino/goinfer/blob/v0.22.0/LICENSE",
     "scope": "root notice verified; complete archive and file-header audit pending"
   },
   {
     "repository": "townsendmerino/aikit",
-    "version_or_revision": "v1.51.1",
+    "version_or_revision": "v1.57.0",
     "license_file": "LICENSE",
     "git_blob_sha1": "0bdd7a2fb4a3982551d8fb6dce4835d0222a5e07",
     "sha256": "e6748a83fb6b323f85260b8979b0728c647a7ad6ae6772e7fcbc69301d3d1a0c",
     "classification": "MIT",
-    "source_url": "https://github.com/townsendmerino/aikit/blob/v1.51.1/LICENSE",
+    "source_url": "https://github.com/townsendmerino/aikit/blob/v1.57.0/LICENSE",
     "scope": "root notice verified; complete archive and file-header audit pending"
   },
   {

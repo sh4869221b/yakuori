@@ -1,0 +1,4 @@
+=== RUN   TestCPUWrapperSmoke
+    cpu_smoke_test.go:30: read model identity: open /missing.gguf: no such file or directory
+--- FAIL: TestCPUWrapperSmoke (0.00s)
+FAIL

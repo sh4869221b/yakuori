@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/sh4869221b/yakuori/internal/config"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -109,7 +111,10 @@ func TestOperationalProbeRejectsInputBeforeModelLoad(t *testing.T) {
 
 type metricsBackend struct {
 	inference.Engine
-	calls int
+	calls   int
+	request inference.GenerationRequest
+	result  inference.GenerationResult
+	err     error
 }
 
 func (*metricsBackend) Info(context.Context) (inference.ModelInfo, error) {
@@ -120,9 +125,100 @@ func (*metricsBackend) CountTokens(_ context.Context, r inference.GenerationRequ
 	return len(r.TokenIDs()), nil
 }
 
-func (e *metricsBackend) Generate(context.Context, inference.GenerationRequest) (inference.GenerationResult, error) {
+func (e *metricsBackend) Generate(_ context.Context, request inference.GenerationRequest) (inference.GenerationResult, error) {
 	e.calls++
-	return inference.GenerationResult{}, errors.New("unexpected generation")
+	e.request = request
+	return e.result, e.err
+}
+
+func TestMeasuredEngineGenerateRecordsRequestAndOutcome(t *testing.T) {
+	policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, 128, 3*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := inference.NewGenerationRequest(inference.PreparedRequest{
+		RenderedPrompt: "headerbody",
+		Spans: []inference.PromptSpan{
+			{Text: "header", Special: true}, {Text: "body"},
+		},
+		TokenIDs: []int{11, 12, 13},
+		Identity: inference.RequestIdentity{
+			ModelSHA256: [32]byte{1},
+			Tokenizer: inference.TokenizerIdentity{
+				ModelSHA256: [32]byte{1}, BackendPin: "github.com/townsendmerino/goinfer@v0.20.0",
+			},
+			Template:     inference.TemplateIdentity{Family: "qwen", Source: "fixture", RendererVersion: "v1"},
+			PromptSchema: 1,
+		},
+		StopIDs: []int{42},
+	}, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	effectivePolicy := request.Policy()
+
+	for _, tc := range []struct {
+		name   string
+		result inference.GenerationResult
+		err    error
+	}{
+		{
+			name: "complete generation",
+			result: inference.GenerationResult{
+				Text: "complete", Finish: inference.Stop, PromptTokens: 3, OutputTokens: 2,
+				Policy: effectivePolicy,
+			},
+		},
+		{
+			name: "partial generation error",
+			result: inference.GenerationResult{
+				Text: "partial", Finish: inference.DecodeError, PromptTokens: 3, OutputTokens: 1,
+				Policy: effectivePolicy,
+			},
+			err: errors.New("decode failed"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := &metricsBackend{result: tc.result, err: tc.err}
+			run := translationRun{}
+			measured := measuredEngine{Engine: backend, run: &run}
+
+			got, gotErr := measured.Generate(context.Background(), request)
+
+			if !reflect.DeepEqual(got, tc.result) || gotErr != tc.err {
+				t.Fatalf("result=%+v error=%v want=%+v error=%v", got, gotErr, tc.result, tc.err)
+			}
+			if backend.calls != 1 || len(run.Requests) != 1 {
+				t.Fatalf("backend calls=%d records=%d", backend.calls, len(run.Requests))
+			}
+			encoded, err := json.Marshal(run.Requests[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			var recorded translationRequest
+			if err := json.Unmarshal(encoded, &recorded); err != nil {
+				t.Fatal(err)
+			}
+			if recorded.RenderedPrompt != backend.request.RenderedPrompt() ||
+				!reflect.DeepEqual(recorded.Spans, backend.request.Spans()) ||
+				!reflect.DeepEqual(recorded.TokenIDs, backend.request.TokenIDs()) ||
+				recorded.Identity != backend.request.Identity() ||
+				!reflect.DeepEqual(recorded.Policy, backend.request.Policy()) {
+				t.Fatalf("recorded request=%+v generated request=%+v", recorded, backend.request)
+			}
+			if recorded.RenderedPrompt == "" || len(recorded.TokenIDs) == 0 || len(recorded.Policy.StopIDs) == 0 {
+				t.Fatalf("incomplete request metadata: %+v", recorded)
+			}
+			if recorded.Finish != tc.result.Finish || recorded.PromptTokens != tc.result.PromptTokens ||
+				recorded.OutputTokens != tc.result.OutputTokens || recorded.Text != tc.result.Text ||
+				recorded.RequestTimeoutMS != tc.result.Policy.RequestTimeout.Milliseconds() {
+				t.Fatalf("recorded outcome=%+v want=%+v", recorded, tc.result)
+			}
+			if (tc.err == nil && recorded.Error != "") || (tc.err != nil && recorded.Error != tc.err.Error()) {
+				t.Fatalf("recorded error=%q want=%v", recorded.Error, tc.err)
+			}
+		})
+	}
 }
 
 func TestMechanicalCountsBeforeGeneration(t *testing.T) {
