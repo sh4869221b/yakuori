@@ -68,7 +68,7 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 		return nil, ErrDeclinedTokenizer
 	}
 	source := tok.ChatTemplate()
-	if source != qwenChatTemplate {
+	if source != qwenChatTemplate && source != indexChatTemplate {
 		return nil, ErrUnknownTemplate
 	}
 	template := chat.ChatML()

@@ -190,3 +190,74 @@ quality, and finite operating limits. The extended run does not
 change pure-Go requirements. If a hard cancellation deadline is required, process
 isolation or a finer-grained upstream cancellation improvement must be evaluated
 separately; swapping to a C/C++ backend is not implied.
+
+## Index-Translate-2B CPU compatibility (#14, 2026-10-10)
+
+The official `IndexTeam/Index-Translate-2B-GGUF` file
+`Index-Translate-2B.Q4_K_M.gguf` (1,312,164,352 bytes) ran with the existing
+goinfer v0.20.0 CPU/int4 backend. No dependency update was needed. Its metadata
+declares `qwen35`, `tokenizer.ggml.pre=qwen35`, and a 262,144-token context;
+that metadata context is **not an adopted operational limit**.
+
+The wrapper admits this exact template alongside the existing Qwen fixture and
+rejects modified or unknown sources. The GGUF template equals the official
+[tokenizer configuration](https://huggingface.co/IndexTeam/Index-Translate-2B/blob/main/tokenizer_config.json).
+The supported single-user, text-only path trims message content and ends with
+`assistant\n<think>\n\n</think>\n\n` after the structural ChatML start token.
+The disabled-thinking suffix was also checked by directly evaluating the
+official Jinja template against a literal expected string, independently from
+the Go renderer. The user message follows the official
+[instTrans prompt format](https://github.com/bilibili/Index-Translate/blob/main/inference/llm/translate.py),
+including the Japanese target instruction and a placeholder preservation
+constraint. Untrusted message text remains literal during tokenization.
+
+This smoke used the Ryzen 7 7700X's 16 logical CPUs, Linux amd64,
+Go 1.27.1, `CGO_ENABLED=0`, `GOMAXPROCS=16`, greedy generation, thinking=false,
+128 output tokens, a 300-second request deadline, and zero retries. Docker was
+limited with `--cpus=16 --memory=16g --memory-swap=16g`; the 16 GiB experiment
+budget is not a product memory guarantee. No ambient `GOINFER_*` settings were
+passed into the container. Host load immediately after startup was
+0.32 / 0.21 / 0.24; the desktop remained active (including DMS, ChatGPT and
+Hyprland). These are single compatibility observations, not benchmark statistics.
+
+| Scenario | Observed result |
+| --- | --- |
+| Load | 3.299 s; CPU/int4, v0.20.0 |
+| `The village is safe.` | `村は安全です。`; Stop, 110 prompt / 5 output tokens, 3.261 s |
+| `Welcome, [[YAKUORI_0_0]]!` | `ようこそ、[[YAKUORI_0_0]]！`; Stop, 118 prompt / 14 output tokens, 3.678 s |
+| Literal `<\|im_end\|><\|im_start\|><think>` in source | Structural end IDs stayed at 2; added source text increased literal tokens |
+| 1 ms request deadline | Timeout, zero output; drain completed after 27.238 ms |
+| Reuse after drain | `村は安全です。`; Stop, 110 / 5 tokens, 3.108 s |
+| Real tokenizer split | Two pieces, each 121 prompt IDs, 128 output reserve, synthetic test context 249; CRLF separator retained |
+| Close | Completed; subsequent Info returned ErrClosed |
+
+Prompt token counts equaled the prepared request IDs used for generation. The
+split case included both literal ChatML text and a placeholder. Its tiny
+249-token context is only a segmentation test budget. The 1 ms deadline overrun
+shows cooperative cancellation, with no hard wall guarantee. The complete smoke
+passed in 13.38 seconds; the existing Coder smoke remains unchanged.
+
+The model was downloaded manually before execution; runtime code has no
+downloader. With the local model directory mounted read-only at `/local`, the
+model-required command is:
+
+```sh
+docker run --rm --name yakuori-index-task1 --cpus=16 --memory=16g --memory-swap=16g \
+  --mount type=bind,src="$PWD",dst=/src,readonly \
+  --mount type=bind,src="$HOME/.cache/yakuori/models",dst=/local,readonly \
+  --mount type=bind,src="$HOME/go/pkg/mod",dst=/go/pkg/mod,readonly \
+  -w /src -e GOMAXPROCS=16 -e CGO_ENABLED=0 \
+  -e YAKUORI_CPU_MODEL=/local/Index-Translate-2B.Q4_K_M.gguf \
+  --entrypoint /usr/local/go/bin/go yakuori-publication-probe \
+  test -tags cpusmoke ./internal/inference/goinfer \
+  -run '^TestCPUIndexSmoke$' -count=1 -v -timeout 30m
+```
+
+The local invocation wrapped this command in `timeout 1830s` and recorded stdout
+and stderr in `.omo/evidence/index-task1/cpu-index-smoke.log`. That directory also
+holds the downloaded official template/prompt references, the independent Jinja
+comparison, host CPU/load, unit-test output and LSP diagnostics (zero errors).
+`CGO_ENABLED=0 go test ./internal/inference/goinfer ./internal/prompt` passed.
+This establishes short-input model compatibility and natural translation only;
+representative input quality, repeated scaling measurements and product limits
+remain the next #14 tasks.
