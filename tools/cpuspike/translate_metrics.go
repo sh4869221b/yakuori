@@ -36,21 +36,22 @@ type translationRun struct {
 	Error                 string               `json:"error,omitempty"`
 }
 type translationReport struct {
-	Go            string           `json:"go"`
-	GOMAXPROCS    int              `json:"gomaxprocs"`
-	TM            string           `json:"tm"`
-	Context       int              `json:"context_tokens"`
-	MaxOutput     int              `json:"max_output_tokens"`
-	RequestMS     int64            `json:"request_timeout_ms"`
-	GenerationMS  int64            `json:"generation_timeout_ms"`
-	ArtifactBytes int              `json:"artifact_bytes"`
-	TextBytes     int              `json:"total_text_bytes"`
-	Units         int              `json:"units"`
-	LoadMS        float64          `json:"load_ms"`
-	TotalMS       float64          `json:"process_total_ms"`
-	PeakRSSKiB    int64            `json:"peak_rss_kib"`
-	Runs          []translationRun `json:"runs"`
-	Error         string           `json:"error,omitempty"`
+	OperationalLimits bool             `json:"operational_limits"`
+	Go                string           `json:"go"`
+	GOMAXPROCS        int              `json:"gomaxprocs"`
+	TM                string           `json:"tm"`
+	Context           int              `json:"context_tokens"`
+	MaxOutput         int              `json:"max_output_tokens"`
+	RequestMS         int64            `json:"request_timeout_ms"`
+	GenerationMS      int64            `json:"generation_timeout_ms"`
+	ArtifactBytes     int              `json:"artifact_bytes"`
+	TextBytes         int              `json:"total_text_bytes"`
+	Units             int              `json:"units"`
+	LoadMS            float64          `json:"load_ms"`
+	TotalMS           float64          `json:"process_total_ms"`
+	PeakRSSKiB        int64            `json:"peak_rss_kib"`
+	Runs              []translationRun `json:"runs"`
+	Error             string           `json:"error,omitempty"`
 }
 type measuredEngine struct {
 	inference.Engine

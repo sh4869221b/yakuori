@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
+	"github.com/sh4869221b/yakuori/internal/config"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sh4869221b/yakuori/internal/localize"
@@ -79,5 +82,22 @@ func TestMechanicalCountsIncludePriorValidatedUnitsOnFailure(t *testing.T) {
 				t.Fatalf("counts=%d/%d want=%d/%d", failures, denominator, tc.failures, tc.denominator)
 			}
 		})
+	}
+}
+
+func TestOperationalProbeRejectsInputBeforeModelLoad(t *testing.T) {
+	// Given inputs over the adopted artifact or per-unit boundary and no model.
+	l := config.DefaultLimits()
+	for _, data := range []string{strings.Repeat(" ", l.ArtifactBytes+1), `["` + strings.Repeat("a", l.UnitTextBytes+1) + `"]`} {
+		path := filepath.Join(t.TempDir(), "input.json")
+		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+		var report translationReport
+		// When operational admission runs, then rejection precedes model Open.
+		err := translateProbe(&report, "missing-model", path, l.ContextTokens, l.MaxOutputTokens, l.RequestTimeout, l.GenerationTimeout, false, true)
+		if !errors.Is(err, config.ErrLimitExceeded) || report.LoadMS != 0 || len(report.Runs) != 0 {
+			t.Fatalf("error=%v report=%+v", err, report)
+		}
 	}
 }
