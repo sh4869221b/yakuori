@@ -129,3 +129,51 @@ func TestCompareFinalRejectsUnboundExpectations(t *testing.T) {
 		})
 	}
 }
+
+func TestCompareFinalSegmentationProfileIdentity(t *testing.T) {
+	session, ids, legacy, _ := exportFixture(t, "source")
+	input := validate.SegmentationInput{Schema: "safe-boundaries-v1", BoundaryFixtures: "safe-boundaries-fixtures-v1"}
+	profile, err := validate.NewProfileWithSegmentation(legacy.Digest(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := validate.Validate(session, ids[0], profile, "訳文")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected, err := artifact.PrepareExport(session, profile, []validate.AcceptedTranslation{accepted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	final := artifact.FinalObservation{
+		Adapter: "fixture", FormatSchema: "v1",
+		Units: []artifact.ObservedUnit{{ID: ids[0], Text: "訳文", TargetLanguage: "ja"}},
+	}
+	for _, tt := range []struct {
+		name  string
+		input validate.SegmentationInput
+		want  error
+	}{
+		{"matching", input, nil},
+		{"legacy", validate.SegmentationInput{}, artifact.ErrInvalidExpected},
+		{"schema", validate.SegmentationInput{Schema: "other", BoundaryFixtures: input.BoundaryFixtures}, artifact.ErrInvalidExpected},
+		{"fixtures", validate.SegmentationInput{Schema: input.Schema, BoundaryFixtures: "other"}, artifact.ErrInvalidExpected},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifestProfile := legacy
+			if tt.input != (validate.SegmentationInput{}) {
+				manifestProfile, err = validate.NewProfileWithSegmentation(legacy.Digest(), tt.input)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			manifest, err := artifact.NewManifest(session, manifestProfile, "fixture", "v1", nil, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := artifact.CompareFinal(manifest, expected, final); !errors.Is(err, tt.want) {
+				t.Fatalf("error=%v want=%v", err, tt.want)
+			}
+		})
+	}
+}

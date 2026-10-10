@@ -21,7 +21,7 @@ type KeyRelation struct {
 
 type Manifest struct {
 	session       unit.Session
-	profile       [32]byte
+	profile       validate.Profile
 	adapter       string
 	formatSchema  string
 	artifact      [32]byte
@@ -65,7 +65,7 @@ func NewManifest(session unit.Session, profile validate.Profile, adapter, format
 		metadata[name] = bytes.Clone(value)
 	}
 	return Manifest{
-		session: session, profile: profile.Digest(), adapter: adapter, formatSchema: formatSchema,
+		session: session, profile: profile, adapter: adapter, formatSchema: formatSchema,
 		artifact: session.ArtifactDigest(), units: units, keys: relations, finalMetadata: metadata,
 	}, nil
 }
