@@ -1,0 +1,40 @@
+[
+  {
+    "target": 4096,
+    "mode": "single-1024",
+    "pair": 1,
+    "command": [
+      "/probe",
+      "translate",
+      "--model",
+      "/local/Index-Translate-2B.Q4_K_M.gguf",
+      "--fixture",
+      "/reserve-input/single-1024.json",
+      "--context-tokens",
+      "4096",
+      "--max-output-tokens",
+      "2048",
+      "--request-timeout",
+      "300s",
+      "--generation-timeout",
+      "1500s"
+    ],
+    "container_memory_peak_bytes": 4157771776,
+    "returncode": 1,
+    "watchdog_kill": null,
+    "observed_peak_rss_kib": 3264344,
+    "process_wall_seconds": 182.668
+  },
+  {
+    "target": 4096,
+    "mode": "single-1024",
+    "pair": 2,
+    "status": "unrun: earlier failure in condition"
+  },
+  {
+    "target": 4096,
+    "mode": "single-1024",
+    "pair": 3,
+    "status": "unrun: earlier failure in condition"
+  }
+]

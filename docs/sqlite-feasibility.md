@@ -214,3 +214,11 @@ All observed transaction/commit times fit the initial 1s operation budget on
 this tmpfs host fixture. These values do not establish a persistent-disk SLO,
 production TM capacity, serialization cost, cache-hit behavior or the cost of
 larger unmeasured batches. No new database budget is adopted by this experiment.
+
+The owner-approved task8 output-reservation experiment on the existing 5150-byte
+single unit produced no accepted output: its first cold run reached MaxTokens
+at context4096/output2048, and warm/later pairs were unrun. Therefore it supplied
+**no additional successful batch** to the opt-in SQLite measurement. The
+27 measured task2 batches above remain the available database evidence; task8
+did not run a database measurement or establish a new transaction bound. See the
+[additional CPU summary](evidence/cpu-long-context/index-translate/reserve2048/summary.json).

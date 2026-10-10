@@ -524,3 +524,69 @@ host-memory-floor interruption and preservation of failures/unrun stages.
 `fmt.Appendf` style suggestion). These checks and actual CLI exit statuses are
 captured under `.omo/evidence/issue-14-task2/`; reproducible model outputs and
 supervisor observables are the linked JSON artifacts above.
+
+### Owner-approved limited output-reservation experiment
+
+After the original matrix, the owner approved task8 on 2026-10-10: repeat only
+its existing `single-1024.json` (5159 artifact bytes, one 5150-byte source unit)
+at **context4096/output2048**. This authorizes a measurement, not product limits.
+The optional supervisor `--max-output-tokens` override preserves the default
+quarter reservation and the legacy Coder command. All seven supervisor tests
+passed, including default-quarter and explicit-2048 child command assertions.
+
+The exact invocation was:
+
+```sh
+docker run --rm --name yakuori-issue14-reserve \
+  --cpus=16 --memory=16g --memory-swap=16g \
+  -v "$PWD:/src" -v /tmp/yakuori-issue14-cpuspike-final:/probe:ro \
+  -v /tmp/yakuori-issue14-reserve-fixtures:/reserve-input:ro \
+  -v /home/sh4869/.cache/yakuori/models:/local:ro \
+  --entrypoint python3 yakuori-issue14-measure \
+  /src/ci/run-long-context.py /probe /local/Index-Translate-2B.Q4_K_M.gguf \
+  /src/docs/evidence/cpu-long-context/index-translate/reserve2048/results \
+  --translate-fixtures /reserve-input --contexts 4096 --max-output-tokens 2048 \
+  --pairs 3 --process-wall-seconds 1800 --request-timeout-seconds 300 \
+  --generation-timeout-seconds 1500 --rss-limit-mib 16384 \
+  --go-memory-limit-mib 14336
+```
+
+The temporary fixture directory contained only a copy of the existing
+`single-1024.json`. All other resource/backend conditions match the original
+matrix, including GOMAXPROCS16, GOMEMLIMIT14336MiB, ambient GOINFER removal,
+16384MiB supervisor RSS limit and 1024MiB host MemAvailable floor. No Go test,
+build or database job ran concurrently with inference.
+
+The [additional summary](evidence/cpu-long-context/index-translate/reserve2048/summary.json)
+and [raw supervisor results](evidence/cpu-long-context/index-translate/reserve2048/results/supervisor.json)
+preserve **one failed pair and two unrun pairs**. Pair1 cold failed with MaxTokens;
+warm did not run. Pair2 and pair3 stopped under the approved failure rule. The
+supervisor returned nonzero; it did not interrupt the child. Original failures
+remain unchanged.
+
+| Same single unit, context4096 | Output1024, original | Output2048, added |
+| --- | ---: | ---: |
+| Planned segments | 1 | 1 |
+| Prompt tokens | 1238 | 1238 |
+| Generated tokens / finish | 1024 / MaxTokens | 2048 / MaxTokens |
+| Generation seconds | 104.671 | 179.302 |
+| Added load seconds | — | 3.194 |
+| Added process wall seconds | — | 182.668 |
+| Accepted units / validated denominator | 0 / 0 | 0 / 0 |
+| Warm run | not run | not run |
+
+The added child Rusage peak was 3262660KiB (sampled peak3264344KiB); container
+memory.peak was 4157771776 bytes, cumulative since this container started. These
+are observations under a 16GiB experiment frame, not a guaranteed memory bound.
+
+The saved generated text contains repeated Japanese translations of the two
+source sentences, but does not form an accepted full translation. The source
+has 103 copies of each sentence; the output contains 158 copies of
+`村は安全です。` and 157 copies of `警備員が門を守っています。`, ending
+`村は安全です。警備`. This is excessive repetition and truncation, rather than
+proof that simply increasing the output reservation yields complete long prose.
+It remains a synthetic repeated-sentence input and cannot establish general
+prose quality. The conditional added 100ms/reuse and SQLite measurements were
+**not run**, because no added successful translation or warm batch exists.
+No retry, further output increase, other input measurement or product adoption
+was performed.

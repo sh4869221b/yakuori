@@ -1,0 +1,110 @@
+{
+  "scope": "Owner-authorized task8: only single-1024.json; no product limit adoption",
+  "environment": {
+    "cpus": 16,
+    "container_memory_gib": 16,
+    "container_memory_plus_swap_gib": 16,
+    "GOMAXPROCS": 16,
+    "GOMEMLIMIT": "14336MiB",
+    "rss_limit_mib": 16384,
+    "host_available_floor_mib": 1024,
+    "request_seconds": 300,
+    "generation_seconds": 1500,
+    "process_pair_wall_seconds": 1800,
+    "backend": "CPU/int4/greedy/thinking=false/no retry; ambient GOINFER_* removed"
+  },
+  "input": {
+    "artifact_bytes": 5159,
+    "units": 1,
+    "max_unit_bytes": 5150,
+    "total_text_bytes": 5150,
+    "segments": 1
+  },
+  "pairs": [
+    {
+      "target": 4096,
+      "mode": "single-1024",
+      "pair": 1,
+      "command": [
+        "/probe",
+        "translate",
+        "--model",
+        "/local/Index-Translate-2B.Q4_K_M.gguf",
+        "--fixture",
+        "/reserve-input/single-1024.json",
+        "--context-tokens",
+        "4096",
+        "--max-output-tokens",
+        "2048",
+        "--request-timeout",
+        "300s",
+        "--generation-timeout",
+        "1500s"
+      ],
+      "container_memory_peak_bytes": 4157771776,
+      "returncode": 1,
+      "watchdog_kill": null,
+      "observed_peak_rss_kib": 3264344,
+      "process_wall_seconds": 182.668
+    },
+    {
+      "target": 4096,
+      "mode": "single-1024",
+      "pair": 2,
+      "status": "unrun: earlier failure in condition"
+    },
+    {
+      "target": 4096,
+      "mode": "single-1024",
+      "pair": 3,
+      "status": "unrun: earlier failure in condition"
+    }
+  ],
+  "comparison": [
+    {
+      "condition": "original",
+      "context_tokens": 4096,
+      "output_reservation": 1024,
+      "load_ms": 3135.035646,
+      "generation_ms": 104671.091358,
+      "cold_total_with_load_ms": 107808.94208800001,
+      "peak_rss_kib": 3475192,
+      "finish": "max_tokens",
+      "prompt_tokens": 1238,
+      "output_tokens": 1024,
+      "accepted_units": 0,
+      "validation_failures": 0,
+      "validation_denominator": 0,
+      "warm": "not run after cold failure"
+    },
+    {
+      "condition": "reserve2048",
+      "context_tokens": 4096,
+      "output_reservation": 2048,
+      "load_ms": 3193.84098,
+      "generation_ms": 179301.501548,
+      "cold_total_with_load_ms": 182497.797621,
+      "peak_rss_kib": 3262660,
+      "finish": "max_tokens",
+      "prompt_tokens": 1238,
+      "output_tokens": 2048,
+      "accepted_units": 0,
+      "validation_failures": 0,
+      "validation_denominator": 0,
+      "warm": "not run after cold failure"
+    }
+  ],
+  "quality": {
+    "source_sentence_pair_count": 103,
+    "output_first_sentence_count": 158,
+    "output_second_sentence_count": 157,
+    "output_utf8_bytes": 9447,
+    "output_ending": "村は安全です。警備",
+    "observation": "Excessive repetition and mid-sentence truncation; no accepted full translation."
+  },
+  "conditional_checks": {
+    "deadline_reuse": "not run: added input failed",
+    "sqlite_batches": "not run: no successful added warm output"
+  },
+  "memory_note": "memory.peak cumulative from container start; one attempted pair"
+}
