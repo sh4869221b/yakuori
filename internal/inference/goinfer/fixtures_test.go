@@ -75,20 +75,20 @@ func loadFixture(t *testing.T) (modelConfig, loaders, *stubModel, *stubTokenizer
 		return tokenStream{tokens: tokens, outcome: func() generationState { return generationState{budget: input.max} }}
 	}
 	tok := &stubTokenizer{
-		source: "<|im_start|> template metadata", stops: map[string]int{"<|im_end|>": 42},
+		source: qwenChatTemplate, stops: map[string]int{"<|im_end|>": 42},
 		encode: func([]tokenizer.Segment, bool) ([]int, error) { return []int{10, 11, 12}, nil },
 		decode: func([]int) (string, error) { return "translated", nil },
 	}
 	load := loaders{
 		model: func(gotPath string, opts decoder.Options) (modelBackend, error) {
-			if gotPath != path || opts.Backend != "cpu" || opts.Quant != "int4" {
+			if gotPath == path || opts.Backend != "cpu" || opts.Quant != "int4" {
 				t.Fatalf("load model: path=%q options=%+v", gotPath, opts)
 			}
 			return model, nil
 		},
 		tokenizer: func(gotPath string) (requestTokenizer, error) {
-			if gotPath != path {
-				t.Fatalf("tokenizer path=%q, want same GGUF %q", gotPath, path)
+			if gotPath == path {
+				t.Fatalf("tokenizer used mutable model path %q", path)
 			}
 			return tok, nil
 		},

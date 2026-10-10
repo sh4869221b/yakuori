@@ -16,29 +16,36 @@ import (
 
 type modelConfig struct{ path, quant string }
 
-func open(ctx context.Context, config modelConfig, load loaders) (_ *Engine, err error) {
+func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if config.quant != "int4" {
 		return nil, ErrUnsupportedQuant
 	}
-	digest, err := modelIdentity(config.path)
+	path, digest, err := snapshotModel(config.path)
 	if err != nil {
 		return nil, fmt.Errorf("read model identity: %w", err)
 	}
+	var model modelBackend
+	defer func() {
+		// Linux mappings remain valid after unlink; neither loader can reopen the
+		// caller's mutable path once the private snapshot has been created.
+		err = errors.Join(err, os.Remove(path))
+		if err != nil {
+			if model != nil {
+				err = errors.Join(err, model.Close())
+			}
+			engine = nil
+		}
+	}()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	model, err := load.model(config.path, decoder.Options{Backend: "cpu", Quant: config.quant})
+	model, err = load.model(path, decoder.Options{Backend: "cpu", Quant: config.quant})
 	if err != nil {
 		return nil, fmt.Errorf("load CPU model: %w", err)
 	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, model.Close())
-		}
-	}()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -53,7 +60,7 @@ func open(ctx context.Context, config modelConfig, load loaders) (_ *Engine, err
 	if contextTokens <= 0 {
 		return nil, ErrUnknownContext
 	}
-	tok, err := load.tokenizer(config.path)
+	tok, err := load.tokenizer(path)
 	if err != nil {
 		return nil, fmt.Errorf("load model tokenizer: %w", err)
 	}
@@ -61,13 +68,10 @@ func open(ctx context.Context, config modelConfig, load loaders) (_ *Engine, err
 		return nil, ErrDeclinedTokenizer
 	}
 	source := tok.ChatTemplate()
-	if source == "" {
+	if source != qwenChatTemplate {
 		return nil, ErrUnknownTemplate
 	}
-	template, err := chat.Detect(chat.Meta{ChatTemplate: source})
-	if err != nil {
-		return nil, ErrUnknownTemplate
-	}
+	template := chat.ChatML()
 	stops := template.Stops().Strings
 	if len(stops) == 0 {
 		return nil, ErrUnknownStop
@@ -94,16 +98,30 @@ func open(ctx context.Context, config modelConfig, load loaders) (_ *Engine, err
 	}, nil
 }
 
-func modelIdentity(path string) (digest [32]byte, err error) {
+func snapshotModel(path string) (snapshot string, digest [32]byte, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return digest, err
+		return "", digest, err
 	}
-	defer func() { err = errors.Join(err, f.Close()) }()
+	defer func() {
+		err = errors.Join(err, f.Close())
+		if err != nil && snapshot != "" {
+			err = errors.Join(err, os.Remove(snapshot))
+		}
+	}()
+	copyFile, err := os.CreateTemp("", "yakuori-model-*.gguf")
+	if err != nil {
+		return "", digest, err
+	}
+	snapshot = copyFile.Name()
+	defer func() { err = errors.Join(err, copyFile.Close()) }()
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return digest, err
+	if _, err = io.Copy(io.MultiWriter(copyFile, h), f); err != nil {
+		return snapshot, digest, err
+	}
+	if err = copyFile.Chmod(0400); err != nil {
+		return snapshot, digest, err
 	}
 	copy(digest[:], h.Sum(nil))
-	return digest, nil
+	return snapshot, digest, nil
 }

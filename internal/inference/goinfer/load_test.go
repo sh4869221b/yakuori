@@ -88,7 +88,7 @@ func TestOpenFailureCancellation(t *testing.T) {
 }
 
 func TestUnknownTemplate(t *testing.T) {
-	for _, source := range []string{"", "unknown template"} {
+	for _, source := range []string{"", "unknown template", "<|im_start|> template metadata", "custom preamble" + qwenChatTemplate} {
 		t.Run(source, func(t *testing.T) {
 			config, load, model, tok := loadFixture(t)
 			tok.source = source

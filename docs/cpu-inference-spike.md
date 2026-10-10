@@ -101,7 +101,14 @@ Docker image removes its copy; no user model registry or TM state was created.
 
 `internal/inference/goinfer` implements Open, model Info, immutable request
 preparation, exact CountTokens, Generate, and Close for the pinned plain CPU/int4
-path. The tokenizer and template come from the same GGUF; segmented encoding
+path. Open copies the local GGUF to a private temporary snapshot and hashes and
+loads both weights and tokenizer from those bytes, so replacing the original path
+cannot mix model identities. This requires temporary disk space equal to the GGUF;
+the snapshot is unlinked after loading (Linux mappings remain valid).
+The template source must exactly match the pinned Qwen fixture: its no-tools,
+explicit-system, single-user path is equivalent to the selected ChatML renderer.
+Customized sources are rejected even if they contain familiar family markers.
+The tokenizer and template come from the same GGUF; segmented encoding
 keeps literal user control-marker text separate from template controls. The common
 request exposes its rendered spans, frozen token IDs, model/tokenizer/template
 identity, prompt schema, and effective policy. Policy schema v1 requires explicit
