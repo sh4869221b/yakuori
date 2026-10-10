@@ -4,7 +4,7 @@
 
 ## 状態
 
-#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）と、全件生成・保護復元・最終artifact検証・一括TM commitを接続するCore（#11）を実装しています。text Adapterは全文1unitを扱い、最終検証とcommit後に訳bytesをstdoutへ一括出力します。EngineとTMのfakeはテスト内だけで使用します。通常の `localize` はbackend未接続のため、出力指定の解析後も `localize pipeline is not implemented` でno-I/O終了します。実model、SQLite TM接続・hit再検証、実ゲーム検証、releaseはまだありません。
+#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）と、全件生成・保護復元・最終artifact検証・一括TM commitを接続するCore（#11）、CPU inference EngineとCore adapter（#12）を実装しています。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使い、取消し後のdrainを終えてから再利用・Closeします。text Adapterは全文1unitを扱い、最終検証とcommit後に訳bytesをstdoutへ一括出力します。通常の `localize` はEngine・TM未接続のため、出力指定の解析後も `localize pipeline is not implemented` でno-I/O終了します。SQLite TM接続・hit再検証、実ゲーム検証、翻訳modelの品質選定、releaseはまだありません。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)を参照してください。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 

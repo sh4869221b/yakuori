@@ -184,8 +184,9 @@ preserve the measurements.
   8K, the measured runtimes, 3 GiB, 7 GiB, or either deadline as product defaults
   from this experiment.
 
-Next, #12 must implement the production boundary and #14 must measure representative
-translation inputs, quality, and finite operating limits. The extended run does not
+The [#12 production CPU boundary](cpu-inference-spike.md#production-wrapper-12)
+is implemented separately; #14 must measure representative translation inputs,
+quality, and finite operating limits. The extended run does not
 change pure-Go requirements. If a hard cancellation deadline is required, process
 isolation or a finer-grained upstream cancellation improvement must be evaluated
 separately; swapping to a C/C++ backend is not implied.
