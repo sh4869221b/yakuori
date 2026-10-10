@@ -103,6 +103,19 @@ unicode-ident and original Ulf Adams attribution for ryu. Only w3strings has
 registry-archive checksum equivalence verified; the other 15 registry archives
 and a future oracle binary remain separate gates.
 
+## Copied Index chat template
+
+`internal/inference/goinfer/index_template.go` contains the 7,755-character
+`chat_template` copied verbatim from `tokenizer_config.json` in the official
+[Index-Translate-2B base model](https://huggingface.co/IndexTeam/Index-Translate-2B).
+The official [GGUF conversion](https://huggingface.co/IndexTeam/Index-Translate-2B-GGUF)
+identifies that base model. Both model cards declare Apache-2.0, as does the
+upstream [Index-Translate repository](https://github.com/bilibili/Index-Translate).
+The examined template has no separate attribution header or accompanying
+NOTICE file; the source repository root also has no NOTICE. A full copy of its
+Apache-2.0 LICENSE is retained at
+[`licenses/research-inference/notices/index-translate-2B-APACHE-2.0.txt`](licenses/research-inference/notices/index-translate-2B-APACHE-2.0.txt).
+
 ## Models and images
 
 The CPU research Dockerfile downloads Qwen2.5-Coder-0.5B-Instruct-GGUF at revision
