@@ -67,7 +67,11 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 	if profile.Digest() == ([32]byte{}) {
 		return nil, &Error{Phase: "input", Err: validate.ErrInvalidProfile}
 	}
-	if c.segmented != nil && profile.Segmentation() != segment.ProfileInput() {
+	expectedSegmentation := validate.SegmentationInput{}
+	if c.segmented != nil {
+		expectedSegmentation = segment.ProfileInput()
+	}
+	if profile.Segmentation() != expectedSegmentation {
 		return nil, &Error{Phase: "input", Err: validate.ErrInvalidProfile}
 	}
 	accepted := make([]validate.AcceptedTranslation, 0, len(session.Units()))

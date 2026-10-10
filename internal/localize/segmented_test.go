@@ -218,6 +218,24 @@ func TestSegmentedProfileMismatch(t *testing.T) {
 	}
 }
 
+func TestLegacyCoreRejectsSegmentationProfile(t *testing.T) {
+	for _, source := range []string{"one two", ""} {
+		t.Run(source, func(t *testing.T) {
+			session, _ := generationFixture(t, []string{source}, nil)
+			calls := 0
+			core := NewCore(fakeEngine(func(_ context.Context, _ unit.UnitID, text string) (Generation, error) {
+				calls++
+				return Generation{Text: text, Finish: Stop}, nil
+			}))
+			accepted, err := core.Generate(context.Background(), session, segmentedProfile(t))
+			var diagnostic *Error
+			if !errors.Is(err, validate.ErrInvalidProfile) || !errors.As(err, &diagnostic) || diagnostic.Phase != "input" || accepted != nil || calls != 0 {
+				t.Fatalf("accepted=%v err=%v calls=%d", accepted, err, calls)
+			}
+		})
+	}
+}
+
 func TestSegmentedContextLimit(t *testing.T) {
 	core := segmentedFixture(t, byteLength, func(context.Context, inference.GenerationRequest) (inference.GenerationResult, error) {
 		t.Fatal("generation on failed plan")
