@@ -241,3 +241,28 @@ record each batch. Database files were on host `/tmp` tmpfs
 (`rw,noatime,inode64,huge=advise`), as in task2; these observations do not establish
 a persistent-disk SLO or production TM performance. No database job ran alongside
 model inference. The opt-in experiment passed; unchanged full CI was not rerun.
+
+## Adopted operation and cleanup budgets (#14)
+
+The owner's candidate A adopts `DBOperationTimeout=1s` and
+`DBCleanupTimeout=1s` in `config.DefaultLimits()`, with retry0. Core finalization
+passes a fresh operation child context from the caller to TM.Commit, covering
+connection acquisition and work performed by the implementation. It does not
+reuse the generation child context. A cancelled/failed commit prevents later
+publication/writing; the generic TM interface cannot perform SQLite rollback.
+
+The measured busy100ms value remains an **initial SQLite research condition**,
+not a new product default or connection setting applied by Core. Real busy wait,
+transaction rollback and independent cleanup implementation remain owned by #16;
+the adopted cleanup field does not imply that connection exists today. The
+27 label/sentence and nine prose batch measurements above used fresh test-owned
+databases on `/tmp` tmpfs. They inform these budgets without establishing
+persistent-disk performance, production TM throughput or a hard wall when an
+implementation ignores context. Existing busy/cancel/rollback and finalization
+boundary tests remain the behavioral evidence.
+
+If a TM implementation returns nil after its operation context expires, Core
+retains `TMCommitted=true` to report that actual return honestly. The expired
+operation still returns an error and prevents subsequent write/publication.
+This does not assert rollback of a commit that may already have happened; the
+existing finalization test covers this distinction.

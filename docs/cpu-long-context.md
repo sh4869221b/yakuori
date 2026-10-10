@@ -1,8 +1,12 @@
 # Bounded CPU long-context experiment (#3)
 
-This supplements [the short CPU spike](cpu-inference-spike.md). It uses exactly the
+The first sections preserve the historical Coder experiment; the final section
+records the owner-adopted Index operational limits and their verification.
+
+The historical experiment supplements [the short CPU spike](cpu-inference-spike.md). It uses exactly the
 same checksum-pinned official 0.5B GGUF and goinfer v0.20.0. No model choice,
-translation-quality claim, production wrapper, or #14 product limit is adopted.
+translation-quality claim, production wrapper, or #14 product limit was adopted
+by that historical experiment.
 The [canonical design](https://chatgpt.com/space/page_3565e1d53fa08191a7d8cb56e84af5a5)
 is unchanged. In particular, a synthetic controlled Stop is not an accepted translation.
 
@@ -679,3 +683,171 @@ coverage automatically. The earlier 5150-byte repeated prose failures and label
 quality reservations remain valid. No input caps, context/output policy or time
 budgets are adopted by this experiment; the owner must select their scope and
 margin. Full CI was not repeated because probe and production code are unchanged.
+
+## Adopted operational limits (#14)
+
+The owner selected candidate A on 2026-10-10. `config.DefaultLimits()` now supplies
+these defaults to the product Core, text Adapter and publication entrypoints;
+existing explicit finite research constructors retain historical experiments.
+This table is the adopted contract, superseding earlier sections' deferred
+adoption statements for current defaults while retaining those trial results.
+
+| Field | Adopted value | Measurement basis and practical limit |
+| --- | ---: | --- |
+| Artifact UTF8 bytes | 1495 | Largest successful 76-label JSON artifact; source binary952B is a different artifact |
+| Units per artifact | 76 | Largest completed label batch |
+| UTF8 bytes per unit | 980 | Largest successful nonrepeated prose unit, one unit per artifact |
+| Total source text UTF8 bytes | 1036 | Largest completed label batch |
+| Segments per artifact | 76 | Largest completed label batch; includes pieces needing no generation |
+| Context / reserved output tokens | 4096 / 2048 | Index greedy natural translation; successful prose prompt301/output250 |
+| Request budget | 30s | Longer than measured prose request19.488s; cooperative through drain/decode/classification |
+| Whole generation budget | 300s | Core.Generate entrance through all planning, units and validation; label warm about235s |
+| DB operation / cleanup budget | 1s / 1s | Existing SQLite research probe measurements on tmpfs; real TM implementation remains #16 |
+| Retry | 0 | Existing greedy generation contract |
+
+The input limits apply together. The largest per-field observations came from
+different workloads: 76 short labels and one980B prose unit. Every combination
+inside this rectangle has not been measured. In particular76 units each980B
+would exceed total-text1036B anyway; other mixed combinations can satisfy the
+caps but still lack performance or quality observations. These are admission
+limits with selected margin, not a performance, translation-quality or memory
+guarantee. The previous repetitive5150B failures and label/prose quality
+reservations remain applicable.
+
+Publication snapshots check source size before retention and read at most the
+artifact limit plus one byte; growth during reading is rejected. Core.Text checks
+caller-supplied bytes before another copy/import, but cannot prevent the caller's
+allocation. The text Adapter checks its one unit before additional retention.
+A generic Adapter may already allocate inside Import: Core checks its returned
+session before protection/request/generation, not before that internal allocation.
+Future format Adapters must enforce the same dimensions before their own added
+retention. All units are protected/planned and the aggregate segment cap checked
+before the first generation request; there is no accepted partial result on
+failure. Source admission is not an output-observation cap.
+
+The generation child context is used only within Generate. Request contexts use
+the earlier of their parent and30s policy, including drain; cancellation can
+overrun cooperatively, and a backend ignoring context has no hard-wall guarantee.
+Finalization.commit creates its own1s child from the caller context, rather than
+reusing an expired generation context, and includes connection acquisition in
+the supplied TM operation. A cancellation/failure prevents subsequent publication
+or output writing. The generic TM interface does not implement rollback; SQLite
+busy handling and rollback/cleanup belong to #16. The1s cleanup field is reserved
+for that implementation, rather than a fictitious rollback in Core.
+
+### Final real CPU verification of adopted defaults
+
+`cpuspike translate --operational-limits` is a research-only verification switch.
+It uses DefaultLimits for bounded source reading, unit/text admission before model
+Open, measurement preplanning and the real segmented Core. Context/output/request/
+generation flags may be omitted; they become4096/2048/30s/300s. Explicit conflicting
+values fail with JSON and nonzero exit. Historical commands without this switch
+continue to use their explicit research limits. This does not add a production
+configuration loader or CLI settings surface.
+
+The Generate-only probe has no TM lookup, commit, export or publication. Its
+success/rejection evidence therefore establishes generation admission and
+cancellation, while product tests establish the no-commit/no-publish boundary.
+
+For final CPU QA, the existing76-label and980B prose fixtures were copied to a
+temporary input directory as `00-label.json` and `01-prose.json`. A temporary
+executable wrapper contains exactly:
+
+```sh
+#!/bin/sh
+exec /probe "$@" --operational-limits
+```
+
+The finite supervisor invocation is:
+
+```sh
+docker run --rm --name yakuori-issue14-operational \
+  --cpus=16 --memory=16g --memory-swap=16g \
+  -v "$PWD:/src" -v /tmp/yakuori-issue14-operational:/probe:ro \
+  -v /tmp/yakuori-issue14-operational-wrapper:/operational:ro \
+  -v /tmp/yakuori-issue14-operational-fixtures:/inputs:ro \
+  -v /home/sh4869/.cache/yakuori/models:/local:ro \
+  --entrypoint python3 yakuori-issue14-measure \
+  /src/ci/run-long-context.py /operational /local/Index-Translate-2B.Q4_K_M.gguf \
+  /src/docs/evidence/cpu-long-context/index-translate/operational/results \
+  --translate-fixtures /inputs --contexts 4096 --max-output-tokens 2048 --pairs 1 \
+  --process-wall-seconds 700 --request-timeout-seconds 30 \
+  --generation-timeout-seconds 300 --rss-limit-mib 16384 \
+  --go-memory-limit-mib 14336
+```
+
+GOMAXPROCS16, CPU/int4/greedy/thinking=false, ambient GOINFER removal,
+GOMEMLIMIT14336MiB and host MemAvailable floor1024MiB remain fixed. The700s
+supervisor wall covers two300s cooperative runs plus load; it is an experimental
+process bound, not a product setting. No build/test/database job runs alongside
+inference. `revalidation_ms` still measures the additional research check;
+Core validation remains part of combined overhead. Container memory.peak remains
+cumulative over the two pairs, not an independent peak for each input.
+
+The [final adopted-policy reports](evidence/cpu-long-context/index-translate/operational/results/supervisor.json)
+show both pairs completed with exit0 and no watchdog interruption:
+
+| Input | Cold generation run s | Load s | Warm run s | Accepted / validation failures / denominator |
+| --- | ---: | ---: | ---: | --- |
+| 76 labels, artifact1495B/text1036B/76 segments | 234.733 | 3.305 | 235.476 | 76 / 0 / 76 in both runs |
+| Prose, artifact985B/unit980B/1 segment | 19.059 | 3.130 | 19.077 | 1 / 0 / 1 in both runs |
+
+Every request reports adopted policy30000ms. Label maximum request was3.314s;
+prose prompt301/output250 ended Stop. Child/sample peak RSS for labels was
+3584508KiB, with cumulative container peak4621688832 bytes; prose child peak
+was3401684KiB. All final cold/warm outputs match the previously inspected label
+and prose outputs exactly, including their documented quality limitations. The
+selected30s request budget exceeds the prior observed prose request19.488s, and
+the300s generation budget exceeds this final label warm run235.476s. This
+comparison does not guarantee completion for every admitted mixed workload.
+
+For cancellation, only the prose fixture was copied to a temporary deadline
+input directory. The command above used container name
+`yakuori-issue14-operational-deadline`, that directory mounted at `/inputs`, output
+`.../operational/deadline`, and `--deadline-probe` added. In operational mode this
+sets a100ms **caller context**, retaining the adopted30s request policy and300s
+normal generation budget. The
+[actual report](evidence/cpu-long-context/index-translate/operational/deadline/4096-01-prose-pair1.json)
+records `caller_deadline_100ms`: whole run107.110163ms, request/drain105.906626ms,
+effective caller deadline overrun7.153624ms, policy30000ms and accepted0.
+The overrun is measured against the earlier caller deadline, which starts before
+preplanning; it is not request-duration minus30s. After cancellation/drain returned,
+a fresh context reused the same loaded model: warm19.043476s, Stop, accepted1,
+validation0/1, same inspected prose output. Supervisor exit0/no kill records
+cooperative cancellation and reuse, rather than forced interruption.
+
+A1496-byte file (1496 spaces) was passed to the actual built CLI:
+
+```sh
+/tmp/yakuori-issue14-operational translate --operational-limits \
+  --model missing-model --fixture /tmp/yakuori-issue14-operational-qa/1496.json
+```
+
+It returned exit1 and [JSON](evidence/cpu-long-context/index-translate/operational/qa/oversized.json)
+`artifact bytes: 1496 exceeds 1495`, load_ms0 and no runs. Adding
+`--request-timeout 300s` returned a
+[conflict error](evidence/cpu-long-context/index-translate/operational/qa/conflict.json)
+before load. A focused test also covers per-unit981B rejection before model Open;
+product boundary tests cover the other adopted dimensions and no-commit/no-publish
+contracts. The [summary](evidence/cpu-long-context/index-translate/operational/summary.json)
+retains input dimensions, policy and individual observations.
+
+Focused `CGO_ENABLED=0 go test ./tools/cpuspike ./internal/config ./internal/localize ./internal/segment`
+passed after the research switch edit, and `gopls check` on the three changed Go
+files reported zero errors. The final full `ci/verify.sh` passed in the existing
+official Go1.27.1/linuxamd64 disposable base image, network disabled, read-only
+module/source mounts, no C compiler or SQLite headers, and a fresh source copy.
+The qualified run used user1000:1000 and a Btrfs bind mount as TMPDIR, so
+publication success, permission-denial and recovery scenarios actually ran.
+CGO0 build/test/vet and arm64 CLI/SQLite test cross-build completed.
+
+The initial qualified run as root failed the tests that explicitly require a
+non-root user; that failed log is retained. Re-running the same final source with
+the required non-root identity passed. The extra verbose qualified publication
+run skipped only `TestUnsupportedFilesystem` because the filesystem qualified;
+that exact refusal test was then run under ordinary container `/tmp` and passed.
+Ordinary unqualified-TMPDIR CI alone would skip qualified success scenarios and
+is not used as their proof. The exact disposable-container command and all
+results are captured in `.omo/evidence/issue-14-task6/ci-qualified-command.txt`,
+`verify-qualified.log` and `ci-qualified-result.txt` (`exit=0`); initial failure is
+`verify.log`. The final source was unchanged between these CI checks and commit.
