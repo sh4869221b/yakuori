@@ -132,6 +132,20 @@ func TestOpenOptionsValidation(t *testing.T) {
 	}
 }
 
+func TestOpenUnavailableCUDABeforeSnapshot(t *testing.T) {
+	if cudaBackendPin != "" {
+		t.Skip("CUDA backend is built in")
+	}
+	missing := filepath.Join(t.TempDir(), "missing")
+	t.Setenv("TMPDIR", missing)
+	engine, err := OpenWithOptions(context.Background(), filepath.Join(missing, "model.gguf"), Options{
+		Backend: "cuda", ComputeQuant: "int4", ContextTokens: 4096,
+	})
+	if engine != nil || !errors.Is(err, ErrUnsupportedBackend) || !strings.Contains(err.Error(), "CUDA backend not built in") {
+		t.Fatalf("engine=%v error=%v", engine, err)
+	}
+}
+
 func TestOpenExplicitBackend(t *testing.T) {
 	for _, backend := range []string{"cpu", "cuda"} {
 		t.Run(backend, func(t *testing.T) {

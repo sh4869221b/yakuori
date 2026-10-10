@@ -86,15 +86,15 @@ func OpenWithOptions(ctx context.Context, modelPath string, options Options) (*E
 	if options.ContextTokens <= 0 {
 		return nil, ErrInvalidContext
 	}
+	if options.Backend == "cuda" && cudaBackendPin == "" {
+		return nil, fmt.Errorf("%w: CUDA backend not built in; build with -tags cuda on linux/amd64", ErrUnsupportedBackend)
+	}
 	return open(ctx, modelConfig{path: modelPath, backend: options.Backend, quant: options.ComputeQuant, contextTokens: options.ContextTokens}, defaultLoaders())
 }
 
 func defaultLoaders() loaders {
 	return loaders{
 		model: func(path string, options decoder.Options) (modelBackend, error) {
-			if options.Backend == "cuda" && cudaBackendPin == "" {
-				return nil, fmt.Errorf("%w: CUDA backend not built in; build with -tags cuda on linux/amd64", ErrUnsupportedBackend)
-			}
 			model, err := decoder.Load(path, options)
 			if err != nil {
 				return nil, err
