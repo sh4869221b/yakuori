@@ -3,6 +3,7 @@ package validate
 import (
 	"errors"
 
+	"github.com/sh4869221b/yakuori/internal/identity"
 	"github.com/sh4869221b/yakuori/internal/unit"
 )
 
@@ -13,6 +14,7 @@ var (
 )
 
 type Profile struct {
+	canonical    identity.ProfileIdentity
 	digest       [32]byte
 	segmentation SegmentationInput
 }
