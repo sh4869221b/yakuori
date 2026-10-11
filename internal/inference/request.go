@@ -1,6 +1,12 @@
 package inference
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/sh4869221b/yakuori/internal/prompt"
+)
+
+const ThinkingDisabled = "disabled"
 
 // PromptSpan keeps template control text distinct from literal message content.
 type PromptSpan struct {
@@ -9,10 +15,13 @@ type PromptSpan struct {
 }
 
 type RequestIdentity struct {
-	ModelSHA256  [32]byte
-	Tokenizer    TokenizerIdentity
-	Template     TemplateIdentity
-	PromptSchema int
+	ModelSHA256            [32]byte
+	Tokenizer              TokenizerIdentity
+	Template               TemplateIdentity
+	PromptSchema           int
+	Prompt                 prompt.Identity
+	Thinking               string
+	DisabledThinkingPrefix string
 }
 
 // PreparedRequest is produced by a backend after rendering and encoding once.

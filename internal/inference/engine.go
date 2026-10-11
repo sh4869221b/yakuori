@@ -4,6 +4,8 @@ package inference
 import (
 	"context"
 	"time"
+
+	"github.com/sh4869221b/yakuori/internal/prompt"
 )
 
 type Finish string
@@ -46,6 +48,22 @@ type ModelInfo struct {
 	Template                TemplateIdentity
 	Tokenizer               TokenizerIdentity
 	PolicySchema            int
+	Prefill                 PrefillPolicy
+	Prompt                  prompt.Identity
+	Thinking                string
+	DisabledThinkingPrefix  string
+}
+
+// PrefillPolicy is a model-load snapshot, not a per-request execution path.
+type PrefillPolicy struct {
+	Exact             bool
+	Path              string
+	CPUFastAttention  bool
+	Batched           bool
+	BatchedCapability bool
+	Fast              string
+	Floor             int
+	Chunk             int
 }
 
 type GenerationResult struct {

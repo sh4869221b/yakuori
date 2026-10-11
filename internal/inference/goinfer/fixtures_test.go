@@ -15,26 +15,33 @@ import (
 )
 
 type stubModel struct {
-	contextTokens   int
-	backend         string
-	quant           string
-	residentActive  bool
-	residentCap     int
-	residentDecline string
-	kvPrecision     string
-	closes          int
-	closeErr        error
-	start           func(context.Context, generationInput) tokenStream
-	onClose         func() error
+	contextTokens     int
+	backend           string
+	quant             string
+	residentActive    bool
+	residentCap       int
+	residentDecline   string
+	kvPrecision       string
+	exactPrefill      bool
+	batchedCapability bool
+	prefillReason     string
+	knobs             map[string]string
+	closes            int
+	closeErr          error
+	start             func(context.Context, generationInput) tokenStream
+	onClose           func() error
 }
 
-func (m *stubModel) Config() *decoder.Config     { return &decoder.Config{MaxPositions: m.contextTokens} }
-func (m *stubModel) EffectiveBackend() string    { return m.backend }
-func (m *stubModel) Quant() string               { return m.quant }
-func (m *stubModel) ResidentActive() bool        { return m.residentActive }
-func (m *stubModel) ResidentContextCap() int     { return m.residentCap }
-func (m *stubModel) ResidentDecline() string     { return m.residentDecline }
-func (m *stubModel) ResidentKVPrecision() string { return m.kvPrecision }
+func (m *stubModel) Config() *decoder.Config         { return &decoder.Config{MaxPositions: m.contextTokens} }
+func (m *stubModel) EffectiveBackend() string        { return m.backend }
+func (m *stubModel) Quant() string                   { return m.quant }
+func (m *stubModel) ResidentActive() bool            { return m.residentActive }
+func (m *stubModel) ResidentContextCap() int         { return m.residentCap }
+func (m *stubModel) ResidentDecline() string         { return m.residentDecline }
+func (m *stubModel) ResidentKVPrecision() string     { return m.kvPrecision }
+func (m *stubModel) ExactPrefill() bool              { return m.exactPrefill }
+func (m *stubModel) PrefillPath() (bool, string)     { return m.batchedCapability, m.prefillReason }
+func (m *stubModel) Knob(name string) (string, bool) { v, ok := m.knobs[name]; return v, ok }
 func (m *stubModel) Close() error {
 	m.closes++
 	if m.onClose != nil {

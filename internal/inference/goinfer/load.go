@@ -12,6 +12,7 @@ import (
 	"github.com/townsendmerino/goinfer/decoder"
 
 	"github.com/sh4869221b/yakuori/internal/inference"
+	"github.com/sh4869221b/yakuori/internal/prompt"
 )
 
 type modelConfig struct {
@@ -108,15 +109,25 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	promptIdentity, prefix := prompt.PlainIdentity(), ""
+	if source == indexChatTemplate {
+		promptIdentity, prefix = prompt.IndexIdentity(), disabledThinkingPrefix
+	}
+	kvPrecision := model.ResidentKVPrecision()
+	if backend == "cpu" {
+		kvPrecision = "not-applicable"
+	}
 	return &Engine{
 		model: model, tokenizer: tok, template: template, stopIDs: stopIDs,
 		info: inference.ModelInfo{
 			BackendPin: backendPin, CUDABackendPin: cudaBackendPin, RequestedBackend: config.backend, Backend: backend, ComputeQuant: quant,
 			ModelSHA256: digest, ContextTokens: contextTokens, PolicySchema: inference.PolicySchemaV1,
 			ModelContextTokens: modelContext, ConfiguredContextTokens: config.contextTokens,
-			ResidentActive: residentActive, ResidentContextCap: residentCap, ResidentDecline: residentDecline, KVPrecision: model.ResidentKVPrecision(),
+			ResidentActive: residentActive, ResidentContextCap: residentCap, ResidentDecline: residentDecline, KVPrecision: kvPrecision,
 			Template:  inference.TemplateIdentity{Family: template.Name(), Source: source, RendererVersion: backendPin},
 			Tokenizer: inference.TokenizerIdentity{ModelSHA256: digest, BackendPin: backendPin},
+			Prefill:   prefillPolicy(model, backend),
+			Prompt:    promptIdentity, Thinking: inference.ThinkingDisabled, DisabledThinkingPrefix: prefix,
 		},
 	}, nil
 }

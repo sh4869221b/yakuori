@@ -123,6 +123,8 @@ type profileRecord struct {
 // ProfileIdentity is immutable and comparable, including its canonical bytes.
 type ProfileIdentity struct {
 	canonical                            string
+	effective                            string
+	model                                string
 	digest                               [32]byte
 	segmentationSchema, boundaryFixtures string
 }
@@ -145,10 +147,13 @@ func NewProfileIdentity(input ProfileInput) (ProfileIdentity, error) {
 	}
 	if prefill.Exact {
 		prefill.CPUFastAttention = false
-		prefill.Fast, prefill.Floor, prefill.Chunk = "off", 0, 0
+		prefill.Fast, prefill.Floor = "off", 0
 	}
 	if prefill.Fast == "off" {
-		prefill.Floor, prefill.Chunk = 0, 0
+		prefill.Floor = 0
+	}
+	if input.Backend == "cuda" && (!prefill.Batched || !prefill.BatchedCapability) {
+		prefill.Fast, prefill.Floor, prefill.Chunk = "off", 0, 0
 	}
 	input.Prompt.SystemTemplate = append([]byte{}, input.Prompt.SystemTemplate...)
 	input.Prompt.UserTemplate = append([]byte{}, input.Prompt.UserTemplate...)
@@ -156,15 +161,49 @@ func NewProfileIdentity(input ProfileInput) (ProfileIdentity, error) {
 	input.Generation.StopIDs = append([]int{}, input.Generation.StopIDs...)
 	input.Glossary.Entries = append([]byte{}, input.Glossary.Entries...)
 	input.Context.Additional = append([]byte{}, input.Context.Additional...)
-	canonical, err := json.Marshal(profileRecord{
+	record := profileRecord{
 		input.Version, input.ModelID, digestHex(input.ModelDigest), input.Backend, input.BackendPin, input.CUDABackendPin, input.ComputeQuant, input.KVPrecision,
 		tokenizerRecord{digestHex(input.Tokenizer.ModelDigest), input.Tokenizer.BackendPin}, input.Template, input.Prompt, input.Generation,
 		input.Segmentation, input.Glossary, input.Protection, input.Validation, input.Context,
-	})
+	}
+	canonical, err := json.Marshal(record)
 	if err != nil {
 		return ProfileIdentity{}, fmt.Errorf("marshal profile identity: %w", err)
 	}
-	return ProfileIdentity{string(canonical), sha256.Sum256(canonical), input.Segmentation.Schema, input.Segmentation.BoundaryFixtures}, nil
+	record.ModelID, record.Glossary = "", GlossaryInput{Mode: "none", Entries: []byte{}}
+	effective, err := json.Marshal(record)
+	if err != nil {
+		return ProfileIdentity{}, fmt.Errorf("marshal effective profile conditions: %w", err)
+	}
+	record.Generation = GenerationInput{Schema: record.Generation.Schema, Thinking: record.Generation.Thinking, Prefill: record.Generation.Prefill}
+	model, err := json.Marshal(record)
+	if err != nil {
+		return ProfileIdentity{}, fmt.Errorf("marshal model profile conditions: %w", err)
+	}
+	return ProfileIdentity{canonical: string(canonical), effective: string(effective), model: string(model), digest: sha256.Sum256(canonical), segmentationSchema: input.Segmentation.Schema, boundaryFixtures: input.Segmentation.BoundaryFixtures}, nil
+}
+
+// MatchesEffective compares runtime-owned conditions without decoding canonical
+// bytes. ModelID and Glossary remain caller-owned and are excluded here only.
+func (p ProfileIdentity) MatchesEffective(input ProfileInput) (bool, error) {
+	input.ModelID, input.Glossary = "effective", GlossaryInput{Mode: "none"}
+	other, err := NewProfileIdentity(input)
+	if err != nil {
+		return false, err
+	}
+	return p.effective != "" && p.effective == other.effective, nil
+}
+
+// MatchesModel excludes request-specific generation budgets, seed and stops for
+// imports with no generation, while retaining thinking and model-load prefill.
+func (p ProfileIdentity) MatchesModel(input ProfileInput) (bool, error) {
+	input.ModelID, input.Glossary = "effective", GlossaryInput{Mode: "none"}
+	input.Generation = GenerationInput{Schema: input.Generation.Schema, MaxOutputTokens: 1, RequestTimeoutNS: 1, Thinking: input.Generation.Thinking, Prefill: input.Generation.Prefill}
+	other, err := NewProfileIdentity(input)
+	if err != nil {
+		return false, err
+	}
+	return p.model != "" && p.model == other.model, nil
 }
 
 func (p ProfileIdentity) CanonicalBytes() []byte { return []byte(p.canonical) }
@@ -205,7 +244,10 @@ func checkProfile(i ProfileInput) error {
 		default:
 			return fmt.Errorf("%w: invalid fast prefill mode", ErrInvalidProfile)
 		}
-		if !i.Generation.Prefill.Exact && i.Generation.Prefill.Fast != "off" && (i.Generation.Prefill.Floor < 0 || i.Generation.Prefill.Chunk <= 0) {
+		if i.Generation.Prefill.Batched && i.Generation.Prefill.BatchedCapability && i.Generation.Prefill.Chunk <= 0 {
+			return fmt.Errorf("%w: invalid batched prefill chunk", ErrInvalidProfile)
+		}
+		if i.Generation.Prefill.Batched && i.Generation.Prefill.BatchedCapability && !i.Generation.Prefill.Exact && i.Generation.Prefill.Fast != "off" && i.Generation.Prefill.Floor < 0 {
 			return fmt.Errorf("%w: invalid fast prefill limits", ErrInvalidProfile)
 		}
 	default:

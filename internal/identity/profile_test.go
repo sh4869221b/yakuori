@@ -150,9 +150,10 @@ func TestProfileIdentityInactiveConditions(t *testing.T) {
 		"exact disables fast": {func(i *identity.ProfileInput) { i.Generation.Prefill.Exact = true }, func(i *identity.ProfileInput) {
 			i.Generation.Prefill.Fast = "attn"
 			i.Generation.Prefill.Floor = 9
-			i.Generation.Prefill.Chunk = 7
 		}},
-		"off ignores fast limits": {func(i *identity.ProfileInput) { i.Generation.Prefill.Fast = "off" }, func(i *identity.ProfileInput) { i.Generation.Prefill.Floor = 9; i.Generation.Prefill.Chunk = 7 }},
+		"off ignores fast floor":              {func(i *identity.ProfileInput) { i.Generation.Prefill.Fast = "off" }, func(i *identity.ProfileInput) { i.Generation.Prefill.Floor = 9 }},
+		"no batched policy ignores chunk":     {func(i *identity.ProfileInput) { i.Generation.Prefill.Batched = false }, func(i *identity.ProfileInput) { i.Generation.Prefill.Chunk = 7 }},
+		"no batched capability ignores chunk": {func(i *identity.ProfileInput) { i.Generation.Prefill.BatchedCapability = false }, func(i *identity.ProfileInput) { i.Generation.Prefill.Chunk = 7 }},
 	}
 	for name, tt := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -175,6 +176,52 @@ func TestProfileIdentityInactiveConditions(t *testing.T) {
 		}
 	})
 }
+
+func TestProfileIdentityBatchedChunkWithoutFastKernels(t *testing.T) {
+	for _, exact := range []bool{false, true} {
+		input := profileInput()
+		input.Generation.Prefill.Exact, input.Generation.Prefill.Fast = exact, "off"
+		base := makeProfile(t, input)
+		input.Generation.Prefill.Chunk++
+		if base == makeProfile(t, input) {
+			t.Fatal("used batched chunk was discarded")
+		}
+		input.Generation.Prefill.Chunk = 0
+		if _, err := identity.NewProfileIdentity(input); !errors.Is(err, identity.ErrInvalidProfile) {
+			t.Fatalf("invalid used chunk error=%v", err)
+		}
+	}
+}
+
+func TestProfileIdentityEffectiveProjection(t *testing.T) {
+	input := profileInput()
+	p := makeProfile(t, input)
+	input.ModelID = "caller alias"
+	input.Glossary = identity.GlossaryInput{Mode: "none"}
+	if ok, err := p.MatchesEffective(input); err != nil || !ok {
+		t.Fatalf("caller-only changes: match=%t err=%v", ok, err)
+	}
+	input.Generation.MaxOutputTokens++
+	if ok, err := p.MatchesEffective(input); err != nil || ok {
+		t.Fatalf("policy change: match=%t err=%v", ok, err)
+	}
+	if ok, err := p.MatchesModel(input); err != nil || !ok {
+		t.Fatalf("no-generation projection: match=%t err=%v", ok, err)
+	}
+	input.Context.Tokens++
+	if ok, err := p.MatchesModel(input); err != nil || ok {
+		t.Fatalf("model context change: match=%t err=%v", ok, err)
+	}
+}
+func TestProfileIdentityModelProjectionRetainsPolicySchema(t *testing.T) {
+	input := profileInput()
+	p := makeProfile(t, input)
+	input.Generation.Schema++
+	if ok, err := p.MatchesModel(input); err != nil || ok {
+		t.Fatalf("generation schema change: match=%t err=%v", ok, err)
+	}
+}
+
 func TestProfileIdentityRejectsInvalidInput(t *testing.T) {
 	cases := map[string]func(*identity.ProfileInput){
 		"unknown version": func(i *identity.ProfileInput) { i.Version = 2 }, "zero version": func(i *identity.ProfileInput) { i.Version = 0 },
