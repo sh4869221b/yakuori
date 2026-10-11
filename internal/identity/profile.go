@@ -127,6 +127,8 @@ type ProfileIdentity struct {
 	model                                string
 	digest                               [32]byte
 	segmentationSchema, boundaryFixtures string
+	segmentation                         SegmentationInput
+	protection, validation               SchemaInput
 }
 
 func NewProfileIdentity(input ProfileInput) (ProfileIdentity, error) {
@@ -180,7 +182,12 @@ func NewProfileIdentity(input ProfileInput) (ProfileIdentity, error) {
 	if err != nil {
 		return ProfileIdentity{}, fmt.Errorf("marshal model profile conditions: %w", err)
 	}
-	return ProfileIdentity{canonical: string(canonical), effective: string(effective), model: string(model), digest: sha256.Sum256(canonical), segmentationSchema: input.Segmentation.Schema, boundaryFixtures: input.Segmentation.BoundaryFixtures}, nil
+	return ProfileIdentity{canonical: string(canonical), effective: string(effective), model: string(model), digest: sha256.Sum256(canonical), segmentationSchema: input.Segmentation.Schema, boundaryFixtures: input.Segmentation.BoundaryFixtures, segmentation: input.Segmentation, protection: input.Protection, validation: input.Validation}, nil
+}
+
+// MatchesEntry checks common Core conditions even when no model is connected.
+func (p ProfileIdentity) MatchesEntry(segmentation SegmentationInput, protection, validation SchemaInput) bool {
+	return p.canonical != "" && p.segmentation == segmentation && p.protection == protection && p.validation == validation
 }
 
 // MatchesEffective compares runtime-owned conditions without decoding canonical
