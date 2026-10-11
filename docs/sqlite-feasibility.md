@@ -12,8 +12,9 @@ and owned by `testing.T.TempDir` (private directory, database mode 0600).
 Design reference: maintainer’s private Draft v0.2, sections 8/11/15.
 The implementation evidence and limitations below are self-contained.
 This records concrete implementation evidence without replacing that design.
-#15 still owns artifact scope, canonical serialization/hash fixtures and profile
-fields; #16 owns validated TM integration. The probe deliberately does not invent
+#15 now supplies [artifact scope, canonical source/profile records and fixtures](source-profile-identity.md)
+through the identity APIs; #16 still owns validated TM integration, including
+connecting those records to this storage contract. The probe does not invent
 an artifact identity from a pathname or enable reuse across artifacts/games.
 
 ## Driver decision and provenance
@@ -49,8 +50,9 @@ The executable schema constant is `tableSQL` in `probe_test.go`:
 - No case folding, whitespace trimming, Unicode normalization or hash-only
   equality. Embedded NUL bytes in *identity blobs* remain distinct. That test
   does not permit NUL in actual translations; validation remains #7/#16.
-- Source/profile blob contents will be the versioned canonical records from
-  #15, with its content hashes verified there. This schema proves unique exact
+- Source/profile blob contents are defined by the versioned canonical records
+  from #15, with content hashes verified by its identity tests. Production storage
+  is not connected yet (#16). This probe schema proves unique exact
   byte comparison, not canonical serialization, SourceIdentity or acceptance.
 - SQLite constraints alone never confer `AcceptedTranslation` status. A row is
   only a candidate and must pass the current unit/profile/manifest validation.

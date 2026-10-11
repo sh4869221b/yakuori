@@ -3,6 +3,7 @@ package validate
 import (
 	"errors"
 
+	"github.com/sh4869221b/yakuori/internal/identity"
 	"github.com/sh4869221b/yakuori/internal/unit"
 )
 
@@ -13,6 +14,7 @@ var (
 )
 
 type Profile struct {
+	canonical    identity.ProfileIdentity
 	digest       [32]byte
 	segmentation SegmentationInput
 }
@@ -42,11 +44,10 @@ func (p Profile) Digest() [32]byte                { return p.digest }
 func (p Profile) Segmentation() SegmentationInput { return p.segmentation }
 
 type binding struct {
-	session      unit.Session
-	unitID       unit.UnitID
-	source       [32]byte
-	profile      [32]byte
-	segmentation SegmentationInput
+	session unit.Session
+	unitID  unit.UnitID
+	source  [32]byte
+	profile Profile
 }
 
 type AcceptedTranslation struct {
@@ -71,7 +72,7 @@ func CheckBinding(session unit.Session, id unit.UnitID, profile Profile, accepte
 		return ErrInvalidAccepted
 	}
 	b := accepted.binding
-	if !session.SameImport(b.session) || id != b.unitID || u.SourceDigest() != b.source || profile.digest != b.profile || profile.segmentation != b.segmentation {
+	if !session.SameImport(b.session) || id != b.unitID || u.SourceDigest() != b.source || profile != b.profile {
 		return ErrBindingMismatch
 	}
 	return nil

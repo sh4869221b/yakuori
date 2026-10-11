@@ -8,6 +8,8 @@ import (
 
 	"github.com/sh4869221b/yakuori/internal/artifact"
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/identity"
+	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/protect"
 	"github.com/sh4869221b/yakuori/internal/segment"
 	"github.com/sh4869221b/yakuori/internal/unit"
@@ -102,6 +104,37 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 	if profile.Segmentation() != expectedSegmentation {
 		return nil, &Error{Phase: "input", Err: validate.ErrInvalidProfile}
 	}
+	canonical := profile.CanonicalIdentity()
+	var info inference.ModelInfo
+	if canonical != (identity.ProfileIdentity{}) {
+		segmentation := identity.SegmentationInput{Mode: "none"}
+		if c.segmented != nil {
+			segmentation = identity.SegmentationInput{Mode: "enabled", Schema: segment.Schema, BoundaryFixtures: segment.BoundaryFixtures, UnitTextBytes: c.limits.UnitTextBytes, Segments: c.limits.Segments}
+		}
+		if !canonical.MatchesEntry(segmentation, identity.SchemaInput{Schema: protect.Schema, FixtureSet: ProtectionFixtures}, identity.SchemaInput{Schema: validate.Schema, FixtureSet: ValidationFixtures}) {
+			return nil, &Error{Phase: "input", Err: ErrInferenceProfile}
+		}
+		var engine inference.Engine
+		if c.segmented != nil {
+			engine = c.segmented.engine
+		} else if c.inference != nil {
+			engine = c.inference.engine
+		}
+		if engine != nil {
+			var err error
+			info, err = engine.Info(ctx)
+			if err != nil {
+				return nil, &Error{Phase: "input", Err: err}
+			}
+			effective, err := EffectiveModelProfile(info, c.limits, c.segmented != nil)
+			if err != nil {
+				return nil, &Error{Phase: "input", Err: err}
+			}
+			if matches, err := canonical.MatchesModel(effective); err != nil || !matches {
+				return nil, &Error{Phase: "input", Err: errors.Join(ErrInferenceProfile, err)}
+			}
+		}
+	}
 	units, err := c.inputUnits(session)
 	if err != nil {
 		return nil, &Error{Phase: "input", Err: err}
@@ -132,6 +165,15 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 				return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 			}
 			segments += len(plan.Segments())
+			if canonical != (identity.ProfileIdentity{}) {
+				for _, piece := range plan.Segments() {
+					if piece.GenerationRequired() {
+						if err := c.checkRequestProfile(profile, info, piece.Request()); err != nil {
+							return nil, &Error{Phase: "plan", UnitID: id, Err: err}
+						}
+					}
+				}
+			}
 		} else {
 			segments++
 			if err := c.limits.CheckSegments(segments); err != nil {
@@ -141,6 +183,11 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 				inferencePlans[len(preparedUnits)], err = c.inference.plan(ctx, id, prepared.Text())
 				if err != nil {
 					return nil, &Error{Phase: "plan", UnitID: id, Err: err}
+				}
+				if canonical != (identity.ProfileIdentity{}) {
+					if err := c.checkRequestProfile(profile, info, inferencePlans[len(preparedUnits)].request); err != nil {
+						return nil, &Error{Phase: "plan", UnitID: id, Err: err}
+					}
 				}
 			}
 		}
@@ -202,6 +249,17 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 		return nil, &Error{Phase: "prepare_export", Err: err}
 	}
 	return accepted, nil
+}
+
+func (c Core) checkRequestProfile(profile validate.Profile, info inference.ModelInfo, request inference.GenerationRequest) error {
+	effective, err := EffectiveInferenceProfile(info, request, c.limits, c.segmented != nil)
+	if err != nil {
+		return err
+	}
+	if matches, err := profile.CanonicalIdentity().MatchesEffective(effective); err != nil || !matches {
+		return errors.Join(ErrInferenceProfile, err)
+	}
+	return nil
 }
 
 func (c Core) inputUnits(session unit.Session) ([]unit.TranslationUnit, error) {

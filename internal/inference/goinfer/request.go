@@ -12,6 +12,13 @@ import (
 	"github.com/sh4869221b/yakuori/internal/prompt"
 )
 
+const (
+	thinkingOpen           = "<think>"
+	thinkingClose          = "</think>"
+	thinkingSeparator      = "\n\n"
+	disabledThinkingPrefix = thinkingOpen + thinkingSeparator + thinkingClose + thinkingSeparator
+)
+
 func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy inference.GenerationPolicy) (inference.GenerationRequest, error) {
 	e.mu.Lock()
 	closing := e.closing
@@ -43,10 +50,10 @@ func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy infe
 	if e.info.Template.Source == indexChatTemplate {
 		// The official disabled-thinking generation prefix closes an empty block.
 		segments = append(segments,
-			tokenizer.Segment{Text: "<think>", Special: true},
-			tokenizer.Segment{Text: "\n\n"},
-			tokenizer.Segment{Text: "</think>", Special: true},
-			tokenizer.Segment{Text: "\n\n"})
+			tokenizer.Segment{Text: thinkingOpen, Special: true},
+			tokenizer.Segment{Text: thinkingSeparator},
+			tokenizer.Segment{Text: thinkingClose, Special: true},
+			tokenizer.Segment{Text: thinkingSeparator})
 	}
 	ids, err := e.tokenizer.EncodeSegments(segments, false)
 	if err != nil {

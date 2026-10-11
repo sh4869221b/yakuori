@@ -11,7 +11,6 @@ import (
 	"github.com/townsendmerino/goinfer/tokenizer"
 
 	"github.com/sh4869221b/yakuori/internal/inference"
-	"github.com/sh4869221b/yakuori/internal/prompt"
 )
 
 const backendPin = "github.com/townsendmerino/goinfer@v0.22.0"
@@ -40,6 +39,9 @@ type modelBackend interface {
 	ResidentContextCap() int
 	ResidentDecline() string
 	ResidentKVPrecision() string
+	ExactPrefill() bool
+	PrefillPath() (bool, string)
+	Knob(string) (string, bool)
 	Close() error
 	generate(context.Context, generationInput) tokenStream
 }
@@ -120,7 +122,8 @@ func (e *Engine) Info(ctx context.Context) (inference.ModelInfo, error) {
 func (e *Engine) identity() inference.RequestIdentity {
 	return inference.RequestIdentity{
 		ModelSHA256: e.info.ModelSHA256, Tokenizer: e.info.Tokenizer,
-		Template: e.info.Template, PromptSchema: prompt.SchemaV1,
+		Template: e.info.Template, PromptSchema: e.info.Prompt.Schema,
+		Prompt: e.info.Prompt, Thinking: e.info.Thinking, DisabledThinkingPrefix: e.info.DisabledThinkingPrefix,
 	}
 }
 

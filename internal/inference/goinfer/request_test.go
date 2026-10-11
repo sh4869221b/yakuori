@@ -176,3 +176,34 @@ func TestForeignRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestRequestPromptIdentity(t *testing.T) {
+	for _, index := range []bool{false, true} {
+		config, load, _, tok := loadFixture(t)
+		wantPrompt, wantPrefix := prompt.PlainIdentity(), ""
+		if index {
+			tok.source, wantPrompt, wantPrefix = indexChatTemplate, prompt.IndexIdentity(), disabledThinkingPrefix
+		}
+		engine, err := open(context.Background(), config, load)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer engine.Close()
+		policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, 128, time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request, err := engine.NewRequest(context.Background(), prompt.Input{SourceLanguage: "en", TargetLanguage: "ja", Text: " text "}, policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id := request.Identity()
+		if id.Prompt != wantPrompt || id.DisabledThinkingPrefix != wantPrefix || id.Thinking != inference.ThinkingDisabled {
+			t.Fatalf("prompt identity=%+v", id)
+		}
+		info, err := engine.Info(context.Background())
+		if err != nil || info.Prompt != id.Prompt || info.DisabledThinkingPrefix != id.DisabledThinkingPrefix {
+			t.Fatalf("info=%+v error=%v", info, err)
+		}
+	}
+}
