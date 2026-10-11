@@ -104,15 +104,17 @@ func TestSourceIdentityKeysAndSnapshot(t *testing.T) {
 
 func TestSourceIdentityInvalidInput(t *testing.T) {
 	changes := map[string]func(*identity.SourceInput){
-		"zero version":    func(i *identity.SourceInput) { i.Version = 0 },
-		"unknown version": func(i *identity.SourceInput) { i.Version = 2 },
-		"game":            func(i *identity.SourceInput) { i.GameNamespace = "" },
-		"artifact":        func(i *identity.SourceInput) { i.ArtifactNamespace = "" },
-		"adapter":         func(i *identity.SourceInput) { i.Adapter = "" },
-		"schema":          func(i *identity.SourceInput) { i.FormatSchema = "" },
-		"stable ID":       func(i *identity.SourceInput) { i.StableID = "" },
-		"source language": func(i *identity.SourceInput) { i.SourceLanguage = "" },
-		"target language": func(i *identity.SourceInput) { i.TargetLanguage = "" },
+		"zero version":            func(i *identity.SourceInput) { i.Version = 0 },
+		"unknown version":         func(i *identity.SourceInput) { i.Version = 2 },
+		"missing artifact digest": func(i *identity.SourceInput) { i.OriginalArtifactDigest = [32]byte{} },
+		"missing source digest":   func(i *identity.SourceInput) { i.RawSourceDigest = [32]byte{} },
+		"game":                    func(i *identity.SourceInput) { i.GameNamespace = "" },
+		"artifact":                func(i *identity.SourceInput) { i.ArtifactNamespace = "" },
+		"adapter":                 func(i *identity.SourceInput) { i.Adapter = "" },
+		"schema":                  func(i *identity.SourceInput) { i.FormatSchema = "" },
+		"stable ID":               func(i *identity.SourceInput) { i.StableID = "" },
+		"source language":         func(i *identity.SourceInput) { i.SourceLanguage = "" },
+		"target language":         func(i *identity.SourceInput) { i.TargetLanguage = "" },
 	}
 	for name, change := range changes {
 		t.Run(name, func(t *testing.T) {

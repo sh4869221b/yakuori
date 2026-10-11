@@ -68,6 +68,9 @@ func NewSourceIdentity(input SourceInput) (SourceIdentity, error) {
 	if input.GameNamespace == "" || input.ArtifactNamespace == "" || input.Adapter == "" || input.FormatSchema == "" || input.StableID == "" || input.SourceLanguage == "" || input.TargetLanguage == "" {
 		return SourceIdentity{}, fmt.Errorf("%w: missing scope, unit identity or language", ErrInvalidSource)
 	}
+	if input.OriginalArtifactDigest == ([32]byte{}) || input.RawSourceDigest == ([32]byte{}) {
+		return SourceIdentity{}, fmt.Errorf("%w: missing artifact or source digest", ErrInvalidSource)
+	}
 	// JSON replaces invalid UTF-8 in strings; reject it before distinct IDs collapse.
 	for _, field := range []string{input.GameNamespace, input.ArtifactNamespace, input.Adapter, input.FormatSchema, input.StableID, input.SourceLanguage, input.TargetLanguage} {
 		if !utf8.ValidString(field) {
