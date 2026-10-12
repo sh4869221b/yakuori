@@ -4,7 +4,7 @@
 
 ## 状態
 
-#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）と、全件生成・保護復元・最終artifact検証・一括TM commitを接続するCore（#11）、明示的にCPU/CUDAを選べるinference EngineとCore adapter（#12/#52）を実装しています。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverを必要とします。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使い、取消し後のdrainを終えてから再利用・Closeします。text Adapterは全文1unitを扱い、最終検証とcommit後に訳bytesをstdoutへ一括出力します。通常の `localize` はEngine・TM未接続のため、出力指定の解析後も `localize pipeline is not implemented` でno-I/O終了します。SQLite TM接続・hit再検証、実ゲーム検証、翻訳modelの品質選定、releaseはまだありません。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
+#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）と、全件生成・保護復元・最終artifact検証・一括TM commitを接続するCore（#11）、明示的にCPU/CUDAを選べるinference EngineとCore adapter（#12/#52）を実装しています。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverを必要とします。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使い、取消し後のdrainを終えてから再利用・Closeします。text Adapterは全文1unitを扱い、最終検証とcommit後に訳bytesをstdoutへ一括出力します。Coreの `TextWithTM` / `FileWithTM` はSQLite TMの完全一致候補を現在unitで再検証し、全件と最終artifactの検証後だけ保存します。通常の `localize` はEngine・TM未接続のため、出力指定の解析後も `localize pipeline is not implemented` でno-I/O終了します。実ゲーム検証、翻訳modelの品質選定、releaseはまだありません。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 
@@ -44,8 +44,7 @@ CLIのexit code、stdout/stderr、設定のfallback、fake試験の入口、clea
 
 ## SQLite feasibility
 
-The test-only [SQLite storage gate](docs/sqlite-feasibility.md) records driver pin,
-rollback/corruption protection and finite-wait evidence for #4. It does not enable TM.
+[SQLiteの調査記録と現在のTM契約](docs/sqlite-feasibility.md#current-core-tm-integration-16)に、明示的な `Create` / `Open` / `Recover`、scope・manifest照合、競合時停止と公開境界を記録しています。Btrfs上で既定の件数・入力byte上限のfixtureを検証済みですが、実modelの最大出力bytesと低速な対応filesystemの性能は未検証です。通常CLIへの接続は含みません。
 
 ## 公開準備と権利表示
 

@@ -3,7 +3,7 @@
 ## Result and scope
 
 2026-10-02: adopt **modernc.org/sqlite v1.60.1** for the next TM implementation
-step. Its actual engine reports **SQLite 3.53.4**. This PR supplies executable,
+step. Its actual engine reports **SQLite 3.53.4**. The original #4 PR supplied executable,
 test-only storage experiments under `internal/sqliteprobe`, not a TM service,
 accepted-translation constructor, production database opener, or CLI command.
 No user database is opened or created by `yakuori`; every fixture is synthetic
@@ -13,8 +13,8 @@ Design reference: maintainer’s private Draft v0.2, sections 8/11/15.
 The implementation evidence and limitations below are self-contained.
 This records concrete implementation evidence without replacing that design.
 #15 now supplies [artifact scope, canonical source/profile records and fixtures](source-profile-identity.md)
-through the identity APIs; #16 still owns validated TM integration, including
-connecting those records to this storage contract. The probe does not invent
+through the identity APIs; #16 now connects those records through the
+[Core TM implementation below](#current-core-tm-integration-16). The probe does not invent
 an artifact identity from a pathname or enable reuse across artifacts/games.
 
 ## Driver decision and provenance
@@ -40,7 +40,7 @@ an artifact identity from a pathname or enable reuse across artifacts/games.
 
 ## Versioned schema contract
 
-The executable schema constant is `tableSQL` in `probe_test.go`:
+The executable schema constant is `tableSQL` in the probe and `internal/tm/schema.go`:
 
 - SQLite `application_id = 1497451343` (`YAKO`) and `user_version = 1`.
 - One `STRICT, WITHOUT ROWID` table `tm`.
@@ -52,7 +52,7 @@ The executable schema constant is `tableSQL` in `probe_test.go`:
   does not permit NUL in actual translations; validation remains #7/#16.
 - Source/profile blob contents are defined by the versioned canonical records
   from #15, with content hashes verified by its identity tests. Production storage
-  is not connected yet (#16). This probe schema proves unique exact
+  now uses these records (#16). This probe schema proves unique exact
   byte comparison, not canonical serialization, SourceIdentity or acceptance.
 - SQLite constraints alone never confer `AcceptedTranslation` status. A row is
   only a candidate and must pass the current unit/profile/manifest validation.
@@ -68,12 +68,13 @@ and two-connection concurrent fixtures prove preservation. Do not use REPLACE,
 a generic `INSERT OR IGNORE`, or unconditional upsert: unrelated constraint
 failures must remain failures, and a valid translation must not be overwritten.
 
-#16 must distinguish valid conflicts from invalid-row repair. Validate an observed
+#16's production implementation distinguishes valid conflicts from invalid-row repair.
+Validate an observed
 row outside the write transaction. A repair may conditionally replace *that exact
 observed invalid value* after final artifact validation; if the row changed,
 abort and revalidate the new candidate outside the transaction. Never overwrite
 an unexamined conflict, hold a writer during generation, or retry generation
-implicitly. This PR intentionally implements neither repair nor validation.
+implicitly. The original #4 probe implements neither repair nor validation.
 
 ### Open, corruption and migration
 
@@ -87,10 +88,10 @@ implicitly. This PR intentionally implements neither repair nor validation.
   Quiescent `-journal`, `-wal` or `-shm` sidecars cause the probe to stop before
   SQLite opens anything; main and sidecar bytes are preserved. Never use
   `immutable=1` to ignore potentially committed WAL contents.
-- This is a **quiescent-fixture proof**, not race-safe production opening. #16/#21
-  must coordinate lifecycle/exclusive access, recheck identity/schema on the
-  actual write connection, and handle recoverable interrupted journals before
-  allowing normal use. Do not copy this preflight as a TOCTOU-safe Open API.
+- This probe is a **quiescent-fixture proof**, not race-safe production opening.
+  The current Store adds cooperative ownership, actual-connection schema checks
+  and explicit journal recovery as described below. Do not copy the probe
+  preflight as a TOCTOU-safe Open API.
 - Fresh probe stores use rollback-journal `DELETE` mode. WAL migration, network
   filesystems, concurrent replacement of the database path and hostile directory
   mutation are not supported or proven by this spike.
@@ -170,7 +171,7 @@ Docker was unavailable on that initial local executor; the PR's exact-head CI pr
 clean-image result. The tests run in the existing required Linux CI, and the
 arm64 probe compilation was added because the ordinary CLI does not yet link SQLite.
 
-Not executed/claimed: arm64 runtime, real game files/translation/acceptance,
+Not executed/claimed by the original #4 spike: arm64 runtime, real game files/translation/acceptance,
 maximum-workload benchmarks, WAL/concurrent file replacement, process-kill recovery,
 power-loss tests, TM integration, security audit, release or deployment. Later
 failures must not erase user assets, publish output or turn into a cache miss.
@@ -253,10 +254,9 @@ connection acquisition and work performed by the implementation. It does not
 reuse the generation child context. A cancelled/failed commit prevents later
 publication/writing; the generic TM interface cannot perform SQLite rollback.
 
-The measured busy100ms value remains an **initial SQLite research condition**,
-not a new product default or connection setting applied by Core. Real busy wait,
-transaction rollback and independent cleanup implementation remain owned by #16;
-the adopted cleanup field does not imply that connection exists today. The
+The Store implementation in #16 now applies busy100ms on each connection and
+implements context-bound commit, transaction rollback and independent cleanup.
+Core supplies the operation budget without configuring SQLite itself. The
 27 label/sentence and nine prose batch measurements above used fresh test-owned
 databases on `/tmp` tmpfs. They inform these budgets without establishing
 persistent-disk performance, production TM throughput or a hard wall when an
@@ -268,3 +268,84 @@ retains `TMCommitted=true` to report that actual return honestly. The expired
 operation still returns an error and prevents subsequent write/publication.
 This does not assert rollback of a commit that may already have happened; the
 existing finalization test covers this distinction.
+
+## Current Core TM integration (#16)
+
+`internal/tm` implements the existing v1 schema using the pinned CGO-free driver.
+`Create(ctx,path,limits)` exclusively creates a new store; `Open` opens only an
+existing supported store and refuses sidecars. `Recover` is an explicit separate
+entry for one interrupted DELETE journal: it first copies main/journal into a
+private temporary directory and asks SQLite to recover and validate the copy,
+then asks SQLite to recover the original. Unknown/corrupt databases and WAL/SHM
+are retained and rejected. No product schema migration or reset fallback is added.
+
+A Store owns `path+".lock"` with a nonblocking Linux flock until Close; it does
+not unlink the lockfile. This coordinates cooperative Store owners on one local
+database. It does not protect against noncooperative writers, concurrent path
+replacement or hostile directory mutation. Independent Runs share a Store while
+keeping their observations and staging separate.
+
+Core's additive `TextWithTM` / `FileWithTM` take an explicit Store and
+`tm.Scope{GameNamespace, ArtifactNamespace, Keys}`. Nil Store and noncanonical
+profiles are errors. All units still pass limits/protection/request/profile
+preflight before lookup or generation. Each exact hit passes current Validation
+and receives fresh import binding; restored hit text is not restored again.
+Only candidate-content rejection returns to the existing generation path;
+source/profile or lookup I/O errors stop. Only complete accepted parent rows are
+staged. Final export/observation/comparison and scope-to-manifest key relations,
+including empty keys and duplicates, must all pass before commit.
+
+`Run.Commit` uses a short reserved-connection `BEGIN IMMEDIATE`/row-work/`COMMIT`
+with context on each SQL operation. An observed valid exact text is retained;
+an observed invalid row is repaired only if its exact observed text remains.
+Changed, missing or unobserved conflicting values stop the run and roll back the
+whole batch without retry. Generation/Validation do not run in the transaction.
+The existing operation and independent cleanup budgets are 1s each, with
+busy_timeout=100ms per connection. Cleanup failure discards the connection.
+The busy interval plus scheduling/I/O can overshoot a context deadline; these
+are cooperative budgets, not hard wall-clock termination guarantees.
+
+Commit failure prevents output/publication. Commit success followed by publication
+failure retains saved rows and reports `TMCommitted=true` with the actual
+publication state. `TestTMCommitPublishFailureRerun` preserves the failed target
+and stage, then reimports the same source/scope and publishes to a fresh output
+parent with zero generation. This does not prove automatic recovery in the same
+destination: existing publication recovery conservatively stops on missing or
+conflicting records. The normal CLI still connects neither Engine nor TM.
+
+### Persistent-filesystem capacity observations
+
+`TestTMAdoptedCapacity` used Linux amd64, Go `1.27.1-X:nodwarf5`, Btrfs, fresh
+test-owned databases, warm OS caches without cache eviction, and no concurrent
+inference. Count-bound and byte-bound fixtures separately satisfy current
+DefaultLimits; they do not require impossible simultaneous maxima. Each row has
+2048 restored ASCII bytes with a declared 2048-token request ceiling. This is a
+synthetic storage fixture, not measured model/tokenizer output equivalence.
+
+| Fixture | Rows | Artifact / source bytes | Largest unit | Source / profile BLOB bytes | Restored / DB bytes | Conn acquisition + commit, two runs (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Count-bound | 76 | 1495 / 988 | 13 | 31084 / 115216 | 155648 / 368640 | 3.104 / 4.297 |
+| Byte-bound | 2 | 1495 / 1036 | 980 | 818 / 3032 | 4096 / 16384 | 1.895 / 2.560 |
+
+Both runs fit the unchanged 1s operation budget. Closing/reopening the Store and
+looking up every exact row verified restored text bytes. Actual maximum output
+bytes under the real tokenizer and latency on slow supported filesystems remain
+**UNVERIFIED**. These observations do not complete a general performance gate or
+establish a persistent-disk SLO.
+
+Reproduce using a test-owned ext4/Btrfs TMPDIR; unsupported filesystems skip the
+publication/capacity cases and are not passing persistence evidence:
+
+```sh
+TMPDIR=/path/to/test-owned-persistent-dir CGO_ENABLED=0 GOTOOLCHAIN=local \
+  go test -count=1 -v ./internal/localize -run '^TestTM'
+TMPDIR=/path/to/test-owned-persistent-dir CGO_ENABLED=0 GOTOOLCHAIN=local \
+  sh ci/verify.sh
+```
+
+The focused tests cover exact-hit revalidation, observed-invalid repair, atomic
+failure, competing Runs, reader/writer deadlines, parent-only segmented rows and
+commit/publication reruns. `TestMigrationAtomic` remains a probe-only migration
+fixture; production rejects unknown versions. The verification script also
+cross-compiles `internal/tm` and the retained probe test binaries for Linux arm64;
+arm64 execution, real-game acceptance, release and deployment remain unverified.

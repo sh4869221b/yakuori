@@ -3,9 +3,9 @@
 `internal/identity` defines immutable, comparable source/profile values and an
 exact key. `internal/unit/identity.go` builds source identity from a session;
 `internal/localize/profile.go` projects effective inference conditions into
-`validate.NewCanonicalProfile`. These APIs do not connect SQLite, TM lookup,
-Glossary matching, game adapters or CLI scope configuration. Those integrations
-remain separate work (#16, #17 and #20).
+`validate.NewCanonicalProfile`. Core's `TextWithTM` / `FileWithTM` now connect
+these identities to SQLite candidate lookup and revalidation (#16). Glossary
+matching, game adapters and CLI scope configuration remain separate work.
 
 ## Canonical bytes and exact equality
 
@@ -126,6 +126,12 @@ Generate calls, accepted translations and TM commits/output publication.
 
 An exact-key candidate is untrusted translated text. It must pass `Validate` for
 the current session/unit/profile, including restored protection/content checks.
+`tm.Scope` supplies explicit game/artifact namespaces and all key relations;
+the final manifest must match those relations, including empty keys and duplicates,
+before commit. All Core preflight checks still run on hits. A valid hit creates a
+fresh Accepted binding without generation or another protection Restore; only
+`ErrInvalidCandidate` returns to generation. Lookup I/O and source/profile errors
+stop the run. Only the complete accepted parent set is staged in run-local memory.
 Accepted values from another import or unit cannot be rebound. Accepted binding,
 ExpectedTranslations, Manifest and final artifact comparison retain the complete
 comparable Profile. Legacy `NewProfile`/`NewProfileWithSegmentation` remain
@@ -179,4 +185,7 @@ docker build --progress=plain -f ci/Dockerfile .
 CUDA-tag stub tests verify connected types/policy, not real GPU quality or
 performance. Model-dependent smoke tests and filesystem qualification require
 their existing fixtures/environment; skips do not prove those scenarios. Real
-TM hit/store/revalidation integration remains #16 acceptance.
+SQLite hit revalidation, repair, parent-only staging, commit/publication failures
+and explicit reruns are covered by `internal/localize/tm_test.go` and
+`tm_linux_test.go`. The [current storage record](sqlite-feasibility.md#current-core-tm-integration-16)
+describes their persistent-filesystem measurements and limits.
