@@ -3,7 +3,9 @@ package validate
 import (
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/protect"
 	"github.com/sh4869221b/yakuori/internal/unit"
 )
@@ -22,6 +24,15 @@ func Validate(session unit.Session, id unit.UnitID, profile Profile, candidate s
 	if profile.digest == ([32]byte{}) {
 		return AcceptedTranslation{}, ErrInvalidProfile
 	}
+	g, err := profile.Glossary()
+	if err != nil {
+		return AcceptedTranslation{}, fmt.Errorf("%w: %w", ErrInvalidProfile, err)
+	}
+	source := string(u.Source())
+	matches, err := g.Match(source)
+	if err != nil {
+		return AcceptedTranslation{}, fmt.Errorf("%w: %w", ErrInvalidSource, err)
+	}
 	prepared, err := protect.Prepare(session, id)
 	if err != nil {
 		return AcceptedTranslation{}, fmt.Errorf("%w: %v", ErrInvalidSource, err)
@@ -29,9 +40,13 @@ func Validate(session unit.Session, id unit.UnitID, profile Profile, candidate s
 	if err := prepared.CheckRestored(session, id, candidate); err != nil {
 		return AcceptedTranslation{}, fmt.Errorf("%w: %v", ErrInvalidCandidate, err)
 	}
-	source := string(u.Source())
 	if err := checkContent(source, candidate); err != nil {
 		return AcceptedTranslation{}, err
+	}
+	for _, match := range matches {
+		if match.Entry.Mode == glossary.Mandatory && !strings.Contains(candidate, match.Entry.Target) {
+			return AcceptedTranslation{}, fmt.Errorf("%w: missing mandatory target %q", ErrInvalidCandidate, match.Entry.Target)
+		}
 	}
 	return AcceptedTranslation{
 		text: candidate,
