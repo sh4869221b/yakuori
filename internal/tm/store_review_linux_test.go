@@ -112,6 +112,37 @@ func TestStoreRejectNonregularPaths(t *testing.T) {
 	}
 }
 
+func TestStoreRecoverRejectsSymlinkJournal(t *testing.T) {
+	path, store := storeFixture(t)
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before := readBytes(t, path)
+	target := filepath.Join(t.TempDir(), "other-journal")
+	contents := []byte("external journal contents")
+	if err := os.WriteFile(target, contents, 0600); err != nil {
+		t.Fatal(err)
+	}
+	journal := path + "-journal"
+	if err := os.Symlink(target, journal); err != nil {
+		t.Fatal(err)
+	}
+	recoveryTemp(t)
+	recovered, err := Recover(t.Context(), path, config.DefaultLimits())
+	if recovered != nil {
+		_ = recovered.Close()
+		t.Fatal("accepted symlinked recovery journal")
+	}
+	if !errors.Is(err, ErrUnsupportedStore) {
+		t.Fatalf("symlinked journal error: %v", err)
+	}
+	assertPreserved(t, path, before)
+	assertPreserved(t, target, contents)
+	if got, err := os.Readlink(journal); err != nil || got != target {
+		t.Fatalf("journal link changed: target=%q error=%v", got, err)
+	}
+}
+
 func TestStoreCreateFailureCleanup(t *testing.T) {
 	if os.Getenv("YAKUORI_TM_CREATE_FAILURE") == "1" {
 		path := filepath.Join(t.TempDir(), "new.sqlite")

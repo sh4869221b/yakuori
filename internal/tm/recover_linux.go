@@ -102,7 +102,10 @@ func copyRecoveryFile(ctx context.Context, source, destination string) (err erro
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	from, err := os.OpenFile(source, os.O_RDONLY|unix.O_NONBLOCK, 0)
+	from, err := os.OpenFile(source, os.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW, 0)
+	if errors.Is(err, unix.ELOOP) {
+		return fmt.Errorf("%w: recovery assets must be regular files", ErrUnsupportedStore)
+	}
 	if err != nil {
 		return err
 	}
