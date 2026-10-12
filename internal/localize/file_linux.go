@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/sh4869221b/yakuori/internal/publication"
+	"github.com/sh4869221b/yakuori/internal/tm"
 	"github.com/sh4869221b/yakuori/internal/validate"
 )
 
@@ -32,7 +33,20 @@ func (c Core) File(ctx context.Context, options publication.Options, adapter Ada
 	})
 }
 
+func (c Core) FileWithTM(ctx context.Context, options publication.Options, adapter Adapter, profile validate.Profile, store *tm.Store, scope tm.Scope) (Result, error) {
+	if store == nil {
+		return Result{}, &Error{Phase: "tm_begin", Err: ErrNilTMStore}
+	}
+	return c.fileWithTM(ctx, options, adapter, profile, nil, &tmExecution{store: store, scope: scope}, func(ctx context.Context, options publication.Options) (publicationRun, error) {
+		return publication.PrepareWithLimits(ctx, options, c.limits)
+	})
+}
+
 func (c Core) file(ctx context.Context, options publication.Options, adapter Adapter, profile validate.Profile, tm TM, prepare preparePublication) (result Result, err error) {
+	return c.fileWithTM(ctx, options, adapter, profile, tm, nil, prepare)
+}
+
+func (c Core) fileWithTM(ctx context.Context, options publication.Options, adapter Adapter, profile validate.Profile, tm TM, memory *tmExecution, prepare preparePublication) (result Result, err error) {
 	result.Publication.State = publication.NotPublished
 	run, err := prepare(ctx, options)
 	if err != nil {
@@ -47,13 +61,19 @@ func (c Core) file(ctx context.Context, options publication.Options, adapter Ada
 	if err != nil {
 		return result, &Error{Phase: "import", Err: err}
 	}
-	accepted, err := c.Generate(ctx, session, profile)
+	accepted, err := c.generate(ctx, session, profile, memory)
 	if err != nil {
 		return result, err
 	}
 	final, err := prepareFinalization(session, profile, accepted)
 	if err != nil {
 		return result, err
+	}
+	if memory != nil {
+		if err := memory.run.Stage(accepted); err != nil {
+			return result, &Error{Phase: "tm_stage", Err: err}
+		}
+		final.run, tm = memory.run, memory.run
 	}
 	if err := run.Stage(ctx, func(writer io.Writer) error {
 		return final.export(writer, adapter)

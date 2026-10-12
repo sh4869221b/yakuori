@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sh4869221b/yakuori/internal/artifact"
+	"github.com/sh4869221b/yakuori/internal/tm"
 	"github.com/sh4869221b/yakuori/internal/unit"
 	"github.com/sh4869221b/yakuori/internal/validate"
 )
@@ -33,6 +34,7 @@ type finalization struct {
 	accepted []validate.AcceptedTranslation
 	expected artifact.ExpectedTranslations
 	manifest artifact.Manifest
+	run      *tm.Run
 	valid    bool
 }
 
@@ -65,6 +67,11 @@ func (f *finalization) check(reader io.Reader, adapter Adapter) error {
 	}
 	if err := artifact.CompareFinal(f.manifest, f.expected, observed); err != nil {
 		return &Error{Phase: "compare_final", Err: err}
+	}
+	if f.run != nil {
+		if err := f.run.CheckManifest(f.manifest); err != nil {
+			return &Error{Phase: "tm_manifest", Err: err}
+		}
 	}
 	f.valid = true
 	return nil

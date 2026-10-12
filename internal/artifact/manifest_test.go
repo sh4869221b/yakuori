@@ -139,3 +139,28 @@ func TestManifestRejectsInvalidDefinition(t *testing.T) {
 		})
 	}
 }
+
+func TestManifestKeyRelations(t *testing.T) {
+	session, ids, profile, _ := exportFixture(t, "source")
+	keys := []artifact.KeyRelation{{UnitID: ids[0], Key: ""}, {UnitID: ids[0], Key: ""}, {UnitID: ids[0], Key: string([]byte{0xff, 0})}}
+	manifest, err := artifact.NewManifest(session, profile, "fixture", "v1", keys, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := make(map[artifact.KeyRelation]int)
+	for _, key := range manifest.KeyRelations() {
+		counts[key]++
+	}
+	if counts[keys[0]] != 2 || counts[keys[2]] != 1 || len(counts) != 2 {
+		t.Fatalf("key counts = %#v", counts)
+	}
+	copy := manifest.KeyRelations()
+	for i := range copy {
+		copy[i].Key = "changed"
+	}
+	for _, key := range manifest.KeyRelations() {
+		if key.Key == "changed" {
+			t.Fatal("accessor exposed mutable state")
+		}
+	}
+}

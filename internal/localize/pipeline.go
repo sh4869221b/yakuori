@@ -89,6 +89,10 @@ func newCore(engine Engine, limits config.Limits) Core {
 
 // Generate returns no usable subset when any unit fails.
 func (c Core) Generate(ctx context.Context, session unit.Session, profile validate.Profile) ([]validate.AcceptedTranslation, error) {
+	return c.generate(ctx, session, profile, nil)
+}
+
+func (c Core) generate(ctx context.Context, session unit.Session, profile validate.Profile, memory *tmExecution) ([]validate.AcceptedTranslation, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.limits.GenerationTimeout)
 	defer cancel()
 	if err := session.Check(); err != nil {
@@ -194,11 +198,26 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 		preparedUnits = append(preparedUnits, prepared)
 		plans = append(plans, plan)
 	}
+	if memory != nil {
+		if err := memory.begin(session, profile); err != nil {
+			return nil, &Error{Phase: "tm_begin", Err: err}
+		}
+	}
 	accepted := make([]validate.AcceptedTranslation, 0, len(units))
 	for i, u := range units {
 		id, prepared := u.ID(), preparedUnits[i]
 		if err := ctx.Err(); err != nil {
 			return nil, &Error{Phase: "generate", UnitID: id, Err: err}
+		}
+		if memory != nil {
+			translation, found, err := memory.lookup(ctx, session, id, profile)
+			if err != nil {
+				return nil, &Error{Phase: "tm_lookup", UnitID: id, Err: err}
+			}
+			if found {
+				accepted = append(accepted, translation)
+				continue
+			}
 		}
 		candidate := prepared.Text()
 		if prepared.GenerationRequired() {
