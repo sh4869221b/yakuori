@@ -79,6 +79,8 @@ func TestModelsCLIParseBeforeIO(t *testing.T) {
 		{"models", "import", "file", "--id", "test"}, {"models", "use"}, {"models", "verify", "id", "private-text"},
 		{"models", "private-text"}, {"doctor", "--backend", "cpu"}, {"doctor", "--check-model", "--backend", "private-text"},
 		{"doctor", "--private-text"}, {"doctor", "--check-model", "private-text"},
+		{"doctor", "--help", "private-text"}, {"models", "import", "--help", "private-text"},
+		{"models", "use", "-h", "private-text"}, {"models", "verify", "--help", "private-text"},
 	} {
 		var out, diag bytes.Buffer
 		code := run(args, &out, &diag, nil)

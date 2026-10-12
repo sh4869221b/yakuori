@@ -52,6 +52,9 @@ func inspectStorage(paths config.Paths, registry *models.Registry) (string, erro
 		fmt.Fprintln(&output, "selected model: none")
 	} else {
 		fmt.Fprintf(&output, "selected model: %s\n", selected)
+		if _, ok := entries[selected]; !ok {
+			diagnostic = errors.Join(diagnostic, errors.New("selected model is not registered"))
+		}
 	}
 	ids := make([]string, 0, len(entries))
 	for id := range entries {

@@ -62,6 +62,9 @@ func parseStorage(args []string) (storageCommand, error) {
 	}
 	if err := flags.Parse(rest); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
+			if flags.NArg() != 0 {
+				return command, err
+			}
 			command.help = modelsUsage
 			if command.action == "doctor" {
 				command.help = doctorUsage

@@ -54,7 +54,7 @@ Real CPU inference, model smoke, SQLite and .w3strings tests remain separate gat
   load models, open TM, write files or use the network. Missing storage is
   normal. A registered model whose file is missing is reported as `[missing]`;
   explicit verification is required to check its bytes. Invalid schema or
-  insecure existing permissions return 1.
+  insecure existing permissions or a selected ID absent from the registry return 1.
 - `models import --id ID FILE`, `models use ID`, and `models verify ID` manage
   local GGUF files. Standard flags precede positional arguments, so `--id`
   comes before `FILE`. Import makes a private copy and does not select it. IDs

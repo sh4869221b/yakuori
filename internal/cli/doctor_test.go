@@ -85,6 +85,28 @@ type doctorEngine struct {
 	closed            bool
 }
 
+func TestDoctorRejectsUnregisteredSelection(t *testing.T) {
+	for _, missingRegistry := range []bool{false, true} {
+		t.Run(fmt.Sprint(missingRegistry), func(t *testing.T) {
+			paths := modelFixture(t)
+			storage := config.ResolveStoragePaths(paths)
+			writeFixture(t, storage.ConfigFile, `{"schema":1,"selected_model":"missing-model"}`)
+			if missingRegistry {
+				if err := os.Remove(storage.RegistryFile); err != nil {
+					t.Fatal(err)
+				}
+			}
+			code, out, diag := storageRun([]string{"doctor"}, paths)
+			if code != ExitFailure || !strings.Contains(out, "selected model: missing-model") || !strings.Contains(diag, "not registered") {
+				t.Fatalf("code=%d stdout=%q stderr=%q", code, out, diag)
+			}
+			if _, err := os.Stat(storage.RegistryLock); !os.IsNotExist(err) {
+				t.Fatalf("doctor created lock: %v", err)
+			}
+		})
+	}
+}
+
 func (e *doctorEngine) Info(context.Context) (inference.ModelInfo, error) { return e.info, e.infoErr }
 func (e *doctorEngine) Close() error                                      { e.closed = true; return e.closeErr }
 
