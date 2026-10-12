@@ -18,6 +18,9 @@ import (
 type modelConfig struct {
 	path, backend, quant string
 	contextTokens        int
+	expectedSHA256       [32]byte
+	checkSHA256          bool
+	snapshotDir          string
 }
 
 func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine, err error) {
@@ -30,7 +33,7 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	if config.backend != "cpu" && config.backend != "cuda" {
 		return nil, fmt.Errorf("%w: requested %q; choose cpu or cuda", ErrUnsupportedBackend, config.backend)
 	}
-	path, digest, err := snapshotModel(config.path)
+	path, digest, err := snapshotModel(config.path, config.snapshotDir)
 	if err != nil {
 		return nil, fmt.Errorf("read model identity: %w", err)
 	}
@@ -46,6 +49,9 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 			engine = nil
 		}
 	}()
+	if config.checkSHA256 && digest != config.expectedSHA256 {
+		return nil, fmt.Errorf("model SHA-256 mismatch: expected %x, got %x", config.expectedSHA256, digest)
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -132,7 +138,7 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	}, nil
 }
 
-func snapshotModel(path string) (snapshot string, digest [32]byte, err error) {
+func snapshotModel(path, dir string) (snapshot string, digest [32]byte, err error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", digest, err
@@ -143,7 +149,7 @@ func snapshotModel(path string) (snapshot string, digest [32]byte, err error) {
 			err = errors.Join(err, os.Remove(snapshot))
 		}
 	}()
-	copyFile, err := os.CreateTemp("", "yakuori-model-*.gguf")
+	copyFile, err := os.CreateTemp(dir, "yakuori-model-*.gguf")
 	if err != nil {
 		return "", digest, err
 	}
