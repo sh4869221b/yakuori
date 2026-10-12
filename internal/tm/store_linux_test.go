@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -205,6 +206,10 @@ func TestStoreRejectPreservesAssets(t *testing.T) {
 	})
 	for _, kind := range []string{"corrupt-recovery", "unknown-recovery", "unsupported-recovery", "original-readonly"} {
 		t.Run(kind, func(t *testing.T) {
+			if kind == "original-readonly" && os.Geteuid() == 0 {
+				readonlyUnprivileged(t)
+				return
+			}
 			path, s := storeFixture(t)
 			if kind == "unknown-recovery" {
 				storeExec(t, s.db, "PRAGMA user_version=99")
@@ -253,6 +258,45 @@ func TestStoreRejectPreservesAssets(t *testing.T) {
 			t.Logf("recovery failure preserved main/journal: %v", err)
 		})
 	}
+}
+
+func readonlyUnprivileged(t *testing.T) {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "yakuori-tm-permission-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Error(err)
+		}
+	})
+	if err := os.Chmod(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary, err := os.ReadFile(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "tm.test")
+	if err := os.WriteFile(path, binary, 0755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, path, "-test.v", "-test.run=^TestStoreRejectPreservesAssets$/^original-readonly$")
+	cmd.Dir = "/tmp"
+	cmd.Env = append(os.Environ(), "TMPDIR=/tmp")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: 65534, Gid: 65534}}
+	output, err := cmd.CombinedOutput()
+	if err != nil || !bytes.Contains(output, []byte("--- PASS: TestStoreRejectPreservesAssets/original-readonly")) {
+		t.Fatalf("unprivileged permission-fault test: %v\n%s", err, output)
+	}
+	t.Logf("unprivileged permission-fault test:\n%s", output)
 }
 
 func TestStoreOwnership(t *testing.T) {
