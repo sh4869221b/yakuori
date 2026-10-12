@@ -40,6 +40,7 @@ type manifest struct {
 	generationRequired bool
 	payloadRequired    bool
 	glossary           glossary.Glossary
+	glossaryMatches    []glossary.Match
 	blocked            []ByteRange
 }
 

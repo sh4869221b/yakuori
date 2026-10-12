@@ -110,6 +110,8 @@ func TestMandatoryTargetReservedTokens(t *testing.T) {
 	}{
 		{"[[YAKUORI_0_0]]", true},
 		{"訳 [[YAKUORI_12_034]] 文", true},
+		{"[[YAKUORI_0_x]]", true},
+		{"訳 [[YAKUORI_12_", true},
 		{"[YAKUORI_0_0]", false},
 		{"猫", false},
 	} {

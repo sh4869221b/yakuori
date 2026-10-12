@@ -20,6 +20,7 @@ func TestParseRejectsInvalidConfiguration(t *testing.T) {
 		{"null preferred target", glossary.Schema, `[{"source":"cat","target":null,"mode":"prefer","match":"word"}]`},
 		{"missing target", glossary.Schema, `[{"source":"cat","mode":"mandatory","match":"word"}]`},
 		{"reserved mandatory target", glossary.Schema, `[{"source":"cat","target":"[[YAKUORI_0_0]]","mode":"mandatory","match":"word"}]`},
+		{"selected prefix mandatory target", glossary.Schema, `[{"source":"cat","target":"[[YAKUORI_0_x]]","mode":"mandatory","match":"word"}]`},
 		{"wrong target type", glossary.Schema, `[{"source":"cat","target":1,"mode":"mandatory","match":"word"}]`},
 		{"NUL escape", glossary.Schema, `[{"source":"cat\u0000","mode":"protect","match":"word"}]`},
 	}

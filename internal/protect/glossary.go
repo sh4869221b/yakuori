@@ -25,6 +25,7 @@ func (m *manifest) addGlossary(matches []glossary.Match, spans []unit.Protection
 		if match.Entry.Mode != glossary.Protect {
 			continue
 		}
+		m.glossaryMatches = append(m.glossaryMatches, match)
 		entries = append(entries, match.Entry)
 		if adapter {
 			continue
@@ -65,6 +66,18 @@ func (m *manifest) scanLiterals(text string) ([]occurrence, error) {
 	matches, err := m.glossary.Match(text)
 	if err != nil {
 		return nil, err
+	}
+	counts := make(map[glossary.Entry]int)
+	for _, match := range m.glossaryMatches {
+		counts[match.Entry]++
+	}
+	for _, match := range matches {
+		counts[match.Entry]--
+	}
+	for _, count := range counts {
+		if count != 0 {
+			return nil, fmt.Errorf("%w: protected glossary entry count differs", ErrInvalidCandidate)
+		}
 	}
 	for _, match := range matches {
 		duplicate := false

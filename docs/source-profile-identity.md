@@ -142,7 +142,7 @@ bytes; it tests serialization, not a conflict-free executable dictionary.
 | Field | Contract |
 | --- | --- |
 | `source` | Nonempty, valid UTF-8 without NUL. |
-| `target` | Nonempty valid UTF-8 without NUL for `prefer` and `mandatory`. Mandatory targets cannot contain reserved protection tokens matching `[[YAKUORI_<digits>_<digits>]]`, which candidate protection rejects. `protect` has no target; JSON must omit it, even an empty or null value is rejected. |
+| `target` | Nonempty valid UTF-8 without NUL for `prefer` and `mandatory`. Mandatory targets cannot contain a reserved protection prefix `[[YAKUORI_<digits>_`, including malformed or incomplete tokens, which candidate protection rejects. `protect` has no target; JSON must omit it, even an empty or null value is rejected. |
 | `mode` | `prefer` recommends a target; `protect` restores the matched original bytes; `mandatory` requires its target in the completed translation. |
 | `match` | Per-entry `literal` or `word`; no default. |
 
@@ -191,7 +191,9 @@ Glossary protect uses the same matching boundaries in preparation, restoration
 and candidate validation. For word protect `cat`, `cat scatter` protects only
 the first occurrence; the substring in `scatter` is neither tokenized nor counted
 as another protected occurrence. Missing, changed or multiplied tokens and
-restored protected occurrences are rejected. Adapter literals retain their
+restored protected occurrences are rejected. Compatible entries sharing a span
+retain their own matching boundaries and occurrence counts; a literal match
+cannot substitute for a lost word match. Adapter literals retain their
 existing all-occurrence and tag/order checks.
 
 After segments are joined and protection is restored, `validate.Validate`

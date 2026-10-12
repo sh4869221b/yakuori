@@ -249,3 +249,50 @@ func TestGlossaryAdapterSameOutputCanCoexist(t *testing.T) {
 		})
 	}
 }
+
+func TestCompatibleProtectEntriesKeepEachBoundary(t *testing.T) {
+	session, id := fixtureSession(t, "cat runs", nil)
+	g, err := glossary.New(glossary.Schema, []glossary.Entry{
+		{Source: "cat", Mode: glossary.Protect, Match: glossary.Literal},
+		{Source: "cat", Mode: glossary.Protect, Match: glossary.Word},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := protect.PrepareWithGlossary(session, id, g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	piece, err := prepared.Slice(0, len(prepared.Text()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, tokenized, restored string
+		invalid                   bool
+	}{
+		{"compatible", "[[YAKUORI_0_0]] walks", "cat walks", false},
+		{"word boundary lost", "s[[YAKUORI_0_0]]ter runs", "scatter runs", true},
+	} {
+		for _, method := range []string{"restore", "restored", "piece"} {
+			t.Run(tc.name+"/"+method, func(t *testing.T) {
+				var err error
+				switch method {
+				case "restore":
+					_, err = prepared.Restore(session, id, tc.tokenized)
+				case "restored":
+					err = prepared.CheckRestored(session, id, tc.restored)
+				case "piece":
+					err = prepared.CheckCandidate(piece, tc.tokenized)
+				}
+				if tc.invalid {
+					if !errors.Is(err, protect.ErrInvalidCandidate) {
+						t.Fatalf("error=%v; want lost word-boundary rejection", err)
+					}
+				} else if err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
+	}
+}

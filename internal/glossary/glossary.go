@@ -16,9 +16,10 @@ import (
 
 const Schema = "glossary-v1"
 
-const ReservedTokenPattern = `\[\[YAKUORI_[0-9]+_[0-9]+\]\]`
+const reservedTokenPrefix = `\[\[YAKUORI_[0-9]+_`
+const ReservedTokenPattern = reservedTokenPrefix + `[0-9]+\]\]`
 
-var reservedTokenPattern = regexp.MustCompile(ReservedTokenPattern)
+var reservedTokenPrefixPattern = regexp.MustCompile(reservedTokenPrefix)
 
 type Mode string
 
@@ -153,8 +154,8 @@ func checkEntry(e Entry) error {
 		if e.Target == "" {
 			return fmt.Errorf("%w: missing target", ErrInvalidGlossary)
 		}
-		if e.Mode == Mandatory && reservedTokenPattern.MatchString(e.Target) {
-			return fmt.Errorf("%w: mandatory target contains a reserved protection token", ErrInvalidGlossary)
+		if e.Mode == Mandatory && reservedTokenPrefixPattern.MatchString(e.Target) {
+			return fmt.Errorf("%w: mandatory target contains a reserved protection token prefix", ErrInvalidGlossary)
 		}
 	default:
 		return fmt.Errorf("%w: unsupported mode %q", ErrInvalidGlossary, e.Mode)

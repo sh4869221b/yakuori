@@ -141,6 +141,13 @@ func (p Prepared) sourceOffset(offset int) (int, bool) {
 func (s Piece) subset() *manifest {
 	parent := s.owner
 	m := &manifest{source: s.Source(), text: s.Text(), prefix: parent.prefix, literals: parent.literals, glossary: parent.glossary, tokens: make(map[string]int)}
+	for _, match := range parent.glossaryMatches {
+		if match.Start >= s.source.Start && match.End <= s.source.End {
+			match.Start -= s.source.Start
+			match.End -= s.source.Start
+			m.glossaryMatches = append(m.glossaryMatches, match)
+		}
+	}
 	for i, occ := range parent.occurrences {
 		if occ.start < s.source.Start || occ.end > s.source.End {
 			continue
