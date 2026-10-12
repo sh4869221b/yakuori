@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/sh4869221b/yakuori/internal/config"
+	"golang.org/x/sys/unix"
 )
 
 // Recover admits one interrupted DELETE journal, first checking SQLite's recovery on a disposable copy.
@@ -101,7 +102,7 @@ func copyRecoveryFile(ctx context.Context, source, destination string) (err erro
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	from, err := os.Open(source)
+	from, err := os.OpenFile(source, os.O_RDONLY|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return err
 	}
@@ -111,7 +112,7 @@ func copyRecoveryFile(ctx context.Context, source, destination string) (err erro
 		return err
 	}
 	if !info.Mode().IsRegular() {
-		return errors.New("recovery assets must be regular files")
+		return fmt.Errorf("%w: recovery assets must be regular files", ErrUnsupportedStore)
 	}
 	to, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {

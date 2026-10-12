@@ -279,11 +279,19 @@ private temporary directory and asks SQLite to recover and validate the copy,
 then asks SQLite to recover the original. Unknown/corrupt databases and WAL/SHM
 are retained and rejected. No product schema migration or reset fallback is added.
 
+If Create fails after exclusively creating the main file, it closes SQLite and
+removes only that new database and its newly created DELETE journal while still
+holding ownership. Pre-existing main files and sidecars are never removed.
+Cleanup failures are returned with the initialization error; the lockfile is retained.
+
 A Store owns `path+".lock"` with a nonblocking Linux flock until Close; it does
 not unlink the lockfile. This coordinates cooperative Store owners on one local
 database. It does not protect against noncooperative writers, concurrent path
 replacement or hostile directory mutation. Independent Runs share a Store while
 keeping their observations and staging separate.
+Parent directory symlinks are resolved before choosing the lock path. Database
+symlinks, files with multiple hard links, and nonregular database/lock files are
+rejected. Recovery also rejects nonregular copy sources without a blocking open.
 
 Core's additive `TextWithTM` / `FileWithTM` take an explicit Store and
 `tm.Scope{GameNamespace, ArtifactNamespace, Keys}`. Nil Store and noncanonical

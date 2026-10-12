@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 
 	"github.com/sh4869221b/yakuori/internal/config"
 	"golang.org/x/sys/unix"
@@ -54,9 +55,26 @@ func own(ctx context.Context, path string, limits config.Limits) (*Store, string
 	if err != nil {
 		return nil, "", err
 	}
-	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0600)
+	parent, err := filepath.EvalSymlinks(filepath.Dir(path))
+	if err != nil {
+		return nil, "", err
+	}
+	path = filepath.Join(parent, filepath.Base(path))
+	info, err := os.Lstat(path)
+	if err == nil {
+		if !info.Mode().IsRegular() || info.Sys().(*syscall.Stat_t).Nlink != 1 {
+			return nil, "", fmt.Errorf("%w: database must be a regular file with one link", ErrUnsupportedStore)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, "", err
+	}
+	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR|unix.O_NONBLOCK|unix.O_NOFOLLOW, 0600)
 	if err != nil {
 		return nil, "", fmt.Errorf("store ownership: %w", err)
+	}
+	info, err = lock.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, "", errors.Join(ErrUnsupportedStore, err, lock.Close())
 	}
 	if err := unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		closeErr := lock.Close()
@@ -103,8 +121,12 @@ func Create(ctx context.Context, path string, limits config.Limits) (store *Stor
 	if err != nil {
 		return nil, err
 	}
+	created := false
 	defer func() {
 		if err != nil {
+			if created {
+				err = errors.Join(err, s.removeCreated(path))
+			}
 			err = errors.Join(err, s.Close())
 		}
 	}()
@@ -119,6 +141,7 @@ func Create(ctx context.Context, path string, limits config.Limits) (store *Stor
 	if err != nil {
 		return nil, err
 	}
+	created = true
 	if err := f.Close(); err != nil {
 		return nil, err
 	}
@@ -136,6 +159,29 @@ func Create(ctx context.Context, path string, limits config.Limits) (store *Stor
 		return nil, err
 	}
 	return s, nil
+}
+
+// Only Create calls this after exclusive creation and absent-sidecar checks.
+// Keep ownership until the new database and its DELETE journal are removed.
+func (s *Store) removeCreated(path string) error {
+	if s.db != nil {
+		if err := s.db.Close(); err != nil {
+			return err
+		}
+		s.db = nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), s.limits.DBCleanupTimeout)
+	defer cancel()
+	var result error
+	for _, suffix := range []string{"-journal", ""} {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(result, err)
+		}
+		if err := os.Remove(path + suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
+			result = errors.Join(result, err)
+		}
+	}
+	return result
 }
 
 // Open admits only an existing, clean v1 database. It never performs recovery.
