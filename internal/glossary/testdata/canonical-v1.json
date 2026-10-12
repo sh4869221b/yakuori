@@ -1,0 +1,1 @@
+[{"source":"Cat","mode":"protect","match":"literal"},{"source":"cat","target":"cat","mode":"prefer","match":"word"},{"source":"cat","target":"猫","mode":"mandatory","match":"word"},{"source":"cat","target":"猫","mode":"prefer","match":"literal"},{"source":"cat","target":"猫","mode":"prefer","match":"word"}]
