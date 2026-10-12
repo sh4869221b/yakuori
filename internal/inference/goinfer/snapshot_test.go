@@ -5,21 +5,32 @@ import (
 	"crypto/sha256"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/townsendmerino/goinfer/decoder"
 )
 
-func TestOpenUsesStableSnapshot(t *testing.T) {
+func TestSnapshotExpectedIdentity(t *testing.T) {
 	for _, replace := range []bool{false, true} {
 		t.Run(map[bool]string{false: "rewrite", true: "atomic replace"}[replace], func(t *testing.T) {
 			config, load, model, tok := loadFixture(t)
+			config.snapshotDir = t.TempDir()
+			config.expectedSHA256 = sha256.Sum256([]byte(fixtureModel))
+			config.checkSHA256 = true
 			var snapshot string
 			checkSnapshot := func(path string) {
 				t.Helper()
 				data, err := os.ReadFile(path)
 				if err != nil || string(data) != fixtureModel {
 					t.Fatalf("snapshot bytes=%q error=%v", data, err)
+				}
+				stat, err := os.Stat(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if filepath.Dir(path) != config.snapshotDir || stat.Mode().Perm() != 0400 {
+					t.Fatalf("snapshot path=%q mode=%o", path, stat.Mode().Perm())
 				}
 			}
 			load.model = func(path string, _ decoder.Options) (modelBackend, error) {
@@ -66,6 +77,9 @@ func TestOpenUsesStableSnapshot(t *testing.T) {
 
 func TestOpenRemovesSnapshotOnFailure(t *testing.T) {
 	config, load, model, _ := loadFixture(t)
+	config.snapshotDir = t.TempDir()
+	config.expectedSHA256 = sha256.Sum256([]byte(fixtureModel))
+	config.checkSHA256 = true
 	var snapshot string
 	load.tokenizer = func(path string) (requestTokenizer, error) {
 		snapshot = path

@@ -75,9 +75,11 @@ type Engine struct {
 }
 
 type Options struct {
-	Backend       string
-	ComputeQuant  string
-	ContextTokens int
+	Backend             string
+	ComputeQuant        string
+	ContextTokens       int
+	ExpectedModelSHA256 *[32]byte
+	SnapshotDir         string
 }
 
 func Open(ctx context.Context, modelPath, computeQuant string) (*Engine, error) {
@@ -85,13 +87,21 @@ func Open(ctx context.Context, modelPath, computeQuant string) (*Engine, error) 
 }
 
 func OpenWithOptions(ctx context.Context, modelPath string, options Options) (*Engine, error) {
+	config := modelConfig{
+		path: modelPath, backend: options.Backend, quant: options.ComputeQuant,
+		contextTokens: options.ContextTokens, snapshotDir: options.SnapshotDir,
+	}
+	if options.ExpectedModelSHA256 != nil {
+		config.expectedSHA256 = *options.ExpectedModelSHA256
+		config.checkSHA256 = true
+	}
 	if options.ContextTokens <= 0 {
 		return nil, ErrInvalidContext
 	}
 	if options.Backend == "cuda" && cudaBackendPin == "" {
 		return nil, fmt.Errorf("%w: CUDA backend not built in; build with -tags cuda on linux/amd64", ErrUnsupportedBackend)
 	}
-	return open(ctx, modelConfig{path: modelPath, backend: options.Backend, quant: options.ComputeQuant, contextTokens: options.ContextTokens}, defaultLoaders())
+	return open(ctx, config, defaultLoaders())
 }
 
 func defaultLoaders() loaders {
