@@ -37,7 +37,10 @@ func TestContracts(t *testing.T) {
 		{"invalid option", []string{"--secret-text"}, 2, "", true},
 		{"unknown command", []string{"secret-text"}, 2, "", true},
 		{"extra args", []string{"doctor", "secret-text"}, 2, "", true},
-		{"doctor", []string{"doctor"}, 0, "config: /c\ndata: /d\ncache: /k\nstate: /s\n", false},
+		{"doctor", []string{"doctor"}, 0, "config: /c\ndata: /d\ncache: /k\nstate: /s\n" +
+			"config directory: /c [missing]\ndata directory: /d [missing]\ncache directory: /k [missing]\nstate directory: /s [missing]\n" +
+			"config file: /c/config.json [missing]\nregistry file: /d/registry.json [missing]\nmodels directory: /d/models [missing]\n" +
+			"TM file: /d/tm.sqlite [missing]\nsnapshot directory: /k/model-snapshots [missing]\nregistry lock: /d/registry.lock [missing]\nselected model: none\n", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var out, diag bytes.Buffer

@@ -26,12 +26,13 @@ const usage = `Usage: yakuori <command>
 
 Commands:
   help       Show this help
-  doctor     Show resolved Yakuori storage directories (read-only)
+  doctor     Diagnose storage; --check-model loads the selected model
+  models     Import, select, or verify a local GGUF model
 
 Options:
   -h, --help Show this help
 
-Foundation only: translation, models and storage are not implemented yet.
+Translation CLI is not implemented yet. Use <command> --help for options.
 `
 
 var errInvalidLocalizeArguments = errors.New("invalid localize arguments")
@@ -56,6 +57,9 @@ func runWithPipeline(ctx context.Context, args []string, stdout, stderr io.Write
 	}
 	if len(args) == 0 {
 		return fail(ExitUsage, "missing command; use --help")
+	}
+	if args[0] == "models" || args[0] == "doctor" {
+		return runStorage(ctx, args, stdout, stderr, resolve)
 	}
 	if args[0] == "localize" {
 		options, help, err := parseLocalize(args[1:])
@@ -85,12 +89,6 @@ func runWithPipeline(ctx context.Context, args []string, stdout, stderr io.Write
 	switch args[0] {
 	case "help", "-h", "--help":
 		result = usage
-	case "doctor":
-		paths, err := resolve()
-		if err != nil {
-			return fail(ExitFailure, "resolve storage paths: "+err.Error())
-		}
-		result = fmt.Sprintf("config: %s\ndata: %s\ncache: %s\nstate: %s\n", paths.Config, paths.Data, paths.Cache, paths.State)
 	default:
 		// Do not echo user-supplied text into ordinary diagnostics.
 		if strings.HasPrefix(args[0], "-") {
