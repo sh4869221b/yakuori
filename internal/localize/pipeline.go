@@ -8,6 +8,7 @@ import (
 
 	"github.com/sh4869221b/yakuori/internal/artifact"
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/identity"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/protect"
@@ -101,6 +102,10 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 	if profile.Digest() == ([32]byte{}) {
 		return nil, &Error{Phase: "input", Err: validate.ErrInvalidProfile}
 	}
+	termsDefinition, err := profile.Glossary()
+	if err != nil {
+		return nil, &Error{Phase: "input", Err: err}
+	}
 	expectedSegmentation := validate.SegmentationInput{}
 	if c.segmented != nil {
 		expectedSegmentation = segment.ProfileInput()
@@ -153,9 +158,23 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 		if err := ctx.Err(); err != nil {
 			return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 		}
-		prepared, err := protect.Prepare(session, id)
+		prepared, err := protect.PrepareWithGlossary(session, id, termsDefinition)
 		if err != nil {
 			return nil, &Error{Phase: "protect", UnitID: id, Err: err}
+		}
+		matches, err := termsDefinition.Match(string(u.Source()))
+		if err != nil {
+			return nil, &Error{Phase: "protect", UnitID: id, Err: err}
+		}
+		var entries []glossary.Entry
+		for _, match := range matches {
+			if match.Entry.Mode != glossary.Protect {
+				entries = append(entries, match.Entry)
+			}
+		}
+		terms, err := glossary.New(glossary.Schema, entries)
+		if err != nil {
+			return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 		}
 		var plan segment.Plan
 		if c.segmented != nil {
@@ -164,7 +183,7 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 			if limits.Segments <= 0 {
 				return nil, &Error{Phase: "plan", UnitID: id, Err: c.limits.CheckSegments(segments + 1)}
 			}
-			plan, err = c.segmented.plan(ctx, id, prepared, limits)
+			plan, err = c.segmented.planWithTerms(ctx, id, prepared, limits, terms)
 			if err != nil {
 				return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 			}
@@ -184,7 +203,11 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 				return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 			}
 			if c.inference != nil && prepared.GenerationRequired() {
-				inferencePlans[len(preparedUnits)], err = c.inference.plan(ctx, id, prepared.Text())
+				planner := *c.inference
+				if canonical != (identity.ProfileIdentity{}) {
+					planner.limits.ContextTokens = min(planner.limits.ContextTokens, info.ContextTokens)
+				}
+				inferencePlans[len(preparedUnits)], err = planner.planWithTerms(ctx, id, RequestInput{Text: prepared.Text(), Terms: terms})
 				if err != nil {
 					return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 				}
@@ -193,6 +216,9 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 						return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 					}
 				}
+			}
+			if c.inference == nil && prepared.GenerationRequired() && !terms.Empty() {
+				return nil, &Error{Phase: "plan", UnitID: id, Err: ErrInferenceProfile}
 			}
 		}
 		preparedUnits = append(preparedUnits, prepared)
