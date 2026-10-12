@@ -88,3 +88,14 @@ func (m Manifest) CheckInput(session unit.Session) error {
 	}
 	return nil
 }
+
+// KeyRelations returns an independent copy, including empty keys and duplicates.
+func (m Manifest) KeyRelations() []KeyRelation {
+	relations := make([]KeyRelation, 0)
+	for relation, count := range m.keys {
+		for range count {
+			relations = append(relations, relation)
+		}
+	}
+	return relations
+}
