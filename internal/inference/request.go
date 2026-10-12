@@ -3,6 +3,7 @@ package inference
 import (
 	"slices"
 
+	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/prompt"
 )
 
@@ -31,6 +32,7 @@ type PreparedRequest struct {
 	TokenIDs       []int
 	Identity       RequestIdentity
 	StopIDs        []int
+	Terms          glossary.Glossary
 }
 
 type GenerationRequest struct {
@@ -39,6 +41,7 @@ type GenerationRequest struct {
 	tokenIDs       []int
 	identity       RequestIdentity
 	policy         EffectivePolicy
+	terms          glossary.Glossary
 }
 
 func NewGenerationRequest(prepared PreparedRequest, policy GenerationPolicy) (GenerationRequest, error) {
@@ -52,6 +55,7 @@ func NewGenerationRequest(prepared PreparedRequest, policy GenerationPolicy) (Ge
 		tokenIDs:       slices.Clone(prepared.TokenIDs),
 		identity:       prepared.Identity,
 		policy:         policy.snapshot(prepared.StopIDs),
+		terms:          prepared.Terms,
 	}, nil
 }
 
@@ -59,6 +63,7 @@ func (r GenerationRequest) RenderedPrompt() string    { return r.renderedPrompt 
 func (r GenerationRequest) Spans() []PromptSpan       { return slices.Clone(r.spans) }
 func (r GenerationRequest) TokenIDs() []int           { return slices.Clone(r.tokenIDs) }
 func (r GenerationRequest) Identity() RequestIdentity { return r.identity }
+func (r GenerationRequest) Terms() glossary.Glossary  { return r.terms }
 
 func (r GenerationRequest) Policy() EffectivePolicy {
 	p := r.policy

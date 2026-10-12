@@ -1,7 +1,11 @@
 // Package prompt defines the translation messages before backend templating.
 package prompt
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/sh4869221b/yakuori/internal/glossary"
+)
 
 const SchemaV1 = 1
 
@@ -16,16 +20,18 @@ type Identity struct {
 	SystemTemplate  string
 	UserTemplate    string
 	LanguageAliases string
+	TermsTemplate   string
 }
 
 func PlainIdentity() Identity {
-	return Identity{SchemaV1, "plain", systemV1, userV1, "none-v1"}
+	return Identity{SchemaV1, "plain", systemV1, userV1, "none-v1", termsTemplateV1}
 }
 
 type Input struct {
 	SourceLanguage string
 	TargetLanguage string
 	Text           string
+	Terms          glossary.Glossary
 }
 
 type Messages struct {
@@ -35,9 +41,9 @@ type Messages struct {
 }
 
 func Build(input Input) Messages {
-	return Messages{
+	return withTerms(Messages{
 		Schema: SchemaV1,
 		System: fmt.Sprintf(systemV1, input.SourceLanguage, input.TargetLanguage),
 		User:   fmt.Sprintf(userV1, input.Text),
-	}
+	}, input.Terms)
 }
