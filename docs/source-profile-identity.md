@@ -4,8 +4,10 @@
 exact key. `internal/unit/identity.go` builds source identity from a session;
 `internal/localize/profile.go` projects effective inference conditions into
 `validate.NewCanonicalProfile`. Core's `TextWithTM` / `FileWithTM` now connect
-these identities to SQLite candidate lookup and revalidation (#16). Glossary
-matching, game adapters and CLI scope configuration remain separate work.
+these identities to SQLite candidate lookup and revalidation (#16).
+`internal/glossary` now supplies executable glossary matching, protection, prompt
+terms and restored-parent validation (#17). Game adapters and CLI glossary/scope
+configuration remain separate work.
 
 ## Canonical bytes and exact equality
 
@@ -67,7 +69,7 @@ not establish model or generation equivalence.
 | `compute_quant`, `kv_precision` | Actual compute quantization and effective KV precision. Runtime CPU projection uses `not-applicable` for unavailable CPU KV precision. |
 | `tokenizer` | `model_digest`, `backend_pin` identifying tokenizer contents/implementation. |
 | `template` | `family`, `source`, `renderer_version` for model template rendering. |
-| `prompt` | `schema`, `variant`, actual `system_template` and `user_template` bytes, `language_aliases` rule version and `disabled_thinking_prefix` bytes. Plain and Index differ even with the same prompt schema. |
+| `prompt` | `schema`, `variant`, actual `system_template` and `user_template` bytes (including the static optional terms template), `language_aliases` rule version and `disabled_thinking_prefix` bytes. Plain and Index differ even with the same prompt schema. |
 | `generation` | `schema`, effective `max_output_tokens`, integer `request_timeout_ns`, `seed`, `seed_fixed`, ordered `stop_ids`, `thinking`, and model-load `prefill` policy below. |
 | `segmentation` | `mode`; when enabled, `schema`, `boundary_fixtures`, actual `unit_text_bytes` and `segments` limits used to split. Disabled mode has empty schema/fixtures and zero limits. |
 | `glossary` | `mode=none` with empty schema/entries, or `mode=provided` with caller-supplied schema and canonical effective `entries` bytes. Identity does not perform matching, ordering or conflict resolution. |
@@ -110,6 +112,139 @@ Requested backend, decline reasons, timings, driver names and configured limits
 that are not effective are excluded. Changes to these diagnostics alone retain
 identity; effective CPU/CUDA, release, precision and policy changes do not.
 
+## Executable glossary contract (#17)
+
+`internal/identity` keeps glossary schema and entries as caller-owned opaque
+bytes. It does not parse, sort or match them. At the execution boundary,
+`validate.Profile.Glossary()` requires supported, nonempty, byte-for-byte
+canonical entries for `mode=provided`; unsupported schemas and noncanonical
+bytes are profile errors. `validate.GlossaryInput` maps an empty glossary to
+`mode=none` with empty schema/entries. Independently constructed equal glossary
+profiles remain comparable by content and retain the existing acceptance/TM
+binding. No glossary span is added to the original unit or source identity.
+
+### Schema and matching
+
+The separately supplied schema is `glossary-v1`. Entries are a JSON array:
+
+```json
+[{"source":"cat","target":"猫","mode":"mandatory","match":"word"},{"source":"KEEP","mode":"protect","match":"literal"}]
+```
+
+This illustrates the input shape; callers use `glossary.New` or `glossary.Parse`
+to obtain canonical bytes. Canonical entries sort byte-lexicographically by
+`source`, `target`, `mode`, then `match`, remove completely identical entries,
+and serialize fields in `source`, optional `target`, `mode`, `match` order with
+no trailing newline. The fixed
+[canonical-v1.json](../internal/glossary/testdata/canonical-v1.json) pins those
+bytes; it tests serialization, not a conflict-free executable dictionary.
+
+| Field | Contract |
+| --- | --- |
+| `source` | Nonempty, valid UTF-8 without NUL. |
+| `target` | Nonempty valid UTF-8 without NUL for `prefer` and `mandatory`. `protect` has no target; JSON must omit it, even an empty or null value is rejected. |
+| `mode` | `prefer` recommends a target; `protect` restores the matched original bytes; `mandatory` requires its target in the completed translation. |
+| `match` | Per-entry `literal` or `word`; no default. |
+
+Unknown schemas, modes, match kinds and JSON fields are rejected. Matching is
+case-sensitive exact UTF-8 bytes, without Unicode normalization, case folding
+or transliteration. `literal` finds every substring occurrence. `word` further
+requires that neither adjacent rune is Unicode Letter, Mark, Number or `_`;
+string ends are boundaries. Thus `cat` in `cat catch scatter` matches once with
+`word`, three times with `literal`. A Japanese letter or combining mark is a
+word rune too; this is not morphological word segmentation.
+
+All occurrences, including self-overlap, are collected as half-open raw-source
+byte spans before conflicts are checked. There is no longest-match, entry-order
+or mode-priority winner. A protect entry's output requirement is its source;
+other entries' output requirement is their target.
+
+| Relationship between applicable spans | Result |
+| --- | --- |
+| Disjoint or adjacent | Both apply. |
+| Exactly equal, equal output requirements | Both apply; equal-target prefer and mandatory keep both modes. Protect can coexist when the other target equals the original source. |
+| Exactly equal, different output requirements | Conflict, including protect with a different target. |
+| Partial overlap, containment or one entry's self-overlap | Conflict even if outputs are equal. |
+| Exactly equal to an adapter protection span | Allowed only when output equals original span bytes; glossary protect reuses adapter metadata. |
+| Partial overlap with an adapter protection span | Conflict; existing adapter semantics are retained. |
+
+### Generation, restoration and TM
+
+Core matches the raw parent source before protection. All units' conflicts,
+protection and request plans are checked before the first Generate call or TM
+begin. Matching prefer/mandatory entries form a deduplicated canonical per-parent
+terms value; protect uses the existing protection-token instructions. Plain and
+Index prompts render terms as JSON data with separate instructions. The static
+optional terms template is included in shared prompt identity; actual applicable
+terms are immutable request data in `PreparedRequest` / `GenerationRequest`,
+separate from model identity. Empty terms preserve existing rendered messages.
+
+The terms-aware builder must return exactly the terms supplied by Core, compared
+by their complete canonical content. Dropped, global instead of applicable, or
+changed terms fail preflight. CountTokens includes the rendered terms and
+instructions. Segmented requests retain all applicable parent terms. Cuts and
+separators cannot split or consume any matched source phrase, including prefer
+and mandatory phrases that do not create protection tokens. An indivisible
+request exceeding the available token budget returns `segment.ErrContextLimit`.
+
+Glossary protect uses the same matching boundaries in preparation, restoration
+and candidate validation. For word protect `cat`, `cat scatter` protects only
+the first occurrence; the substring in `scatter` is neither tokenized nor counted
+as another protected occurrence. Missing, changed or multiplied tokens and
+restored protected occurrences are rejected. Adapter literals retain their
+existing all-occurrence and tag/order checks.
+
+After segments are joined and protection is restored, `validate.Validate`
+requires each applicable mandatory target as an exact substring at least once
+in the complete parent candidate. Two source occurrences can be satisfied by
+one target occurrence; source/target occurrence counts need not correspond.
+Case or Unicode-normalization differences do not satisfy the target. Mandatory
+entries absent from the raw source do not apply, and prefer noncompliance does
+not reject a candidate. These are mechanical constraints, not a guarantee of
+semantic translation quality.
+
+Exact-key TM candidates pass the same restored-parent validation. Mandatory or
+protect violations are recorded as invalid candidates and treated as misses;
+invalid regeneration produces no accepted output or TM commit. Glossary content
+changes use the existing full profile/key contract and miss earlier entries.
+No rescue replacement or automatic generation retry is added.
+
+### Internal API connection
+
+Inside this module, with an already loaded `*goinfer.Engine` named `engine`, a
+valid generation `policy`, `ctx` and matching limits, the terms-aware path is:
+
+```go
+g, err := glossary.New(glossary.Schema, []glossary.Entry{
+    {Source: "cat", Target: "猫", Mode: glossary.Mandatory, Match: glossary.Word},
+})
+if err != nil { return err }
+limits := config.DefaultLimits()
+build := localize.TermsRequestBuilder(func(ctx context.Context, _ unit.UnitID, input localize.RequestInput) (inference.GenerationRequest, error) {
+    return engine.NewRequest(ctx, prompt.Input{
+        SourceLanguage: "en", TargetLanguage: "ja", Text: input.Text, Terms: input.Terms,
+    }, policy)
+})
+base, err := build(ctx, unit.UnitID{}, localize.RequestInput{Text: "profile"})
+if err != nil { return err }
+info, err := engine.Info(ctx)
+if err != nil { return err }
+profile, err := localize.NewCanonicalInferenceProfile(info, base, localize.InferenceProfileInput{
+    ModelID: "my-model", Glossary: validate.GlossaryInput(g), Limits: limits,
+})
+if err != nil { return err }
+core := localize.NewCore(localize.NewGlossaryInferenceEngine(engine, build))
+accepted, err := core.Generate(ctx, session, profile)
+```
+
+The caller supplies the imported `session` and handles `accepted`/`err` as usual.
+For segmentation, use `NewGlossarySegmentedCore` (or its WithLimits variant) and
+set `InferenceProfileInput.Segmentation=true`. Existing `NewInferenceEngine` and
+`NewSegmentedCore` callbacks remain supported when requests have no applicable
+prefer/mandatory terms. Protection-only or empty units need no generation but
+still undergo glossary/schema/conflict and final validation checks. This is an
+internal API connection, with no CLI loader or game-specific wiring.
+
 ## Runtime matching and acceptance
 
 Full canonical identity includes ModelID, Glossary and every generation field.
@@ -125,7 +260,8 @@ before generating any unit or segment. Any mismatch returns an error with zero
 Generate calls, accepted translations and TM commits/output publication.
 
 An exact-key candidate is untrusted translated text. It must pass `Validate` for
-the current session/unit/profile, including restored protection/content checks.
+the current session/unit/profile, including restored protection/content and
+applicable glossary checks.
 `tm.Scope` supplies explicit game/artifact namespaces and all key relations;
 the final manifest must match those relations, including empty keys and duplicates,
 before commit. All Core preflight checks still run on hits. A valid hit creates a
@@ -168,10 +304,21 @@ absent. Existing task1–4 focused results can be reused when code is unchanged.
 | IS-4 exact candidate requires current validation/full binding | Same key across imports still rejects old acceptance; malformed protected candidate errors; current valid candidate passes; legacy same-digest/session/unit mismatch rejects | `internal/validate/profile_test.go`: `TestCanonicalProfileExactCandidateStillRequiresValidation`, `TestCanonicalProfileBindingRequiresCompleteProfileAndCurrentImport`, `TestCanonicalProfileExactKeyEligibility`; `internal/artifact/compare_test.go`: `TestCompareFinalSegmentationProfileIdentity` |
 | IS-5 scope/version rules and legacy eligibility | Fixed BLOB fixtures match schema1 key; zero identity and legacy profiles cannot produce keys | This record; `internal/identity/key_test.go`: `TestExactKeyCanonicalBlobs`, `TestExactKeyRejectsZeroIdentity`; `internal/validate/profile_test.go`: `TestCanonicalProfileExactKeyEligibility` |
 
-Focused verification, when relevant code has changed:
+Glossary-specific executable scenarios are recorded in the existing tests:
+
+| Contract | Scenario and binary observable | Test artifact |
+| --- | --- | --- |
+| Canonical schema and exact boundaries/conflicts | Canonical golden equality; expected spans or explicit conflict error | `internal/glossary/glossary_test.go`; `match_test.go`: `TestMatchBoundaries`, `TestMatchConflicts`; `testdata/canonical-v1.json` |
+| Profile and restored-parent validation | Equal profiles bind; changed semantic fields change exact keys; missing mandatory target or invalid protected occurrence rejects | `internal/validate/glossary_profile_test.go`; `glossary_test.go`: `TestValidateMandatoryUsesRawParentAndExactTarget`, `TestValidateGlossaryProtectUsesMatchingBoundaries` |
+| Protection and phrase-safe cuts | Exact round trip and adapter metadata retained; token corruption, overlap and separator escape reject | `internal/protect/glossary_test.go`: `TestGlossaryProtectionRoundTrip`, `TestGlossaryProtectionRejectsAdapterConflicts`, `TestGlossaryTermsAreIndivisibleWithoutTokens`, `TestGlossaryTermCannotEscapeIntoSeparator` |
+| Actual prompt and request terms | Both prompt variants contain quoted terms; wrong request terms reject with zero Generate calls | `internal/prompt/terms_test.go`: `TestGlossaryDataInBothPrompts`; `internal/localize/glossary_request_test.go`; `glossary_pipeline_test.go`: `TestGlossaryCoreRejectsWrongRequestTermsBeforeGeneration` |
+| Parent scope, preflight and TM | Normal/segmented parent accepts one mandatory target; later conflict or excess terms cost prevents TM begin; invalid exact hit regenerates; changed glossary misses | `internal/localize/glossary_pipeline_test.go`: `TestGlossaryRegularAndSegmentedParent`; `glossary_preflight_test.go`; `glossary_tm_test.go` |
+
+Focused reproduction, when relevant code has changed (unchanged focused results
+need not be rerun before the Docker gate):
 
 ```sh
-CGO_ENABLED=0 go test ./internal/identity ./internal/unit ./internal/validate ./internal/localize ./internal/artifact ./internal/prompt -count=1
+CGO_ENABLED=0 go test ./internal/glossary ./internal/identity ./internal/unit ./internal/protect ./internal/validate ./internal/localize ./internal/artifact ./internal/prompt ./internal/inference ./internal/inference/goinfer ./internal/segment ./internal/tm -count=1
 CGO_ENABLED=0 go test ./internal/identity -run 'TestExactKey|TestSourceIdentity|TestProfileIdentity' -count=1 -v
 ```
 
