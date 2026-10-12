@@ -122,13 +122,14 @@ type profileRecord struct {
 
 // ProfileIdentity is immutable and comparable, including its canonical bytes.
 type ProfileIdentity struct {
-	canonical                            string
-	effective                            string
-	model                                string
-	digest                               [32]byte
-	segmentationSchema, boundaryFixtures string
-	segmentation                         SegmentationInput
-	protection, validation               SchemaInput
+	canonical                                     string
+	effective                                     string
+	model                                         string
+	digest                                        [32]byte
+	segmentationSchema, boundaryFixtures          string
+	segmentation                                  SegmentationInput
+	protection, validation                        SchemaInput
+	glossaryMode, glossarySchema, glossaryEntries string
 }
 
 func NewProfileIdentity(input ProfileInput) (ProfileIdentity, error) {
@@ -182,7 +183,7 @@ func NewProfileIdentity(input ProfileInput) (ProfileIdentity, error) {
 	if err != nil {
 		return ProfileIdentity{}, fmt.Errorf("marshal model profile conditions: %w", err)
 	}
-	return ProfileIdentity{canonical: string(canonical), effective: string(effective), model: string(model), digest: sha256.Sum256(canonical), segmentationSchema: input.Segmentation.Schema, boundaryFixtures: input.Segmentation.BoundaryFixtures, segmentation: input.Segmentation, protection: input.Protection, validation: input.Validation}, nil
+	return ProfileIdentity{canonical: string(canonical), effective: string(effective), model: string(model), digest: sha256.Sum256(canonical), segmentationSchema: input.Segmentation.Schema, boundaryFixtures: input.Segmentation.BoundaryFixtures, segmentation: input.Segmentation, protection: input.Protection, validation: input.Validation, glossaryMode: input.Glossary.Mode, glossarySchema: input.Glossary.Schema, glossaryEntries: string(input.Glossary.Entries)}, nil
 }
 
 // MatchesEntry checks common Core conditions even when no model is connected.
@@ -211,6 +212,11 @@ func (p ProfileIdentity) MatchesModel(input ProfileInput) (bool, error) {
 		return false, err
 	}
 	return p.model != "" && p.model == other.model, nil
+}
+
+// Glossary returns the exact caller-owned definition with detached entry bytes.
+func (p ProfileIdentity) Glossary() GlossaryInput {
+	return GlossaryInput{Mode: p.glossaryMode, Schema: p.glossarySchema, Entries: []byte(p.glossaryEntries)}
 }
 
 func (p ProfileIdentity) CanonicalBytes() []byte { return []byte(p.canonical) }

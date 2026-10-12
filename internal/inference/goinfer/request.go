@@ -70,7 +70,7 @@ func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy infe
 	}
 	return inference.NewGenerationRequest(inference.PreparedRequest{
 		RenderedPrompt: rendered.String(), Spans: spans, TokenIDs: ids,
-		Identity: e.identity(), StopIDs: e.stopIDs,
+		Identity: e.identity(), StopIDs: e.stopIDs, Terms: input.Terms,
 	}, policy)
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/segment"
 	"github.com/sh4869221b/yakuori/internal/unit"
@@ -15,6 +16,7 @@ type InferenceEngine struct {
 	limits       config.Limits
 	engine       inference.Engine
 	buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)
+	buildTerms   TermsRequestBuilder
 }
 
 func NewInferenceEngine(engine inference.Engine, buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) InferenceEngine {
@@ -41,7 +43,11 @@ type inferencePlan struct {
 }
 
 func (e InferenceEngine) plan(ctx context.Context, id unit.UnitID, text string) (inferencePlan, error) {
-	request, err := e.buildRequest(ctx, id, text)
+	return e.planWithTerms(ctx, id, RequestInput{Text: text})
+}
+
+func (e InferenceEngine) planWithTerms(ctx context.Context, id unit.UnitID, input RequestInput) (inferencePlan, error) {
+	request, err := buildTermsRequest(ctx, id, input, e.buildTerms, e.buildRequest)
 	if err != nil {
 		return inferencePlan{}, err
 	}
@@ -58,6 +64,37 @@ func (e InferenceEngine) plan(ctx context.Context, id unit.UnitID, text string) 
 		return inferencePlan{}, segment.ErrContextLimit
 	}
 	return inferencePlan{request: request, count: count}, ctx.Err()
+}
+
+type RequestInput struct {
+	Text  string
+	Terms glossary.Glossary
+}
+
+type TermsRequestBuilder func(context.Context, unit.UnitID, RequestInput) (inference.GenerationRequest, error)
+
+func NewGlossaryInferenceEngine(engine inference.Engine, build TermsRequestBuilder) InferenceEngine {
+	return InferenceEngine{engine: engine, buildTerms: build, limits: config.DefaultLimits()}
+}
+
+func buildTermsRequest(ctx context.Context, id unit.UnitID, input RequestInput, build TermsRequestBuilder, legacy func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) (inference.GenerationRequest, error) {
+	var request inference.GenerationRequest
+	var err error
+	if build != nil {
+		request, err = build(ctx, id, input)
+	} else {
+		if !input.Terms.Empty() || legacy == nil {
+			return inference.GenerationRequest{}, ErrInferenceProfile
+		}
+		request, err = legacy(ctx, id, input.Text)
+	}
+	if err != nil {
+		return inference.GenerationRequest{}, err
+	}
+	if request.Terms() != input.Terms {
+		return inference.GenerationRequest{}, ErrInferenceProfile
+	}
+	return request, nil
 }
 
 func (e InferenceEngine) generate(ctx context.Context, plan inferencePlan) (Generation, error) {

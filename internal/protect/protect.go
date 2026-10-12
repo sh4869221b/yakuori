@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/unit"
 )
 
@@ -38,9 +39,17 @@ type manifest struct {
 	tokenizedReserved  map[string]int
 	generationRequired bool
 	payloadRequired    bool
+	glossary           glossary.Glossary
+	glossaryMatches    []glossary.Match
+	blocked            []ByteRange
 }
 
 func Prepare(session unit.Session, id unit.UnitID) (Prepared, error) {
+	return PrepareWithGlossary(session, id, glossary.Glossary{})
+}
+
+// PrepareWithGlossary checks all raw source matches before tokenizing protections.
+func PrepareWithGlossary(session unit.Session, id unit.UnitID, g glossary.Glossary) (Prepared, error) {
 	u, err := session.Unit(id)
 	if err != nil {
 		return Prepared{}, err
@@ -48,6 +57,10 @@ func Prepare(session unit.Session, id unit.UnitID) (Prepared, error) {
 	source := string(u.Source())
 	if err := checkText(source); err != nil {
 		return Prepared{}, fmt.Errorf("%w: %v", ErrInvalidSource, err)
+	}
+	matches, err := g.Match(source)
+	if err != nil {
+		return Prepared{}, fmt.Errorf("%w: %w", ErrInvalidSource, err)
 	}
 	m := &manifest{session: session, id: id, source: source, tokens: make(map[string]int)}
 	spans := u.ProtectionSpans()
@@ -72,7 +85,10 @@ func Prepare(session unit.Session, id unit.UnitID) (Prepared, error) {
 			m.ordered = append(m.ordered, index)
 		}
 	}
-	observed, err := scanLiterals(source, m.literals)
+	if err := m.addGlossary(matches, spans); err != nil {
+		return Prepared{}, err
+	}
+	observed, err := m.scanLiterals(source)
 	if err != nil {
 		return Prepared{}, fmt.Errorf("%w: %v", ErrInvalidSource, err)
 	}
@@ -84,7 +100,7 @@ func Prepare(session unit.Session, id unit.UnitID) (Prepared, error) {
 	}
 	payload := withoutOccurrences(source, observed)
 	m.payloadRequired = strings.TrimSpace(payload) != ""
-	m.generationRequired = source != "" && (len(spans) == 0 || m.payloadRequired)
+	m.generationRequired = source != "" && (len(m.occurrences) == 0 || m.payloadRequired)
 	for namespace := 0; ; namespace++ {
 		m.prefix = fmt.Sprintf("[[YAKUORI_%d_", namespace)
 		if !strings.Contains(source, m.prefix) {
@@ -172,7 +188,7 @@ func (p Prepared) CheckRestored(session unit.Session, id unit.UnitID, text strin
 	if strings.Contains(text, m.prefix) || !maps.Equal(reservedTokens(text), m.sourceReserved) {
 		return fmt.Errorf("%w: unrestored or unknown reserved token", ErrInvalidCandidate)
 	}
-	observed, err := scanLiterals(text, m.literals)
+	observed, err := m.scanLiterals(text)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidCandidate, err)
 	}

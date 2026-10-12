@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/protect"
 	"github.com/sh4869221b/yakuori/internal/segment"
@@ -14,11 +15,25 @@ import (
 type segmentedGenerator struct {
 	engine       inference.Engine
 	buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)
+	buildTerms   TermsRequestBuilder
 }
 
 // NewSegmentedCore plans all requests before sequential generation. The caller owns the engine.
 func NewSegmentedCore(engine inference.Engine, buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) Core {
 	return Core{segmented: &segmentedGenerator{engine: engine, buildRequest: buildRequest}, limits: config.DefaultLimits()}
+}
+
+func NewGlossarySegmentedCore(engine inference.Engine, build TermsRequestBuilder) Core {
+	return Core{segmented: &segmentedGenerator{engine: engine, buildTerms: build}, limits: config.DefaultLimits()}
+}
+
+func NewGlossarySegmentedCoreWithLimits(engine inference.Engine, build TermsRequestBuilder, limits config.Limits) (Core, error) {
+	if err := limits.Check(); err != nil {
+		return Core{}, err
+	}
+	core := NewGlossarySegmentedCore(engine, build)
+	core.limits = limits
+	return core, nil
 }
 
 // NewSegmentedCoreWithLimits keeps explicit finite experimental limits separate from product defaults.
@@ -45,12 +60,16 @@ func segmentedFailure(err error) (Generation, error) {
 }
 
 func (g *segmentedGenerator) plan(ctx context.Context, id unit.UnitID, prepared protect.Prepared, limits config.Limits) (segment.Plan, error) {
+	return g.planWithTerms(ctx, id, prepared, limits, glossary.Glossary{})
+}
+
+func (g *segmentedGenerator) planWithTerms(ctx context.Context, id unit.UnitID, prepared protect.Prepared, limits config.Limits, terms glossary.Glossary) (segment.Plan, error) {
 	info, err := g.engine.Info(ctx)
 	if err != nil {
 		return segment.Plan{}, err
 	}
 	return segment.BuildWithLimits(ctx, id, prepared, info, func(ctx context.Context, text string) (inference.GenerationRequest, error) {
-		return g.buildRequest(ctx, id, text)
+		return buildTermsRequest(ctx, id, RequestInput{Text: text, Terms: terms}, g.buildTerms, g.buildRequest)
 	}, g.engine.CountTokens, limits)
 }
 
