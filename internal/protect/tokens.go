@@ -6,9 +6,11 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/sh4869221b/yakuori/internal/glossary"
 )
 
-var reservedTokenPattern = regexp.MustCompile(`\[\[YAKUORI_[0-9]+_[0-9]+\]\]`)
+var reservedTokenPattern = regexp.MustCompile(glossary.ReservedTokenPattern)
 
 func reservedTokens(text string) map[string]int {
 	counts := make(map[string]int)

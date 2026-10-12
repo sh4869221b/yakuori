@@ -142,7 +142,7 @@ bytes; it tests serialization, not a conflict-free executable dictionary.
 | Field | Contract |
 | --- | --- |
 | `source` | Nonempty, valid UTF-8 without NUL. |
-| `target` | Nonempty valid UTF-8 without NUL for `prefer` and `mandatory`. `protect` has no target; JSON must omit it, even an empty or null value is rejected. |
+| `target` | Nonempty valid UTF-8 without NUL for `prefer` and `mandatory`. Mandatory targets cannot contain reserved protection tokens matching `[[YAKUORI_<digits>_<digits>]]`, which candidate protection rejects. `protect` has no target; JSON must omit it, even an empty or null value is rejected. |
 | `mode` | `prefer` recommends a target; `protect` restores the matched original bytes; `mandatory` requires its target in the completed translation. |
 | `match` | Per-entry `literal` or `word`; no default. |
 

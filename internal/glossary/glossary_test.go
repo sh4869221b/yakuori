@@ -102,3 +102,30 @@ func TestEmptyGlossary(t *testing.T) {
 		t.Fatalf("empty matches = %v, error = %v", matches, err)
 	}
 }
+
+func TestMandatoryTargetReservedTokens(t *testing.T) {
+	for _, tt := range []struct {
+		target  string
+		invalid bool
+	}{
+		{"[[YAKUORI_0_0]]", true},
+		{"訳 [[YAKUORI_12_034]] 文", true},
+		{"[YAKUORI_0_0]", false},
+		{"猫", false},
+	} {
+		t.Run(tt.target, func(t *testing.T) {
+			// Given
+			entry := glossary.Entry{Source: "cat", Target: tt.target, Mode: glossary.Mandatory, Match: glossary.Word}
+			// When
+			g, err := glossary.New(glossary.Schema, []glossary.Entry{entry})
+			// Then
+			if tt.invalid {
+				if !errors.Is(err, glossary.ErrInvalidGlossary) || !g.Empty() {
+					t.Fatalf("glossary=%v error=%v; want invalid mandatory target", g, err)
+				}
+			} else if err != nil || g.Empty() {
+				t.Fatalf("glossary=%v error=%v; want accepted target", g, err)
+			}
+		})
+	}
+}

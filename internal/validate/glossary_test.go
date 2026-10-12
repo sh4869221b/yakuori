@@ -83,6 +83,7 @@ func TestValidateRejectsUnsupportedOrNoncanonicalGlossary(t *testing.T) {
 		{"opaque entries", "v1", []byte{0, 255}},
 		{"noncanonical entries", glossary.Schema, []byte(`[ {"source":"cat","target":"猫","mode":"mandatory","match":"word"} ]`)},
 		{"provided empty entries", glossary.Schema, []byte(`[]`)},
+		{"reserved mandatory target", glossary.Schema, []byte(`[{"source":"cat","target":"[[YAKUORI_0_0]]","mode":"mandatory","match":"word"}]`)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: opaque identity remains constructible, but cannot execute.
