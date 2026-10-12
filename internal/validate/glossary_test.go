@@ -102,3 +102,28 @@ func TestValidateRejectsUnsupportedOrNoncanonicalGlossary(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateGlossaryProtectUsesMatchingBoundaries(t *testing.T) {
+	for _, tt := range []struct {
+		candidate string
+		invalid   bool
+	}{
+		{"cat scatter", false}, {"cat 散らす", false}, {"scatter", true}, {"cat cat 散らす", true}, {"scat 散らす", true},
+	} {
+		t.Run(tt.candidate, func(t *testing.T) {
+			// Given
+			session, ids, _ := fixture(t, "cat scatter")
+			profile := glossaryProfile(t, glossary.Entry{Source: "cat", Mode: glossary.Protect, Match: glossary.Word})
+			// When
+			accepted, err := Validate(session, ids[0], profile, tt.candidate)
+			// Then
+			if tt.invalid {
+				if !errors.Is(err, ErrInvalidCandidate) || accepted != (AcceptedTranslation{}) {
+					t.Fatalf("accepted=%v err=%v", accepted, err)
+				}
+			} else if err != nil || accepted.Text() != tt.candidate {
+				t.Fatalf("accepted=%v err=%v", accepted, err)
+			}
+		})
+	}
+}

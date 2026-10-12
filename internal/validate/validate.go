@@ -33,12 +33,12 @@ func Validate(session unit.Session, id unit.UnitID, profile Profile, candidate s
 	if err != nil {
 		return AcceptedTranslation{}, fmt.Errorf("%w: %w", ErrInvalidSource, err)
 	}
-	prepared, err := protect.Prepare(session, id)
+	prepared, err := protect.PrepareWithGlossary(session, id, g)
 	if err != nil {
-		return AcceptedTranslation{}, fmt.Errorf("%w: %v", ErrInvalidSource, err)
+		return AcceptedTranslation{}, fmt.Errorf("%w: %w", ErrInvalidSource, err)
 	}
 	if err := prepared.CheckRestored(session, id, candidate); err != nil {
-		return AcceptedTranslation{}, fmt.Errorf("%w: %v", ErrInvalidCandidate, err)
+		return AcceptedTranslation{}, fmt.Errorf("%w: %w", ErrInvalidCandidate, err)
 	}
 	if err := checkContent(source, candidate); err != nil {
 		return AcceptedTranslation{}, err

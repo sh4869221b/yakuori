@@ -63,8 +63,8 @@ func (p Prepared) Cuts() []Cut {
 				}
 				next += size
 			}
-			if _, ok := p.sourceOffset(offset); ok {
-				if _, ok := p.sourceOffset(next); ok {
+			if start, ok := p.sourceOffset(offset); ok {
+				if stop, ok := p.sourceOffset(next); ok && p.data.safeGlossarySeparator(start, stop) {
 					cuts = append(cuts, Cut{offset, next})
 				}
 			}
@@ -77,8 +77,8 @@ func (p Prepared) Cuts() []Cut {
 				}
 				next += size
 			}
-			if _, ok := p.sourceOffset(end); ok {
-				if _, ok := p.sourceOffset(next); ok {
+			if start, ok := p.sourceOffset(end); ok {
+				if stop, ok := p.sourceOffset(next); ok && p.data.safeGlossarySeparator(start, stop) {
 					cuts = append(cuts, Cut{end, next})
 				}
 			}
@@ -119,7 +119,8 @@ func (p Prepared) sourceOffset(offset int) (int, bool) {
 		start := previousPrepared + occ.start - previousSource
 		end := start + len(fmt.Sprintf("%s%d]]", m.prefix, i))
 		if offset <= start {
-			return previousSource + offset - previousPrepared, depth == 0
+			source := previousSource + offset - previousPrepared
+			return source, depth == 0 && m.safeGlossaryOffset(source)
 		}
 		if offset < end {
 			return 0, false
@@ -133,12 +134,13 @@ func (p Prepared) sourceOffset(offset int) (int, bool) {
 		}
 		previousSource, previousPrepared = occ.end, end
 	}
-	return previousSource + offset - previousPrepared, depth == 0
+	source := previousSource + offset - previousPrepared
+	return source, depth == 0 && m.safeGlossaryOffset(source)
 }
 
 func (s Piece) subset() *manifest {
 	parent := s.owner
-	m := &manifest{source: s.Source(), text: s.Text(), prefix: parent.prefix, literals: parent.literals, tokens: make(map[string]int)}
+	m := &manifest{source: s.Source(), text: s.Text(), prefix: parent.prefix, literals: parent.literals, glossary: parent.glossary, tokens: make(map[string]int)}
 	for i, occ := range parent.occurrences {
 		if occ.start < s.source.Start || occ.end > s.source.End {
 			continue
@@ -185,7 +187,7 @@ func (p Prepared) CheckCandidate(piece Piece, candidate string) error {
 	if strings.Contains(text, m.prefix) || !maps.Equal(reservedTokens(text), m.sourceReserved) {
 		return fmt.Errorf("%w: unrestored or unknown reserved token", ErrInvalidCandidate)
 	}
-	observed, err := scanLiterals(text, m.literals)
+	observed, err := m.scanLiterals(text)
 	if err == nil {
 		err = m.checkStructure(observed)
 	}

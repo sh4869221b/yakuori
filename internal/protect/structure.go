@@ -21,6 +21,9 @@ type occurrence struct{ start, end, literal int }
 func scanLiterals(text string, literals []literal) ([]occurrence, error) {
 	var found []occurrence
 	for i, item := range literals {
+		if item.kind == "" {
+			continue
+		}
 		for offset := 0; offset < len(text); {
 			relative := strings.Index(text[offset:], item.text)
 			if relative < 0 {
