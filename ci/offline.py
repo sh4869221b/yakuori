@@ -6,7 +6,9 @@ The whole process tree is traced with
 INET6 socket creation, connect and destination-addressed send, plus AF_UNIX
 connect and destination-addressed send that would bypass a resolver or proxy,
 are refused. AF_UNIX socketpair and other in-process IPC stay allowed. Unknown,
-blank or truncated trace lines are never rounded to zero.
+blank or truncated trace lines are never rounded to zero: a record counts only
+once its argument list closes outside quotes and ``-yy`` annotations and its printed
+result is complete.
 
 Evidence is written next to ``--evidence PREFIX``: PREFIX.trace (raw trace),
 PREFIX.stdout, PREFIX.stderr (the target's streams) and PREFIX.json (detector
@@ -32,6 +34,11 @@ UNFINISHED = " <unfinished ...>"
 MARKER = re.compile(r"^(?:\d+\s+)?(?:\+\+\+|---)")
 RESUMED = re.compile(r"^<\.\.\.\s+([a-z_][a-z0-9_]*)\s+resumed>")
 CALL = re.compile(r"^([a-z_][a-z0-9_]*)\((.*)$")
+ASSIGNMENT = re.compile(r"\s*=\s*")
+COUNT = re.compile(r"[0-9]+")
+ERRNO = re.compile(r"(?:-1|\?) [A-Z][A-Z0-9_]* \([^()]*\)\Z")
+OPENERS = {"(": ")", "[": "]", "{": "}", "<": ">"}
+CLOSERS = ")]}>"
 SOCKADDR = re.compile(r"sa_family=(AF_[A-Z0-9_]+)")
 FAMILY = re.compile(r"\bAF_[A-Z0-9_]+")
 
@@ -105,6 +112,70 @@ class Analysis:
         return reasons
 
 
+def closer(body: str, start: int, stack: list[str]) -> int | None:
+    """Index of the character closing the bracket sequence already open at ``start``, or None.
+
+    strace ends a completed record with ``) = <value>``, but that text also occurs inside a
+    printed value: in a quoted argument, and in the unquoted ``-yy`` descriptor annotation a
+    real trace prints verbatim, such as ``sendto(4</tmp/a) = 5.bin>, ...)``. Quote, escape and
+    bracket state therefore decide which characters are delimiters - ``-yy`` escapes quotes,
+    ``<`` and spaces inside descriptor paths, and the ``->`` of a path or of a ``[128 => 2]``
+    pair must not close anything - and a sequence that never closes is a record cut mid-write.
+    """
+    quoted = False
+    index = start
+    while index < len(body):
+        char = body[index]
+        if quoted:
+            if char == "\\":
+                index += 2
+                continue
+            if char == '"':
+                quoted = False
+        elif char == "\\":
+            index += 2
+            continue
+        elif char == '"':
+            quoted = True
+        elif char in OPENERS:
+            stack.append(OPENERS[char])
+        elif char in CLOSERS and char == stack[-1]:
+            stack.pop()
+            if not stack:
+                return index
+        index += 1
+    return None
+
+
+def complete_result(tail: str) -> bool:
+    """True only for a result strace prints after a completed argument list.
+
+    A completed record ends in ``?``, in an integer, in that integer plus a closed ``-yy``
+    annotation such as ``4<TCP:[127.0.0.1:9->127.0.0.1:1]>``, in a failure ``-1 ERRNO
+    (message)``, or in an interrupted restart ``? ERRNO (message)``. Every other tail - the
+    ``= -``, ``= -1``, ``= -1 EAGAIN``, ``= -1 EAGAIN (Resource temporaril`` and
+    ``= 8<UNIX-STREAM:[`` that a cut line leaves behind - is a partial result, so the record
+    is not completed.
+    """
+    match = ASSIGNMENT.match(tail)
+    if match is None:
+        return False
+    text = tail[match.end():]
+    if text == "?" or ERRNO.match(text) is not None:
+        return True
+    count = COUNT.match(text)
+    if count is None:
+        return False
+    rest = text[count.end():]
+    return rest == "" or (rest.startswith("<") and closer(rest, 1, [">"]) == len(rest) - 1)
+
+
+def complete_record(body: str, start: int) -> bool:
+    """True when the argument list already open at ``start`` closes and carries a complete result."""
+    end = closer(body, start, [")"])
+    return end is not None and complete_result(body[end + 1:])
+
+
 def analyze(text: str) -> Analysis:
     result = Analysis()
     for raw in text.splitlines():
@@ -120,18 +191,26 @@ def analyze(text: str) -> Analysis:
         parts = stripped.split(None, 1)
         if len(parts) == 2 and parts[0].isdigit():
             pid, body = int(parts[0]), parts[1]
-        if body.endswith(UNFINISHED):
+        unfinished = body.endswith(UNFINISHED)
+        if unfinished:
             result.unfinished += 1
             body = body[: -len(UNFINISHED)]
-        if RESUMED.match(body) is not None:
+        resumed = RESUMED.match(body)
+        if resumed is not None:
             if pid is None:
                 result.unparsed.append({"line": raw, "reason": "trace line without pid prefix; -f following unverified"})
+                continue
+            if not complete_record(body, resumed.end()):
+                result.unparsed.append({"line": raw, "reason": "resumed line without a completed syscall result; truncated trace record"})
                 continue
             result.resumed += 1
             continue
         match = CALL.match(body)
         if match is None:
             result.unparsed.append({"line": raw, "reason": "neither a syscall line nor a marker"})
+            continue
+        if not unfinished and not complete_record(body, match.start(2)):
+            result.unparsed.append({"line": raw, "reason": "syscall line without a completed result; truncated trace record"})
             continue
         name, args = match.groups()
         entry = {"pid": pid, "line": raw, "syscall": name}

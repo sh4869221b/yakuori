@@ -110,6 +110,40 @@ DANGLING_TRACE = (
     '4242 connect(3<TCP:127.0.0.1:9>, {sa_family=AF_INET, sin_port=htons(9), sin_addr=inet_addr("127.0.0.1")}, 16 <unfinished ...>\n'
 )
 GARBAGE_TRACE = '4242 socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, IPPROTO_TCP) = 3\nnot a syscall line\n'
+# A complete AF_INET socket line comes first: the fake tracer replays the fixture as its own
+# preflight trace, which must show an INET attempt before tracing is trusted.
+INET_LINE = "4242 socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, IPPROTO_TCP) = 3\n"
+COMPLETE_LOCAL_IPC_TRACE = INET_LINE + "4242 socketpair(AF_UNIX, SOCK_STREAM, 0, [3, 4]) = 0\n"
+CUT_LOCAL_IPC_TRACE = INET_LINE + "4242 socketpair(AF_UNIX, SOCK_STREAM, 0"
+CUT_LOCAL_IPC_NEWLINE_TRACE = INET_LINE + "4242 socketpair(AF_UNIX, SOCK_STREAM, 0\n"
+CUT_RECEIVE_TRACE = INET_LINE + "4242 recvfrom(3,"
+CUT_RESUMED_TRACE = INET_LINE + "4242 <... recvfrom resumed>"
+PAIRED_ALLOWED_IPC_TRACE = (INET_LINE + '4242 recvfrom(3, "probe", 5, 0, NULL, NULL <unfinished ...>\n'
+                            "4242 <... recvfrom resumed>) = 5\n")
+# The only ') = <value>' text in each cut fixture sits inside a quoted argument, so the
+# record is still incomplete and must not be read as a completed syscall.
+QUOTED_MARKER_LINE = '4242 recvfrom(3, "abc) = 5'
+CUT_QUOTED_MARKER_TRACE = INET_LINE + QUOTED_MARKER_LINE
+CUT_QUOTED_MARKER_NEWLINE_TRACE = INET_LINE + QUOTED_MARKER_LINE + "\n"
+CUT_QUOTED_ESCAPE_TRACE = INET_LINE + '4242 recvfrom(3, "a\\") = 5'
+CUT_QUOTED_MARKER_AFTER_ARG_TRACE = INET_LINE + '4242 recvfrom(3, "abc) = 5", 7'
+COMPLETE_QUOTED_MARKER_TRACE = INET_LINE + '4242 recvfrom(3, "abc) = 5", 7, 0, NULL, NULL) = 7\n'
+# Real strace prints the result after the argument list and -yy prints descriptor paths
+# verbatim, so a record cut mid-result must not read as a completed syscall: a partial failure
+# ('= -', '= -1 EAGAIN (Resource temporaril'), an open descriptor annotation
+# ('= 8<UNIX-STREAM:[...]'), or ') = ' text inside a real fd path such as
+# sendto(4</tmp/a) = 5.bin>, ...) are all incomplete.
+CUT_NEGATIVE_RESULT_TRACE = INET_LINE + '4242 recvfrom(3, "probe", 5, 0, NULL, NULL) = -'
+CUT_NEGATIVE_RESULT_NEWLINE_TRACE = CUT_NEGATIVE_RESULT_TRACE + "\n"
+CUT_ERRNO_RESULT_TRACE = INET_LINE + '4242 recvfrom(3, "probe", 5, 0, NULL, NULL) = -1 EAGAIN (Resource temporaril'
+CUT_RESULT_ANNOTATION_TRACE = INET_LINE + "4242 socket(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0) = 8<UNIX-STREAM:[6120774]"
+CUT_FD_PATH_MARKER_TRACE = INET_LINE + '4242 sendto(4</tmp/a) = 5.bin>, "x", 1, 0, NULL'
+# The same shapes as complete records: a closed error result, a closed descriptor annotation,
+# and ') = ' plus an escaped quote inside real -yy fd paths.
+COMPLETE_ERRNO_RESULT_TRACE = INET_LINE + '4242 recvfrom(3, "probe", 5, 0, NULL, NULL) = -1 EAGAIN (Resource temporarily unavailable)\n'
+COMPLETE_RESULT_ANNOTATION_TRACE = INET_LINE + "4242 socket(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0) = 8<UNIX-STREAM:[6120774]>\n"
+COMPLETE_FD_PATH_MARKER_TRACE = INET_LINE + '4242 sendto(4</tmp/a) = 5.bin>, "x", 1, 0, NULL, 0) = -1 ENOTSOCK (Socket operation on non-socket)\n'
+COMPLETE_ESCAPED_QUOTE_PATH_TRACE = INET_LINE + '4242 sendto(6</tmp/a\\"b.bin>, "x", 1, 0, NULL, 0) = -1 ENOTSOCK (Socket operation on non-socket)\n'
 
 
 class ObserverTests(unittest.TestCase):
@@ -306,6 +340,123 @@ class ObserverTests(unittest.TestCase):
         evidence = self.evidence(prefix)
         self.assertEqual(evidence["status"], "invalid")
         self.assertEqual(evidence["trace"]["unparsed"][0]["line"], "not a syscall line")
+
+    def test_complete_local_ipc_trace_stays_allowed(self):
+        fixture = self.root / "complete-ipc.trace"
+        fixture.write_text(COMPLETE_LOCAL_IPC_TRACE)
+        path, env = self.fake_strace(f"fixture:{fixture}")
+        prefix = self.prefix("complete-ipc")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        evidence = self.evidence(prefix)
+        self.assertEqual([entry["detail"] for entry in evidence["attempts"]], ["socket(AF_INET)"], evidence["attempts"])
+        self.assertEqual(evidence["invalid_reasons"], [])
+        self.assertEqual(evidence["trace"]["unparsed"], [])
+        self.assertTrue(any(entry["syscall"] == "socketpair" for entry in evidence["allowed_local"]), evidence["allowed_local"])
+
+    def test_truncated_trace_records_are_invalid(self):
+        # Each fixture is a complete INET line followed by one record cut mid-write: the
+        # cut record cannot be classified, so the whole trace has to be invalid rather
+        # than silently reporting only the complete attempt.
+        for name, text in (("cut-ipc", CUT_LOCAL_IPC_TRACE),
+                           ("cut-ipc-newline", CUT_LOCAL_IPC_NEWLINE_TRACE),
+                           ("cut-receive", CUT_RECEIVE_TRACE),
+                           ("cut-resumed", CUT_RESUMED_TRACE)):
+            with self.subTest(name=name):
+                fixture = self.root / f"{name}.trace"
+                fixture.write_text(text)
+                path, env = self.fake_strace(f"fixture:{fixture}")
+                prefix = self.prefix(name)
+                run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env)
+                self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                evidence = self.evidence(prefix)
+                self.assertEqual(evidence["status"], "invalid")
+                self.assertEqual(evidence["allowed_local"], [])
+                self.assertEqual([entry["line"] for entry in evidence["trace"]["unparsed"]], [text.splitlines()[-1]], evidence["trace"])
+                self.assertTrue(any("could not be classified" in reason for reason in evidence["invalid_reasons"]),
+                                evidence["invalid_reasons"])
+
+    def test_paired_unfinished_resumed_allowed_ipc_is_not_invalid(self):
+        fixture = self.root / "paired-ipc.trace"
+        fixture.write_text(PAIRED_ALLOWED_IPC_TRACE)
+        path, env = self.fake_strace(f"fixture:{fixture}")
+        prefix = self.prefix("paired-ipc")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        evidence = self.evidence(prefix)
+        self.assertEqual((evidence["trace"]["unfinished"], evidence["trace"]["resumed"]), (1, 1))
+        self.assertEqual(evidence["invalid_reasons"], [])
+        self.assertEqual(evidence["trace"]["unparsed"], [])
+        self.assertTrue(any(entry["syscall"] == "recvfrom" for entry in evidence["allowed_local"]), evidence["allowed_local"])
+
+    def test_quoted_marker_truncations_are_invalid(self):
+        for name, text in (("cut-quoted-marker", CUT_QUOTED_MARKER_TRACE),
+                           ("cut-quoted-marker-newline", CUT_QUOTED_MARKER_NEWLINE_TRACE),
+                           ("cut-quoted-escape", CUT_QUOTED_ESCAPE_TRACE),
+                           ("cut-quoted-marker-after-arg", CUT_QUOTED_MARKER_AFTER_ARG_TRACE)):
+            with self.subTest(name=name):
+                fixture = self.root / f"{name}.trace"
+                fixture.write_text(text)
+                path, env = self.fake_strace(f"fixture:{fixture}")
+                prefix = self.prefix(name)
+                run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env)
+                self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                evidence = self.evidence(prefix)
+                self.assertEqual(evidence["status"], "invalid")
+                self.assertEqual(evidence["allowed_local"], [])
+                self.assertEqual([entry["line"] for entry in evidence["trace"]["unparsed"]], [text.splitlines()[-1]], evidence["trace"])
+
+    def test_complete_quoted_marker_record_stays_allowed(self):
+        fixture = self.root / "complete-quoted-marker.trace"
+        fixture.write_text(COMPLETE_QUOTED_MARKER_TRACE)
+        path, env = self.fake_strace(f"fixture:{fixture}")
+        prefix = self.prefix("complete-quoted-marker")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        evidence = self.evidence(prefix)
+        self.assertEqual(evidence["invalid_reasons"], [])
+        self.assertEqual(evidence["trace"]["unparsed"], [])
+        self.assertTrue(any(entry["syscall"] == "recvfrom" for entry in evidence["allowed_local"]), evidence["allowed_local"])
+
+    def test_truncated_result_records_are_invalid(self):
+        # The argument list closes but the printed result is cut: a partial failure, an
+        # unclosed -yy descriptor annotation, or ') = ' text inside a real fd path. A partial
+        # result is not a completed syscall, so such a trace has to be invalid.
+        for name, text in (("cut-negative-result", CUT_NEGATIVE_RESULT_TRACE),
+                           ("cut-negative-result-newline", CUT_NEGATIVE_RESULT_NEWLINE_TRACE),
+                           ("cut-errno-result", CUT_ERRNO_RESULT_TRACE),
+                           ("cut-result-annotation", CUT_RESULT_ANNOTATION_TRACE),
+                           ("cut-fd-path-marker", CUT_FD_PATH_MARKER_TRACE)):
+            with self.subTest(name=name):
+                fixture = self.root / f"{name}.trace"
+                fixture.write_text(text)
+                path, env = self.fake_strace(f"fixture:{fixture}")
+                prefix = self.prefix(name)
+                run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env)
+                self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                evidence = self.evidence(prefix)
+                self.assertEqual(evidence["status"], "invalid")
+                self.assertEqual(evidence["allowed_local"], [])
+                self.assertEqual([entry["line"] for entry in evidence["trace"]["unparsed"]], [text.splitlines()[-1]], evidence["trace"])
+
+    def test_complete_result_records_stay_allowed(self):
+        # Controls: these are the records strace prints complete, so the completeness check
+        # must keep accepting them instead of rejecting real records.
+        for name, text, syscall in (("complete-errno-result", COMPLETE_ERRNO_RESULT_TRACE, "recvfrom"),
+                                    ("complete-result-annotation", COMPLETE_RESULT_ANNOTATION_TRACE, "socket"),
+                                    ("complete-fd-path-marker", COMPLETE_FD_PATH_MARKER_TRACE, "sendto"),
+                                    ("complete-escaped-quote-path", COMPLETE_ESCAPED_QUOTE_PATH_TRACE, "sendto")):
+            with self.subTest(name=name):
+                fixture = self.root / f"{name}.trace"
+                fixture.write_text(text)
+                path, env = self.fake_strace(f"fixture:{fixture}")
+                prefix = self.prefix(name)
+                run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env)
+                self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+                evidence = self.evidence(prefix)
+                self.assertEqual(evidence["invalid_reasons"], [])
+                self.assertEqual(evidence["trace"]["unparsed"], [])
+                self.assertTrue(any(entry["syscall"] == syscall for entry in evidence["allowed_local"]), evidence["allowed_local"])
 
     def test_missing_trace_file_is_invalid(self):
         path, env = self.fake_strace("missing")
