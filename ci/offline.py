@@ -203,14 +203,36 @@ def live_tree(roots: list[int]) -> list[int]:
     return found
 
 
+def traced_pids(tracer: int) -> list[int]:
+    """Every process the tracer still follows, read from the existing ptrace relationship.
+
+    This is the link that survives a descendant double-forking, calling setsid and being
+    reparented to pid 1: such a daemon is still traced, so it must still be stopped.
+    """
+    found: list[int] = []
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit():
+            continue
+        try:
+            status = Path(f"/proc/{entry}/status").read_text()
+        except OSError:
+            continue
+        for line in status.splitlines():
+            if line.startswith("TracerPid:"):
+                if line.split()[1] == str(tracer):
+                    found.append(int(entry))
+                break
+    return found
+
+
 def record_tree(identity: dict[int, str], root: int, group: int) -> None:
-    """Record every live traced process, by parent chain and by process-group membership."""
-    for pid in live_tree([root, *sorted(identity)]):
+    """Record every live traced process: parent chain, process group and ptrace link."""
+    members = [member["pid"] for member in group_members(group)]
+    linked = traced_pids(root)
+    for pid in [*live_tree([root, *sorted(identity), *members, *linked]), *members, *linked]:
         record = process_record(pid)
         if record is not None:
             identity.setdefault(pid, record["starttime"])
-    for member in group_members(group):
-        identity.setdefault(member["pid"], member["starttime"])
 
 
 def group_members(group: int) -> list[dict[str, Any]]:
@@ -234,12 +256,14 @@ def owned_alive(pid: int, starttime: str) -> bool:
 def stop_traced(root: int, group: int) -> None:
     """Kill the traced tree and record in TEARDOWN what actually stayed alive.
 
-    Two verified failures shape this: a repeated SIGINT/SIGTERM delivered while the
+    Three verified failures shape this: a repeated SIGINT/SIGTERM delivered while the
     cleanup ran aborted it and leaked strace plus its target while the result claimed
-    the group had stopped, and a descendant that called setsid left the process group
-    and survived a timeout. Interrupts are absorbed for the whole region, descendants
-    are found by parent chain as well as by group, and each kill is sent only while the
-    recorded start time still matches so a reused pid is never signalled.
+    the group had stopped; a descendant that called setsid left the process group and
+    survived a timeout; and a descendant that double-forked, called setsid and was
+    reparented to pid 1 survived a timeout because nothing linked it back to the tracer.
+    Interrupts are absorbed for the whole region, descendants are found by parent chain,
+    by process group and by the tracer's own ptrace link, and each kill is sent only
+    while the recorded start time still matches so a reused pid is never signalled.
     """
     global IN_TEARDOWN
     identity: dict[int, str] = {}

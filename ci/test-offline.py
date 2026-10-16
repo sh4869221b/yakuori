@@ -167,6 +167,12 @@ class ObserverTests(unittest.TestCase):
         except FileNotFoundError:
             return None
 
+    def process_field(self, pid, index):
+        try:
+            return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[-1].split()[index]
+        except FileNotFoundError:
+            return None
+
     def ready_fifo(self):
         fifo = self.root / f"ready-{self.runs + 1}.fifo"
         os.mkfifo(fifo)
@@ -401,6 +407,41 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(evidence["status"], "timeout")
         self.assertEqual(evidence["descendants_after_exit"], [])
         self.assertIn(escapee, evidence["descendants_stopped"])
+
+    def test_reparented_daemon_descendant_is_stopped_on_timeout(self):
+        fifo = self.ready_fifo()
+        holder = self.root / "daemon-holder.sh"
+        holder.write_text("#!/bin/sh\nsleep 600 &\nwait\n")
+        holder.chmod(0o700)
+        target = self.root / "daemon-target.py"
+        target.write_text(textwrap.dedent(f"""\
+            import os
+            middle = os.fork()
+            if middle == 0:
+                os.setsid()
+                if os.fork() == 0:
+                    open("{self.root}/daemon.pid", "w").write(str(os.getpid()))
+                    with open("{fifo}", "w") as handle:
+                        handle.write("ready\\n")
+                    os.execvp("/bin/sh", ["/bin/sh", "{holder}"])
+                os._exit(0)
+            os.waitpid(middle, 0)
+            """))
+        prefix = self.prefix("daemon")
+        args = [sys.executable, str(OFFLINE), "--evidence", str(prefix), "--expect-exit", "0",
+                "--timeout-seconds", "5", "--", sys.executable, str(target)]
+        observer = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.await_ready(fifo)
+        daemon = int((self.root / "daemon.pid").read_text())
+        self.assertEqual(self.process_field(daemon, 1), "1", "the daemon must be reparented to init")
+        self.assertNotIn(self.process_state(daemon), (None, "Z"), "the daemon must be alive before the timeout")
+        self.assertEqual(observer.wait(timeout=20), 4)
+        self.assertIn(self.process_state(daemon), (None, "Z"), "the reparented daemon survived the timeout")
+        self.assert_no_live_process(str(holder))
+        evidence = self.evidence(prefix)
+        self.assertEqual(evidence["status"], "timeout")
+        self.assertEqual(evidence["descendants_after_exit"], [])
+        self.assertIn(daemon, evidence["descendants_stopped"])
 
     def test_existing_evidence_is_not_overwritten(self):
         prefix = self.prefix("existing")
