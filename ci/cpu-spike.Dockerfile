@@ -1,6 +1,6 @@
 # Explicit model-required issue #3 gate. Never substitutes a skip for inference.
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl time python3 \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl strace time python3 \
     && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://go.dev/dl/go1.27.1.linux-amd64.tar.gz -o /tmp/go.tar.gz \
     && echo '63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445  /tmp/go.tar.gz' | sha256sum -c - \
