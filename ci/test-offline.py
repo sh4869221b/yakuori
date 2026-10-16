@@ -173,6 +173,35 @@ class ObserverTests(unittest.TestCase):
         except FileNotFoundError:
             return None
 
+    def ancestors(self):
+        """This test process and every kernel parent up to init, read from /proc."""
+        chain, pid = [], os.getpid()
+        while str(pid) not in chain:
+            chain.append(str(pid))
+            parent = self.process_field(pid, 1)
+            if parent is None or parent == "0":
+                break
+            pid = int(parent)
+        return chain
+
+    def traced_by(self, pid, observer):
+        """The tracer holding `pid`, failing unless this observer started that tracer.
+
+        A double-forked, setsid descendant leaves the parent chain and the process
+        group, so the ptrace link is the only thing that still connects it to the run:
+        it has to be this observer's own tracer that holds it.
+        """
+        try:
+            status = Path(f"/proc/{pid}/status").read_text()
+        except FileNotFoundError:
+            self.fail(f"no /proc entry for traced process {pid}")
+        tracer = next((int(line.split()[1]) for line in status.splitlines()
+                       if line.startswith("TracerPid:")), 0)
+        self.assertNotEqual(tracer, 0, f"{pid} is not traced by the observer's tracer")
+        self.assertEqual(self.process_field(tracer, 1), str(observer.pid),
+                         "the traced process is held by a tracer this observer did not start")
+        return tracer
+
     def ready_fifo(self):
         fifo = self.root / f"ready-{self.runs + 1}.fifo"
         os.mkfifo(fifo)
@@ -433,7 +462,14 @@ class ObserverTests(unittest.TestCase):
         observer = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.await_ready(fifo)
         daemon = int((self.root / "daemon.pid").read_text())
-        self.assertEqual(self.process_field(daemon, 1), "1", "the daemon must be reparented to init")
+        self.traced_by(daemon, observer)
+        # The double-forked daemon is an orphan: the kernel hands it to the nearest child
+        # subreaper ancestor, which is pid 1 only when nothing between this test and init
+        # supervises children (the systemd user manager does). Both are legitimate
+        # adoptions, so the escape is proven by the adopted parent sitting on this test's
+        # own ancestry instead of by pid 1 exactly.
+        self.assertIn(self.process_field(daemon, 1), self.ancestors(),
+                      "the daemon must be reparented to init or a subreaper ancestor")
         self.assertNotIn(self.process_state(daemon), (None, "Z"), "the daemon must be alive before the timeout")
         self.assertEqual(observer.wait(timeout=20), 4)
         self.assertIn(self.process_state(daemon), (None, "Z"), "the reparented daemon survived the timeout")
