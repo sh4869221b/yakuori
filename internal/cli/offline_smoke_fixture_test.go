@@ -75,6 +75,14 @@ func offlineSmokeBackend(t *testing.T) string {
 	return backend
 }
 
+// offlineSmokeAllowMPS reports whether this run has to opt the observer into the
+// test-only NVIDIA MPS control-path exception. Only the requested CUDA backend
+// loads libcuda, so the exception is enabled there and nowhere else: the
+// model-free runs leave the backend unset, and the CPU runs stay strict.
+func offlineSmokeAllowMPS() bool {
+	return os.Getenv("YAKUORI_OFFLINE_BACKEND") == "cuda"
+}
+
 func offlineSmokeEvidence(t *testing.T) string {
 	t.Helper()
 	dir := os.Getenv("YAKUORI_PULL_EVIDENCE")
@@ -183,18 +191,28 @@ func (l *offlineSmokeLayout) corruptManaged(t *testing.T, id string) {
 }
 
 type offlineSmokeRun struct {
-	Name           string   `json:"name"`
-	Command        []string `json:"command"`
-	ExpectExit     int      `json:"expect_exit"`
-	ObserverExit   int      `json:"observer_exit"`
-	TargetExit     int      `json:"target_exit"`
-	Status         string   `json:"status"`
-	Attempts       int      `json:"attempts"`
-	PreflightOK    bool     `json:"preflight_ok"`
-	TracePath      string   `json:"trace_path"`
-	Stdout         string   `json:"stdout"`
-	Stderr         string   `json:"stderr"`
-	ObserverOutput string   `json:"observer_output"`
+	Name           string                     `json:"name"`
+	Command        []string                   `json:"command"`
+	ExpectExit     int                        `json:"expect_exit"`
+	ObserverExit   int                        `json:"observer_exit"`
+	TargetExit     int                        `json:"target_exit"`
+	Status         string                     `json:"status"`
+	Attempts       int                        `json:"attempts"`
+	AllowNvidiaMPS bool                       `json:"allow_nvidia_mps"`
+	AllowedLocal   []offlineSmokeAllowedEntry `json:"allowed_local"`
+	PreflightOK    bool                       `json:"preflight_ok"`
+	TracePath      string                     `json:"trace_path"`
+	Stdout         string                     `json:"stdout"`
+	Stderr         string                     `json:"stderr"`
+	ObserverOutput string                     `json:"observer_output"`
+}
+
+// offlineSmokeAllowedEntry is one record the observer recorded as allowed local
+// IPC instead of a forbidden attempt; under the MPS opt-in the exact control
+// connects appear here and never in the attempt list.
+type offlineSmokeAllowedEntry struct {
+	Syscall string `json:"syscall"`
+	Detail  string `json:"detail"`
 }
 
 type offlineSmokeObserverRecord struct {
@@ -203,7 +221,9 @@ type offlineSmokeObserverRecord struct {
 	Attempts     []struct {
 		Syscall string `json:"syscall"`
 	} `json:"attempts"`
-	Preflight struct {
+	AllowNvidiaMPS bool                       `json:"allow_nvidia_mps"`
+	AllowedLocal   []offlineSmokeAllowedEntry `json:"allowed_local"`
+	Preflight      struct {
 		OK     bool   `json:"ok"`
 		Detail string `json:"detail"`
 	} `json:"preflight"`
@@ -238,8 +258,14 @@ func (l *offlineSmokeLayout) run(t *testing.T, name string, expect int, args ...
 		t.Fatalf("observer evidence %s.json already exists; a stale prefix would be refused", prefix)
 	}
 	observer := filepath.Join(offlineSmokeRepoRoot(t), "ci", "offline.py")
-	command := append([]string{"python3", observer, "--evidence", prefix, "--expect-exit", strconv.Itoa(expect),
-		"--timeout-seconds", strconv.Itoa(int(offlineSmokeObserverTimeout.Seconds())), "--", offlineSmokeBinary(t)}, args...)
+	allowMPS := offlineSmokeAllowMPS()
+	command := []string{"python3", observer, "--evidence", prefix, "--expect-exit", strconv.Itoa(expect),
+		"--timeout-seconds", strconv.Itoa(int(offlineSmokeObserverTimeout.Seconds()))}
+	if allowMPS {
+		command = append(command, "--allow-nvidia-mps")
+	}
+	command = append(command, "--", offlineSmokeBinary(t))
+	command = append(command, args...)
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Dir = l.root
 	cmd.Env = l.env
@@ -271,14 +297,18 @@ func (l *offlineSmokeLayout) run(t *testing.T, name string, expect int, args ...
 	run := offlineSmokeRun{
 		Name: name, Command: command, ExpectExit: expect, ObserverExit: cmd.ProcessState.ExitCode(),
 		TargetExit: record.ObservedExit, Status: record.Status, Attempts: len(record.Attempts),
+		AllowNvidiaMPS: record.AllowNvidiaMPS, AllowedLocal: record.AllowedLocal,
 		PreflightOK: record.Preflight.OK, TracePath: record.Trace.Path,
 		Stdout: string(targetStdout), Stderr: string(targetStderr), ObserverOutput: strings.TrimSpace(stdout.String()),
 	}
-	if run.ObserverExit != 0 || run.Status != "clean" || run.Attempts != 0 || !run.PreflightOK || run.TargetExit != expect ||
+	// The observer has to report the policy this fixture selected: with the exception enabled
+	// the CUDA child may show its control connects as allowed local IPC, and every other run
+	// has to prove it stayed under the default strict policy.
+	if run.ObserverExit != 0 || run.Status != "clean" || run.Attempts != 0 || record.AllowNvidiaMPS != allowMPS || !run.PreflightOK || run.TargetExit != expect ||
 		record.DescendantsAfterExit == nil || len(record.DescendantsAfterExit) != 0 {
-		t.Fatalf("observed %q: exit=%d status=%s target_exit=%d want=%d attempts=%d preflight=%t descendants_after_exit=%v reasons=%v target_stderr=%q observer=%q",
-			name, run.ObserverExit, run.Status, run.TargetExit, expect, run.Attempts, run.PreflightOK,
-			record.DescendantsAfterExit, record.InvalidReasons, run.Stderr, run.ObserverOutput)
+		t.Fatalf("observed %q: exit=%d status=%s target_exit=%d want=%d attempts=%d allow_mps=%t want_allow_mps=%t allowed_local=%v preflight=%t descendants_after_exit=%v reasons=%v target_stderr=%q observer=%q",
+			name, run.ObserverExit, run.Status, run.TargetExit, expect, run.Attempts, record.AllowNvidiaMPS, allowMPS,
+			record.AllowedLocal, run.PreflightOK, record.DescendantsAfterExit, record.InvalidReasons, run.Stderr, run.ObserverOutput)
 	}
 	return run
 }
