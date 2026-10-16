@@ -225,11 +225,28 @@ def traced_pids(tracer: int) -> list[int]:
     return found
 
 
-def record_tree(identity: dict[int, str], root: int, group: int) -> None:
-    """Record every live traced process: parent chain, process group and ptrace link."""
+def owned_roots(root: int, tracer: str, identity: dict[int, str]) -> list[int]:
+    """Only pids that still hold the process we recorded may seed a tree walk.
+
+    A pid we killed can be reused by an unrelated process; walking from the number alone
+    would adopt that stranger, so the recorded start time has to still match.
+    """
+    roots = [pid for pid in sorted(identity) if owned_alive(pid, identity[pid])]
+    if owned_alive(root, tracer):
+        roots.append(root)
+    return roots
+
+
+def record_tree(identity: dict[int, str], root: int, tracer: str, group: int) -> None:
+    """Record every live traced process: parent chain, process group and ptrace link.
+
+    Ownership stays exact: tree walks start only from pids that still hold the recorded
+    process, the ptrace link is read only while our own tracer is still that process, and
+    group membership counts only because this run created that session itself.
+    """
     members = [member["pid"] for member in group_members(group)]
-    linked = traced_pids(root)
-    for pid in [*live_tree([root, *sorted(identity), *members, *linked]), *members, *linked]:
+    linked = traced_pids(root) if owned_alive(root, tracer) else []
+    for pid in [*live_tree([*owned_roots(root, tracer, identity), *members, *linked]), *members, *linked]:
         record = process_record(pid)
         if record is not None:
             identity.setdefault(pid, record["starttime"])
@@ -253,8 +270,11 @@ def owned_alive(pid: int, starttime: str) -> bool:
     return record is not None and record["starttime"] == starttime
 
 
-def stop_traced(root: int, group: int) -> None:
+def stop_traced(root: int, tracer: str, group: int) -> None:
     """Kill the traced tree and record in TEARDOWN what actually stayed alive.
+
+    Only processes this run owns are ever signalled: children of our own tracer, members
+    of the session our tracer created, and processes that same tracer still follows.
 
     Three verified failures shape this: a repeated SIGINT/SIGTERM delivered while the
     cleanup ran aborted it and leaked strace plus its target while the result claimed
@@ -271,7 +291,7 @@ def stop_traced(root: int, group: int) -> None:
     IN_TEARDOWN = True
     try:
         for _ in range(TEARDOWN_ROUNDS):
-            record_tree(identity, root, group)
+            record_tree(identity, root, tracer, group)
             # Freeze what is known before killing it: a stopped process cannot fork the
             # replacement descendant that the next scan would otherwise miss.
             for pid in sorted(identity):
@@ -280,7 +300,7 @@ def stop_traced(root: int, group: int) -> None:
                         os.kill(pid, signal.SIGSTOP)
                     except ProcessLookupError:
                         pass
-            record_tree(identity, root, group)
+            record_tree(identity, root, tracer, group)
             alive = [pid for pid in sorted(identity) if owned_alive(pid, identity[pid])]
             if not alive:
                 TEARDOWN.update({"descendants_stopped": stopped, "descendants_after_exit": [], "verified": True})
@@ -292,10 +312,12 @@ def stop_traced(root: int, group: int) -> None:
                         stopped.append(pid)
                     except ProcessLookupError:
                         pass
-            try:
-                os.killpg(group, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            if owned_alive(root, tracer):
+                # The group is ours only while the tracer that created it is that process.
+                try:
+                    os.killpg(group, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             time.sleep(TEARDOWN_INTERVAL)
         survivors = [pid for pid in sorted(identity) if owned_alive(pid, identity[pid])]
         TEARDOWN.update({"descendants_stopped": stopped, "descendants_after_exit": survivors, "verified": True})
@@ -318,6 +340,8 @@ def run_strace(strace: str, trace: Path, command: list[str], stdout: Path, stder
         child = subprocess.Popen(argv, stdout=out, stderr=err, start_new_session=True)
         group = os.getpgid(child.pid)
         root = child.pid
+        tracer_record = process_record(root)
+        tracer = tracer_record["starttime"] if tracer_record is not None else ""
         timed_out = False
         try:
             try:
@@ -326,10 +350,10 @@ def run_strace(strace: str, trace: Path, command: list[str], stdout: Path, stder
                 timed_out = True
             # Exactly one teardown per run: it kills the traced tree (after a timeout or
             # after a clean exit) and records what it actually stopped.
-            stop_traced(root, group)
+            stop_traced(root, tracer, group)
             code = child.wait()
         except SystemExit:
-            stop_traced(root, group)
+            stop_traced(root, tracer, group)
             if child.poll() is None:
                 child.wait()
             raise

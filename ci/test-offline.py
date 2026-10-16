@@ -443,6 +443,32 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(evidence["descendants_after_exit"], [])
         self.assertIn(daemon, evidence["descendants_stopped"])
 
+    def test_unrelated_sibling_process_is_not_signalled(self):
+        fifo = self.ready_fifo()
+        sleeper = subprocess.Popen(["/bin/sh", "-c", "exec sleep 600"], start_new_session=True)
+        try:
+            child = self.root / "sibling-child.sh"
+            child.write_text("#!/bin/sh\nsleep 600 &\nwait\n")
+            child.chmod(0o700)
+            target = self.root / "sibling-target.sh"
+            target.write_text(f"#!/bin/sh\n{child} &\necho $! > {self.root}/sibling.pid\necho ready > {fifo}\nwait\n")
+            target.chmod(0o700)
+            prefix = self.prefix("sibling")
+            observer = subprocess.Popen([sys.executable, str(OFFLINE), "--evidence", str(prefix), "--expect-exit", "0", "--", str(target)],
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.await_ready(fifo)
+            # The sibling is in its own session, is not a child of our tracer and is not
+            # traced by it: the teardown must leave it alone while it stops its own tree.
+            observer.send_signal(signal.SIGTERM)
+            self.assertEqual(observer.wait(timeout=20), 143)
+            evidence = self.evidence(prefix)
+            self.assertEqual(evidence["descendants_after_exit"], [])
+            self.assertNotIn(sleeper.pid, evidence["descendants_stopped"])
+            self.assertNotIn(self.process_state(sleeper.pid), (None, "Z"), "an unrelated sibling process was signalled")
+        finally:
+            sleeper.kill()
+            sleeper.wait(timeout=10)
+
     def test_existing_evidence_is_not_overwritten(self):
         prefix = self.prefix("existing")
         Path(f"{prefix}.json").write_text("existing evidence")
