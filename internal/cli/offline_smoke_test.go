@@ -87,7 +87,7 @@ func TestOfflineCLIMatrix(t *testing.T) {
 			{"name": "verify_accepts_the_managed_copy", "pass": verifyCopy.TargetExit == 0 && strings.Contains(verifyCopy.Stdout, offlineSmokeSHA256)},
 			{"name": "check_model_without_a_selection_is_a_command_failure", "pass": checkUnselected.TargetExit == 1 && strings.Contains(checkUnselected.Stderr, "no model selected")},
 			{"name": "use_selects_the_pinned_copy", "pass": useCopy.TargetExit == 0 && useCopy.Stdout == "use: copy\n"},
-			{"name": "check_model_loads_the_real_engine", "pass": checkSelected.TargetExit == 0 && strings.Contains(checkSelected.Stdout, "model_id: copy") && strings.Contains(checkSelected.Stdout, "effective_backend: cpu") && strings.Contains(checkSelected.Stdout, offlineSmokeSHA256)},
+			{"name": "check_model_loads_the_real_engine", "pass": checkSelected.TargetExit == 0 && strings.Contains(checkSelected.Stdout, "model_id: copy") && strings.Contains(checkSelected.Stdout, "effective_backend: "+backend) && strings.Contains(checkSelected.Stdout, offlineSmokeSHA256)},
 			{"name": "the_managed_copy_matches_the_pin", "pass": afterUse.ManagedSHA == offlineSmokeSHA256 && selected(afterUse)},
 			{"name": "corrupted_bytes_fail_verify_and_check_model", "pass": verifyCorrupt.TargetExit == 1 && verifyCorrupt.Stdout == "" && strings.Contains(verifyCorrupt.Stderr, "model identity mismatch") && checkCorrupt.TargetExit == 1 && strings.Contains(checkCorrupt.Stderr, "model identity mismatch")},
 			{"name": "old_state_survives_the_corrupted_copy", "pass": afterCorrupt.ManagedSHA != offlineSmokeSHA256 && selected(afterCorrupt)},
