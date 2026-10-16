@@ -1,5 +1,23 @@
 # CUDA inference evaluation: #23 spike and #52 product wrapper
 
+## Release update: v0.23.0 (2026-10-16)
+
+The current module pins are `goinfer@v0.23.0`, `goinfer/cuda@v0.23.0` and
+`aikit@v1.70.1`; `aikit/gpu@v0.33.5` is unchanged. The independently tagged
+`cuda/v0.23.0` module requires the matching core release. Its declared
+`aikit/gpu/visioncuda` dependency is not imported by the selected packages and
+does not add a direct or indirect requirement to Yakuori's `go.mod`.
+
+The wrapper leaves `decoder.Options.KVPrecision` at the upstream default. In
+v0.23.0 this selects f16 for supported CUDA families, including the Qwen2 family
+used by Index-Translate, rather than the f32 measured below. The effective
+precision is recorded in `ModelInfo` and the profile key along with both updated
+backend pins. `ResidentWindowedKV` remains false in the direct Go API path.
+
+The measurements below used v0.22.0 and are retained with their original pins
+and precision. GPU execution and translation-quality parity on v0.23.0 require
+a fresh run on a CUDA host; this update's environment has no NVIDIA device.
+
 ## Current #52 product wrapper result (2026-10-10)
 
 Issue #52 connects explicit CPU/CUDA selection to the shared inference Engine.
@@ -31,7 +49,7 @@ effective context 4,096, effective backend `cuda`, resident active, compute
 quantization `int4`, and resident KV precision `f32`. `ModelInfo` also exposes
 requested/effective backend, backend pins and a residency decline reason. It
 does not implement the canonical #15 SourceIdentity/Profile/TM key; the backend
-is not added to immutable request identity. The existing module pins are
+is not added to immutable request identity. The module pins for this measurement are
 `goinfer@v0.22.0` and `goinfer/cuda@v0.22.0`.
 
 Both backends use the same `DefaultLimits` values from

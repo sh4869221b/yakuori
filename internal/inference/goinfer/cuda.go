@@ -4,4 +4,4 @@ package goinfer
 
 import _ "github.com/townsendmerino/goinfer/cuda"
 
-const cudaBackendPin = "github.com/townsendmerino/goinfer/cuda@v0.22.0"
+const cudaBackendPin = "github.com/townsendmerino/goinfer/cuda@v0.23.0"
