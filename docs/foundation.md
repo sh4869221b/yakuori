@@ -59,6 +59,64 @@ of the three fetches, places or loads a model. The real-model `modelsmoke` /
 matrices, are explicitly provisioned local QA runs away from the gate; a green
 normal CI never substitutes for them.
 
+### Offline observer and CUDA reproduction
+
+`ci/offline.py` refuses network attempts by default. Its test-only
+`--allow-nvidia-mps` option permits only a fully decoded `connect(AF_UNIX)` to
+`/run/nvidia-mps/control` or `/tmp/nvidia-mps/control`. Each such record stays
+in the raw `.trace` and is listed under JSON `allowed_local`; JSON `attempts`
+continues to contain forbidden attempts only. The option does not permit
+resolver or proxy connections, INET/INET6, addressed sends, other UNIX
+destinations, malformed or incomplete traces, or hidden preinitialization.
+
+The `offlinesmoke` CLI fixture adds the option only when
+`YAKUORI_OFFLINE_BACKEND=cuda`; its own record must match the selected policy.
+An unset backend remains model-free and strict (`allow_nvidia_mps=false`), and
+CPU runs remain strict. For example, on a Linux/amd64 host with the pinned GGUF
+already present and an NVIDIA driver, the CLI matrix can be reproduced with:
+
+```sh
+YAKUORI_OFFLINE_MODEL="$MODEL" \
+YAKUORI_OFFLINE_BACKEND=cuda \
+YAKUORI_PULL_BINARY="$CUDA_BIN" \
+YAKUORI_PULL_EVIDENCE="$E/task-7-cli" \
+CGO_ENABLED=0 GOTOOLCHAIN=local \
+go test -count=1 -tags cuda,offlinesmoke ./internal/cli \
+  -run '^TestOfflineCLIMatrix$/^real-model$' -v
+```
+
+This Go fixture automatically passes `--allow-nvidia-mps` to each observed CLI
+child for the CUDA backend only. `MODEL` must be the existing
+`qwen2.5-coder-0.5b-instruct-q4_k_m.gguf` fixture, revision
+`ebb2015119c907b064c512bf053e945850b5875f`, SHA-256
+`1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32`, size
+491400064 bytes. `CUDA_BIN` is built with `-tags cuda`; this test uses the
+preplaced file and does not download a model.
+
+For a directly observed CUDA Core test, pass the option explicitly:
+
+```sh
+YAKUORI_OFFLINE_MODEL="$MODEL" \
+YAKUORI_OFFLINE_BACKEND=cuda \
+python3 ci/offline.py --evidence "$E/task-7-cuda-core" --expect-exit 0 \
+  --allow-nvidia-mps -- "$E/localize-offline-cuda.test" \
+  -test.run '^TestOfflineCoreMatrix$' -test.v
+```
+
+The driver-free refusal is a separate run inside the existing container with
+the CUDA binary and pinned model available but no NVIDIA driver. Keep the
+observer strict, with no MPS option:
+
+```sh
+python3 ci/offline.py --evidence "$E/task-7-driverfree-doctor" --expect-exit 1 \
+  -- "$CUDA_BIN" doctor --check-model --backend cuda
+```
+
+This refusal checks that CUDA does not fall back to CPU or acquire a driver;
+it is not a real-GPU success result. The exception changes only observer
+classification for the two control connects. It does not itself establish that
+the GPU matrix passed; report the run's actual traces and status separately.
+
 ## Initial CLI / error contract
 
 - `help`, `-h`, `--help`: exit 0, help on stdout, empty stderr; no config access.

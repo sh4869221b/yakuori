@@ -44,6 +44,22 @@ CLIのexit code、stdout/stderr、設定のfallback、fake試験の入口、clea
 
 通常CIのclean gateはmodel不要です。`ci/verify.sh` は観測器自己試験、実binaryを使う取得失敗matrix、CLI/error matrixをmodelなしで走らせ、外部のmodel配布元には接続しません。実modelと実GPUのmatrix（`modelsmoke` / `offlinesmoke`、CUDA・driver不成立）は、事前配置したGGUFを明示したlocal実行として別に行われ、通常CIの成功はその代わりになりません。
 
+offline観測器 `ci/offline.py` は既定でstrictです。`--allow-nvidia-mps` を明示した場合だけ、完全にdecodeされた `connect(AF_UNIX)` のうち `/run/nvidia-mps/control` と `/tmp/nvidia-mps/control` への接続を許可IPCとして記録します。許可記録はJSONの `allowed_local` に入り、`attempts` は禁止試行だけを示し、raw `.trace` は変更されません。この例外はresolver/proxy、INET/INET6、宛先付きsend、その他のUNIX socket、未知または不完全なtraceを許可しません。
+
+`offlinesmoke` のCLI fixtureは `YAKUORI_OFFLINE_BACKEND=cuda` の場合だけobserverへこのflagを渡します。backend未設定のmodel-free実行は `allow_nvidia_mps=false`、CPU実行もstrictのままです。通常CIは引き続きmodelを取得せず、GPU用の再現は固定pinのGGUFを事前配置したLinux/amd64 NVIDIA環境で行います。たとえばCLI matrixは次のように実行します。
+
+```sh
+YAKUORI_OFFLINE_MODEL="$MODEL" \
+YAKUORI_OFFLINE_BACKEND=cuda \
+YAKUORI_PULL_BINARY="$CUDA_BIN" \
+YAKUORI_PULL_EVIDENCE="$E/task-7-cli" \
+CGO_ENABLED=0 GOTOOLCHAIN=local \
+go test -count=1 -tags cuda,offlinesmoke ./internal/cli \
+  -run '^TestOfflineCLIMatrix$/^real-model$' -v
+```
+
+このGo fixtureがCLIの各childだけを観測し、CUDA指定時に限ってflagを自動付与します。`MODEL` は `qwen2.5-coder-0.5b-instruct-q4_k_m.gguf` の既存fixture（revision `ebb2015119c907b064c512bf053e945850b5875f`、SHA-256 `1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32`、491400064 bytes）、`CUDA_BIN` は `-tags cuda` で作ったCLIです。driver-free拒否matrixにはこの許可を適用せず、driverなしの結果を実GPU成功の代用にしません。
+
 ## ローカルmodelの登録
 
 GGUFはsourceから個人用の管理copyへ登録します。sourceは変更・削除せず、登録IDは一意で既存IDを置換できません。importだけでは選択されないため、使うIDを明示してください。`models verify` は管理copyの登録時SHA-256とsizeを照合し、Engineも実際のload snapshotを同じ登録SHA-256と照合します。CPU/CUDAは同じGGUFと埋込みtokenizerを使います。
