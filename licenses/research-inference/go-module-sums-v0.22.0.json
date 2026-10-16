@@ -1,0 +1,104 @@
+[
+  {
+    "Path": "github.com/townsendmerino/goinfer",
+    "Version": "v0.22.0",
+    "Sum": "h1:/p5BkfewnCxR0ABKZ3EQ2EGdjCrjfFfRmZTWaPriTq4=",
+    "GoModSum": "h1:GoDnQkbzz+rycZWq36RPqRuqzAn4ni2q603Y4EhN0UM="
+  },
+  {
+    "Path": "github.com/townsendmerino/goinfer/cuda",
+    "Version": "v0.22.0",
+    "Sum": "h1:xEzV7QHJhXkTDfDhY5tlVkdofho/emrKGeqG8fsoc5c=",
+    "GoModSum": "h1:Cl3AxF4NPouRMMxb7xt2ktl0Rh9AWVBEixbToIdiw4M="
+  },
+  {
+    "Path": "golang.org/x/sys",
+    "Version": "v0.48.0",
+    "Sum": "h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo=",
+    "GoModSum": "h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og="
+  },
+  {
+    "Path": "modernc.org/sqlite",
+    "Version": "v1.60.1",
+    "Sum": "h1:/blz53O951KWFOso4QQvEs/Fq6cDBKLtMVrYNSeJVKw=",
+    "GoModSum": "h1:1dIoEagfDE72QytD5scH1lxARtaUgKgHC/NuApA27r0="
+  },
+  {
+    "Path": "github.com/dustin/go-humanize",
+    "Version": "v1.0.1",
+    "Sum": "h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=",
+    "GoModSum": "h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto="
+  },
+  {
+    "Path": "github.com/google/uuid",
+    "Version": "v1.6.0",
+    "Sum": "h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=",
+    "GoModSum": "h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo="
+  },
+  {
+    "Path": "github.com/mattn/go-isatty",
+    "Version": "v0.0.24",
+    "Sum": "h1:tGZZoVgT/KiqK1c8ocVLeDS8BSWMRd47J3Lbz7vsReI=",
+    "GoModSum": "h1:nMCL3Zebbrt45jsMDgnfIwz6ydEQApk5oEI3HqDio6A="
+  },
+  {
+    "Path": "github.com/ncruces/go-strftime",
+    "Version": "v1.0.0",
+    "Sum": "h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOFAw7w=",
+    "GoModSum": "h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls="
+  },
+  {
+    "Path": "github.com/remyoudompheng/bigfft",
+    "Version": "v0.0.0-20230129092748-24d4a6f8daec",
+    "Sum": "h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=",
+    "GoModSum": "h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo="
+  },
+  {
+    "Path": "github.com/townsendmerino/aikit",
+    "Version": "v1.57.0",
+    "Sum": "h1:9bVyYcNf3assIy6hff/Gwg6cLCYQLAnSvhn0rdJ/w/k=",
+    "GoModSum": "h1:DCoyKC6l6F1CBt5SJSvX8UjktEKXsrln1MuNOSebam8="
+  },
+  {
+    "Path": "github.com/townsendmerino/aikit/gpu",
+    "Version": "v0.33.5",
+    "Sum": "h1:25cPfdw0nGjtSwEV/iaRZMYrKd0o/ShsYXMrg01CCS0=",
+    "GoModSum": "h1:5BoeTW/VGltnAT3zB/lhZPFDxjZBh+tMF+FFhHE8Fn0="
+  },
+  {
+    "Path": "github.com/eitamring/gocudrv",
+    "Version": "v0.3.2",
+    "Sum": "h1:zjRj3gRSfmbxbQkt1jXSTdGKHPwL1R912qovXnOPUlE=",
+    "GoModSum": "h1:nA+ytiB8A1YvVSHzBQbn+Be+BGR4gAGVIP+7chLn+O4="
+  },
+  {
+    "Path": "github.com/ebitengine/purego",
+    "Version": "v0.10.1",
+    "Sum": "h1:dewVBCBT2GaMu1SrNTYxQhgQBethzfhiwvZiLGP/qyY=",
+    "GoModSum": "h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ="
+  },
+  {
+    "Path": "golang.org/x/text",
+    "Version": "v0.40.0",
+    "Sum": "h1:Ub2Z6/xjgF1WrYQz2nuITOEegKFtiIy+rieRJ5lHZKs=",
+    "GoModSum": "h1:hpnzDAfGV753zIKo+wk3u1bVKCGPbrnF7+7LBF/UHVY="
+  },
+  {
+    "Path": "modernc.org/libc",
+    "Version": "v1.77.1",
+    "Sum": "h1:Ct8j47QtiZ1Enj2DtFXQtUqrPCAjdCmPjtCuvrYQ0Hs=",
+    "GoModSum": "h1:87/pZ4L6nD1zqW4nItuS12YO7hN1igAah34xjnQo/W0="
+  },
+  {
+    "Path": "modernc.org/mathutil",
+    "Version": "v1.7.1",
+    "Sum": "h1:GCZVGXdaN8gTqB1Mf/usp1Y/hSqgI2vAGGP4jZMCxOU=",
+    "GoModSum": "h1:4p5IwJITfppl0G4sUEDtCr4DthTaT47/N3aT6MhfgJg="
+  },
+  {
+    "Path": "modernc.org/memory",
+    "Version": "v1.12.1",
+    "Sum": "h1:nFMiWrpStgZczNl6XI9GnIk/rWhYIyHGUaR04pGbp9g=",
+    "GoModSum": "h1:/JP4VbVC+K5sU2wZi9bHoq2MAkCnrt2r98UGeSK7Mjw="
+  }
+]

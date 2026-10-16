@@ -20,8 +20,8 @@ results supplement this short-prompt report; neither report chooses #14 product 
 
 > Historical baseline: the original pin table and feasibility measurements predate
 > #51 and use
-> goinfer v0.20.0 / aikit v1.51.1. The current CPU wrapper uses goinfer v0.22.0 /
-> aikit v1.57.0; see [the current release update](#current-cpu-release-update-51-2026-10-10).
+> goinfer v0.20.0 / aikit v1.51.1. The current CPU wrapper uses goinfer v0.23.0 /
+> aikit v1.70.1; see [the current release update](#current-release-update-v0230-2026-10-16).
 
 ## Reproducible pins and rights
 
@@ -237,7 +237,38 @@ process isolation or an upstream API change; it is not silently assumed here.
   or explicit process isolation. All preserve Go/CGO=0 in principle; switching to a
   C/C++ backend would change the approved pure-Go requirement and needs a user decision.
 
-## Current CPU release update (#51, 2026-10-10)
+## Current release update: v0.23.0 (2026-10-16)
+
+The CPU and CUDA modules now pin goinfer v0.23.0, released 2026-10-15, and the
+required aikit v1.70.1. Upstream declares Go 1.27.0 and a preferred toolchain of
+Go 1.27.2; validation here uses the repository's pinned Go 1.27.1 toolchain.
+Backend and tokenizer/template version identities are
+updated with the dependency pins, so profiles from the prior release do not
+match the new release.
+
+The wrapper still loads a private GGUF snapshot directly and uses explicit
+CPU/CUDA and int4 admission. The removed row4 serialization APIs, v16-only
+`.giw` bundles and v3 session snapshots are outside this path. On CUDA,
+upstream's default KV precision now selects f16 for supported model families;
+the wrapper records `ResidentKVPrecision()` in `ModelInfo` and the profile key.
+The CLI's default windowed KV change does not affect this direct Go API caller.
+See [the CUDA update note](cuda-inference-spike.md#release-update-v0230-2026-10-16).
+
+The v0.22.0 and earlier measurements below remain historical evidence. They do
+not establish v0.23.0 performance or translation-quality parity.
+
+Validation passed with `CGO_ENABLED=0`:
+
+- `sh ci/verify.sh`: all package tests, vet, cgo guard, CLI build and Linux
+  arm64 cross-builds.
+- `go test -tags cuda ./internal/inference/goinfer ./internal/models ./internal/cli ./internal/localize`.
+- `go test -count=1 -tags 'cuda,cudasmoke' ./internal/inference/goinfer -run '^TestCUDAEvaluationFixtures$'`
+  and `go build -tags cuda ./cmd/yakuori`.
+- `YAKUORI_CPU_MODEL=<local pinned Qwen GGUF> go test -count=1 -tags cpusmoke ./internal/inference/goinfer -run '^TestCPUWrapperSmoke$' -v -timeout 180s`:
+  natural Stop, exact counts and literal markers, deadline/drain/reuse,
+  segmentation, context refusal and Close passed; [captured output](evidence/cpu-long-context/goinfer-v0.23.0/smoke/wrapper.log).
+
+## CPU release update (#51, 2026-10-10)
 
 The production CPU wrapper now pins goinfer v0.22.0 and its required aikit v1.57.0.
 The module still declares Go 1.27.0; the image build used Go 1.27.1 on Linux amd64
