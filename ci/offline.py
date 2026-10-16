@@ -41,6 +41,9 @@ SEND = ("sendto", "sendmsg", "sendmmsg")
 EXISTING_SOCKET = ("recvfrom", "recvmsg", "recvmmsg", "shutdown", "getsockname", "getpeername", "setsockopt", "getsockopt")
 UNIX = "AF_UNIX"
 PREFLIGHT_TIMEOUT = 120
+TEARDOWN_ROUNDS = 40
+TEARDOWN_INTERVAL = 0.05
+TEARDOWN: dict[str, Any] = {"descendants_stopped": [], "descendants_after_exit": None, "verified": False}
 
 
 def classify(name: str, args: str) -> tuple[str, str]:
@@ -146,28 +149,54 @@ def analyze(text: str) -> Analysis:
     return result
 
 
+INTERRUPTED = False
+IN_TEARDOWN = False
+
+
 def terminate(signum: int, _frame: Any) -> None:
+    """End the run on the first interrupt and absorb every later one.
+
+    A repeated SIGINT/SIGTERM used to be delivered while the teardown ran and aborted
+    it, leaking strace plus its target while the result still claimed the group had
+    stopped. Only the first interrupt raises, and any delivery during the teardown is
+    absorbed instead of replacing that teardown, so no later signal can abort it. No
+    signal disposition is changed: that call is itself racy while signals are in flight.
+    """
+    global INTERRUPTED
+    if INTERRUPTED or IN_TEARDOWN:
+        return
+    INTERRUPTED = True
     raise SystemExit(128 + signum)
 
 
-def run_strace(strace: str, trace: Path, command: list[str], stdout: Path, stderr: Path, timeout: int) -> tuple[int, bool, int]:
-    argv = [strace, "-f", "-qq", "-yy", "-s", "4096", "-e", "trace=%network", "-o", str(trace), "--", *command]
-    with stdout.open("wb") as out, stderr.open("wb") as err:
-        child = subprocess.Popen(argv, stdout=out, stderr=err, start_new_session=True)
-        group = os.getpgid(child.pid)
-        timed_out = False
-        try:
-            try:
-                code = child.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                timed_out = True
-                os.killpg(group, signal.SIGKILL)
-                code = child.wait()
-        finally:
-            if child.poll() is None:
-                os.killpg(group, signal.SIGKILL)
-                code = child.wait()
-    return code, timed_out, group
+def process_record(pid: int) -> dict[str, str] | None:
+    """State, parent, group and start time of a live process; None once gone or zombie."""
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[-1].split()
+    except OSError:
+        return None
+    if len(fields) < 20 or fields[0] == "Z":
+        return None
+    return {"state": fields[0], "ppid": fields[1], "pgrp": fields[2], "starttime": fields[19]}
+
+
+def descendant_pids(root: int) -> list[int]:
+    """Every live descendant of root, including ones that left the group through setsid."""
+    children: dict[str, list[int]] = {}
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit():
+            continue
+        record = process_record(int(entry))
+        if record is None:
+            continue
+        children.setdefault(record["ppid"], []).append(int(entry))
+    found: list[int] = []
+    queue = list(children.get(str(root), []))
+    while queue:
+        pid = queue.pop()
+        found.append(pid)
+        queue.extend(children.get(str(pid), []))
+    return found
 
 
 def group_members(group: int) -> list[dict[str, Any]]:
@@ -175,30 +204,95 @@ def group_members(group: int) -> list[dict[str, Any]]:
     for entry in os.listdir("/proc"):
         if not entry.isdigit():
             continue
-        try:
-            stat = Path(f"/proc/{entry}/stat").read_text()
-        except OSError:
+        record = process_record(int(entry))
+        if record is None or record["pgrp"] != str(group):
             continue
-        fields = stat.rsplit(")", 1)[-1].split()
-        if len(fields) < 3 or fields[2] != str(group) or fields[0] == "Z":
-            continue
-        alive.append({"pid": int(entry), "state": fields[0]})
+        alive.append({"pid": int(entry), "state": record["state"], "starttime": record["starttime"]})
     return alive
 
 
-def stop_group(group: int) -> list[dict[str, Any]]:
-    """Kill every surviving group member and wait, bounded, for the group to empty."""
-    for _ in range(40):
-        alive = group_members(group)
-        if not alive:
-            return []
-        for entry in alive:
+def owned_alive(pid: int, starttime: str) -> bool:
+    """True only while the same process, identified by start time, is still alive."""
+    record = process_record(pid)
+    return record is not None and record["starttime"] == starttime
+
+
+def stop_traced(root: int, group: int) -> None:
+    """Kill the traced tree and record in TEARDOWN what actually stayed alive.
+
+    Two verified failures shape this: a repeated SIGINT/SIGTERM delivered while the
+    cleanup ran aborted it and leaked strace plus its target while the result claimed
+    the group had stopped, and a descendant that called setsid left the process group
+    and survived a timeout. Interrupts are absorbed for the whole region, descendants
+    are found by parent chain as well as by group, and each kill is sent only while the
+    recorded start time still matches so a reused pid is never signalled.
+    """
+    global IN_TEARDOWN
+    identity: dict[int, str] = {}
+    stopped: list[int] = []
+    IN_TEARDOWN = True
+    try:
+        for _ in range(TEARDOWN_ROUNDS):
+            if Path(f"/proc/{root}/stat").exists():
+                for pid in descendant_pids(root):
+                    record = process_record(pid)
+                    if record is not None:
+                        identity.setdefault(pid, record["starttime"])
+            for member in group_members(group):
+                identity.setdefault(member["pid"], member["starttime"])
+            alive = [pid for pid in sorted(identity) if owned_alive(pid, identity[pid])]
+            if not alive:
+                TEARDOWN.update({"descendants_stopped": stopped, "descendants_after_exit": [], "verified": True})
+                return
+            for pid in alive:
+                if owned_alive(pid, identity[pid]):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                        stopped.append(pid)
+                    except ProcessLookupError:
+                        pass
             try:
-                os.kill(entry["pid"], signal.SIGKILL)
+                os.killpg(group, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-        time.sleep(0.05)
-    return group_members(group)
+            time.sleep(TEARDOWN_INTERVAL)
+        survivors = [pid for pid in sorted(identity) if owned_alive(pid, identity[pid])]
+        TEARDOWN.update({"descendants_stopped": stopped, "descendants_after_exit": survivors, "verified": True})
+    finally:
+        IN_TEARDOWN = False
+
+
+def interrupt_reason(signal_number: int) -> str:
+    if not TEARDOWN["verified"]:
+        return f"observer received signal {signal_number}; traced group teardown could not be verified"
+    if TEARDOWN["descendants_after_exit"]:
+        return f"observer received signal {signal_number}; {len(TEARDOWN['descendants_after_exit'])} traced descendant(s) survived teardown"
+    return f"observer received signal {signal_number}; traced group stopped and verified"
+
+
+def run_strace(strace: str, trace: Path, command: list[str], stdout: Path, stderr: Path, timeout: int) -> tuple[int, bool, int]:
+    argv = [strace, "-f", "-qq", "-yy", "-s", "4096", "-e", "trace=%network", "-o", str(trace), "--", *command]
+    TEARDOWN.update({"descendants_stopped": [], "descendants_after_exit": None, "verified": False})
+    with stdout.open("wb") as out, stderr.open("wb") as err:
+        child = subprocess.Popen(argv, stdout=out, stderr=err, start_new_session=True)
+        group = os.getpgid(child.pid)
+        root = child.pid
+        timed_out = False
+        try:
+            try:
+                code = child.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+            # Exactly one teardown per run: it kills the traced tree (after a timeout or
+            # after a clean exit) and records what it actually stopped.
+            stop_traced(root, group)
+            code = child.wait()
+        except SystemExit:
+            stop_traced(root, group)
+            if child.poll() is None:
+                child.wait()
+            raise
+    return code, timed_out, group
 
 
 def preflight_tracer(strace: str) -> dict[str, Any]:
@@ -207,8 +301,7 @@ def preflight_tracer(strace: str) -> dict[str, Any]:
         root = Path(tmp)
         trace = root / "preflight.trace"
         script = "import socket; socket.socket(socket.AF_INET, socket.SOCK_STREAM).close()"
-        _, _, group = run_strace(strace, trace, [sys.executable, "-c", script], root / "stdout", root / "stderr", timeout=PREFLIGHT_TIMEOUT)
-        stop_group(group)
+        run_strace(strace, trace, [sys.executable, "-c", script], root / "stdout", root / "stderr", timeout=PREFLIGHT_TIMEOUT)
         if not trace.is_file():
             return {"ok": False, "detail": "the tracer produced no trace file for its own probe", "syscall": None}
         parsed = analyze(trace.read_text(errors="replace"))
@@ -255,7 +348,8 @@ def main() -> int:
         "attempts": [],
         "allowed_local": [],
         "invalid_reasons": [],
-        "descendants_after_exit": [],
+        "descendants_stopped": [],
+        "descendants_after_exit": None,
         "preflight": None,
         "note": "strace messages are suppressed with -qq, so PREFIX.stdout/PREFIX.stderr carry the target's streams",
         "exit_code": None,
@@ -280,12 +374,15 @@ def main() -> int:
         code, timed_out, group = run_strace(strace, trace, command, stdout, stderr, args.timeout_seconds)
     except SystemExit as interrupted:
         record["status"] = "interrupted"
-        record["invalid_reasons"] = [f"observer received signal {int(interrupted.code) - 128}; traced group stopped"]
+        record["descendants_stopped"] = TEARDOWN["descendants_stopped"]
+        record["descendants_after_exit"] = TEARDOWN["descendants_after_exit"] if TEARDOWN["verified"] else None
+        record["invalid_reasons"] = [interrupt_reason(int(interrupted.code) - 128)]
         return emit(prefix, record, int(interrupted.code))
     record["observed_exit"] = code
     record["strace"]["returncode"] = code
     record["strace"]["timed_out"] = timed_out
-    record["descendants_after_exit"] = stop_group(group)
+    record["descendants_stopped"] = TEARDOWN["descendants_stopped"]
+    record["descendants_after_exit"] = TEARDOWN["descendants_after_exit"] if TEARDOWN["verified"] else None
 
     reasons: list[str] = []
     if trace.is_file():
@@ -300,6 +397,8 @@ def main() -> int:
         reasons = ["strace did not create the trace file"]
     if record["descendants_after_exit"]:
         reasons.append("traced descendants survived the tracer exit")
+    elif record["descendants_after_exit"] is None:
+        reasons.append("traced group teardown could not be verified")
     record["invalid_reasons"] = reasons
 
     if timed_out:

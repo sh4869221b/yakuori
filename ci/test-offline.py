@@ -3,7 +3,9 @@
 import json
 import os
 from pathlib import Path
+import select
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -136,7 +138,9 @@ class ObserverTests(unittest.TestCase):
         return subprocess.run(args, capture_output=True, text=True, env=env, timeout=120)
 
     def evidence(self, prefix):
-        return json.loads(Path(f"{prefix}.json").read_text())
+        path = Path(f"{prefix}.json")
+        self.assertTrue(path.is_file(), f"observer wrote no evidence JSON at {path}")
+        return json.loads(path.read_text())
 
     def probe_run(self, mode, prefix, expect_exit=0):
         return self.run_observer(prefix, expect_exit, [sys.executable, str(self.probe), mode])
@@ -162,6 +166,38 @@ class ObserverTests(unittest.TestCase):
             return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[-1].split()[0]
         except FileNotFoundError:
             return None
+
+    def ready_fifo(self):
+        fifo = self.root / f"ready-{self.runs + 1}.fifo"
+        os.mkfifo(fifo)
+        return fifo
+
+    def await_ready(self, fifo, timeout=20):
+        """Block on the traced process's own readiness write instead of polling for it."""
+        handle = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+        try:
+            readable, _, _ = select.select([handle], [], [], timeout)
+            if not readable:
+                self.fail(f"traced process never signalled readiness through {fifo}")
+            payload = os.read(handle, 64)
+            if b"ready" not in payload:
+                self.fail(f"unexpected readiness payload {payload!r}")
+        finally:
+            os.close(handle)
+
+    def assert_no_live_process(self, marker):
+        survivors = []
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                cmdline = Path(f"/proc/{entry}/cmdline").read_bytes()
+            except OSError:
+                continue
+            state = self.process_state(int(entry))
+            if marker.encode() in cmdline and state not in (None, "Z"):
+                survivors.append((int(entry), state, cmdline[:160]))
+        self.assertEqual(survivors, [], "traced process still alive after teardown")
 
     def test_clean_run_has_valid_empty_trace(self):
         prefix = self.prefix("clean")
@@ -287,27 +323,84 @@ class ObserverTests(unittest.TestCase):
         self.assertIn(self.process_state(pid), (None, "Z"))
 
     def test_interrupted_observer_stops_descendants_and_fails(self):
+        fifo = self.ready_fifo()
         script = self.root / "interrupt.sh"
         child = self.root / "interrupt-child.sh"
-        child.write_text("#!/bin/sh\nsleep 600\n")
+        child.write_text("#!/bin/sh\nsleep 600 &\nwait\n")
         child.chmod(0o700)
-        script.write_text(f"#!/bin/sh\n{child} &\necho $! > {self.root}/interrupt.pid\necho ready\nwait\n")
+        script.write_text(f"#!/bin/sh\n{child} &\necho $! > {self.root}/interrupt.pid\necho ready > {fifo}\nwait\n")
         script.chmod(0o700)
         prefix = self.prefix("interrupt")
         args = [sys.executable, str(OFFLINE), "--evidence", str(prefix), "--expect-exit", "0", "--", str(script)]
         observer = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        started = Path(f"{prefix}.stdout")
-        deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            if started.exists() and "ready" in started.read_text():
-                break
-            time.sleep(0.02)
-        observer.send_signal(subprocess.signal.SIGTERM)
-        self.assertEqual(observer.wait(timeout=15), 143)
+        self.await_ready(fifo)
+        observer.send_signal(signal.SIGTERM)
+        self.assertEqual(observer.wait(timeout=20), 143)
         evidence = self.evidence(prefix)
         self.assertEqual(evidence["status"], "interrupted")
+        self.assertEqual(evidence["descendants_after_exit"], [])
         pid = int((self.root / "interrupt.pid").read_text())
         self.assertIn(self.process_state(pid), (None, "Z"))
+        self.assert_no_live_process(str(child))
+
+    def test_repeated_interruptions_stop_the_whole_traced_tree(self):
+        fifo = self.ready_fifo()
+        child = self.root / "repeated-child.sh"
+        child.write_text("#!/bin/sh\nsleep 600 &\nwait\n")
+        child.chmod(0o700)
+        target = self.root / "repeated-target.sh"
+        target.write_text(f"#!/bin/sh\n{child} &\necho $! > {self.root}/repeated.pid\necho ready > {fifo}\nwait\n")
+        target.chmod(0o700)
+        prefix = self.prefix("repeated")
+        args = [sys.executable, str(OFFLINE), "--evidence", str(prefix), "--expect-exit", "0", "--", str(target)]
+        observer = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.await_ready(fifo)
+        # SIGTERM and SIGINT cannot coalesce, so the second one is delivered inside the
+        # teardown: an interruptible teardown aborted there and left strace, the target
+        # and the child alive while still claiming the traced group had stopped.
+        observer.send_signal(signal.SIGTERM)
+        observer.send_signal(signal.SIGINT)
+        # Both signals end the run; which one Python processes first decides 128+signum.
+        self.assertIn(observer.wait(timeout=20), (130, 143))
+        self.assert_no_live_process(str(child))
+        self.assertIn(self.process_state(int((self.root / "repeated.pid").read_text())), (None, "Z"))
+        evidence = self.evidence(prefix)
+        self.assertEqual(evidence["status"], "interrupted")
+        self.assertEqual(evidence["descendants_after_exit"], [])
+        self.assertIn("verified", evidence["invalid_reasons"][0])
+        self.assertIn(int((self.root / "repeated.pid").read_text()), evidence["descendants_stopped"])
+
+    def test_group_escaping_descendant_is_stopped_on_timeout(self):
+        fifo = self.ready_fifo()
+        holder = self.root / "escape-holder.sh"
+        holder.write_text("#!/bin/sh\nsleep 600 &\nwait\n")
+        holder.chmod(0o700)
+        target = self.root / "escape-target.py"
+        target.write_text(textwrap.dedent(f"""\
+            import os
+            pid = os.fork()
+            if pid == 0:
+                os.setsid()
+                os.execvp("/bin/sh", ["/bin/sh", "{holder}"])
+            open("{self.root}/escape.pid", "w").write(str(pid))
+            with open("{fifo}", "w") as handle:
+                handle.write("ready\\n")
+            os.waitpid(pid, 0)
+            """))
+        prefix = self.prefix("escape")
+        args = [sys.executable, str(OFFLINE), "--evidence", str(prefix), "--expect-exit", "0",
+                "--timeout-seconds", "5", "--", sys.executable, str(target)]
+        observer = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.await_ready(fifo)
+        escapee = int((self.root / "escape.pid").read_text())
+        self.assertNotIn(self.process_state(escapee), (None, "Z"), "the escaping descendant must be alive before the timeout")
+        self.assertEqual(observer.wait(timeout=20), 4)
+        self.assertIn(self.process_state(escapee), (None, "Z"), "the escaping descendant survived the timeout")
+        self.assert_no_live_process(str(holder))
+        evidence = self.evidence(prefix)
+        self.assertEqual(evidence["status"], "timeout")
+        self.assertEqual(evidence["descendants_after_exit"], [])
+        self.assertIn(escapee, evidence["descendants_stopped"])
 
     def test_existing_evidence_is_not_overwritten(self):
         prefix = self.prefix("existing")
