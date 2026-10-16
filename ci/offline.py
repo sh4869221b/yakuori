@@ -180,8 +180,8 @@ def process_record(pid: int) -> dict[str, str] | None:
     return {"state": fields[0], "ppid": fields[1], "pgrp": fields[2], "starttime": fields[19]}
 
 
-def descendant_pids(root: int) -> list[int]:
-    """Every live descendant of root, including ones that left the group through setsid."""
+def live_tree(roots: list[int]) -> list[int]:
+    """Live processes reachable by parent chain from any root, setsid escapees included."""
     children: dict[str, list[int]] = {}
     for entry in os.listdir("/proc"):
         if not entry.isdigit():
@@ -191,12 +191,26 @@ def descendant_pids(root: int) -> list[int]:
             continue
         children.setdefault(record["ppid"], []).append(int(entry))
     found: list[int] = []
-    queue = list(children.get(str(root), []))
+    queue = [str(root) for root in roots]
+    seen = set(queue)
     while queue:
-        pid = queue.pop()
-        found.append(pid)
-        queue.extend(children.get(str(pid), []))
+        for child in children.get(queue.pop(), []):
+            if str(child) in seen:
+                continue
+            seen.add(str(child))
+            found.append(child)
+            queue.append(str(child))
     return found
+
+
+def record_tree(identity: dict[int, str], root: int, group: int) -> None:
+    """Record every live traced process, by parent chain and by process-group membership."""
+    for pid in live_tree([root, *sorted(identity)]):
+        record = process_record(pid)
+        if record is not None:
+            identity.setdefault(pid, record["starttime"])
+    for member in group_members(group):
+        identity.setdefault(member["pid"], member["starttime"])
 
 
 def group_members(group: int) -> list[dict[str, Any]]:
@@ -233,13 +247,16 @@ def stop_traced(root: int, group: int) -> None:
     IN_TEARDOWN = True
     try:
         for _ in range(TEARDOWN_ROUNDS):
-            if Path(f"/proc/{root}/stat").exists():
-                for pid in descendant_pids(root):
-                    record = process_record(pid)
-                    if record is not None:
-                        identity.setdefault(pid, record["starttime"])
-            for member in group_members(group):
-                identity.setdefault(member["pid"], member["starttime"])
+            record_tree(identity, root, group)
+            # Freeze what is known before killing it: a stopped process cannot fork the
+            # replacement descendant that the next scan would otherwise miss.
+            for pid in sorted(identity):
+                if owned_alive(pid, identity[pid]):
+                    try:
+                        os.kill(pid, signal.SIGSTOP)
+                    except ProcessLookupError:
+                        pass
+            record_tree(identity, root, group)
             alive = [pid for pid in sorted(identity) if owned_alive(pid, identity[pid])]
             if not alive:
                 TEARDOWN.update({"descendants_stopped": stopped, "descendants_after_exit": [], "verified": True})
