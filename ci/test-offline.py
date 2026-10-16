@@ -67,6 +67,20 @@ PROBE = textwrap.dedent(
         left.close()
         right.close()
 
+    def mps():
+        # The exact addresses a CUDA driver probes for its MPS control socket.
+        for path in ("/run/nvidia-mps/control", "/tmp/nvidia-mps/control"):
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            ignore(lambda: sock.connect(path))
+            sock.close()
+
+    def mps_abstract():
+        # An abstract address whose printed name spells out the control path: only the
+        # exact filesystem path is the exception, so this must stay refused.
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        ignore(lambda: sock.connect("\\x00/run/nvidia-mps/control"))
+        sock.close()
+
     def thread():
         worker = threading.Thread(target=tcp4)
         worker.start()
@@ -76,7 +90,8 @@ PROBE = textwrap.dedent(
         subprocess.run([sys.executable, __file__, "tcp4"], check=False)
 
     MODES = {"tcp4": tcp4, "tcp6": tcp6, "udp4": udp4, "udp6": udp6, "dns": dns, "unix": unix,
-             "unixgram": unixgram, "unixpair": unixpair, "thread": thread, "child": child}
+             "unixgram": unixgram, "unixpair": unixpair, "mps": mps, "mps-abstract": mps_abstract,
+             "thread": thread, "child": child}
     MODES[sys.argv[1]]()
     """
 )
@@ -145,6 +160,31 @@ COMPLETE_RESULT_ANNOTATION_TRACE = INET_LINE + "4242 socket(AF_UNIX, SOCK_STREAM
 COMPLETE_FD_PATH_MARKER_TRACE = INET_LINE + '4242 sendto(4</tmp/a) = 5.bin>, "x", 1, 0, NULL, 0) = -1 ENOTSOCK (Socket operation on non-socket)\n'
 COMPLETE_ESCAPED_QUOTE_PATH_TRACE = INET_LINE + '4242 sendto(6</tmp/a\\"b.bin>, "x", 1, 0, NULL, 0) = -1 ENOTSOCK (Socket operation on non-socket)\n'
 
+# The recorded shape of the two NVIDIA MPS control connects libcuda probes (the same -yy
+# descriptor annotation, sockaddr and addrlen the CUDA host produced; only the errno text is
+# the C locale). One failure and one success prove the outcome does not decide the
+# classification: under the opt-in both complete records are IPC, not attempts.
+MPS_OPT_IN = ("--allow-nvidia-mps",)
+MPS_CONTROL_CONNECTS_TRACE = INET_LINE + (
+    '4242 connect(10<UNIX:[3214705]>, {sa_family=AF_UNIX, sun_path="/run/nvidia-mps/control"}, 26) = -1 ENOENT (No such file or directory)\n'
+    '4242 connect(10<UNIX:[3218510]>, {sa_family=AF_UNIX, sun_path="/tmp/nvidia-mps/control"}, 26) = 0\n'
+)
+# Near misses that stay forbidden attempts: a longer name, a deeper path, a sibling path and
+# a relative path.
+MPS_NEARBY_PATHS_TRACE = INET_LINE + (
+    '4242 connect(10<UNIX:[1]>, {sa_family=AF_UNIX, sun_path="/run/nvidia-mps/controls"}, 26) = -1 ENOENT (No such file or directory)\n'
+    '4242 connect(10<UNIX:[2]>, {sa_family=AF_UNIX, sun_path="/run/nvidia-mps/control/more"}, 26) = -1 ENOENT (No such file or directory)\n'
+    '4242 connect(10<UNIX:[3]>, {sa_family=AF_UNIX, sun_path="/tmp/nvidia-mps/control-old"}, 26) = -1 ENOENT (No such file or directory)\n'
+    '4242 connect(10<UNIX:[4]>, {sa_family=AF_UNIX, sun_path="nvidia-mps/control"}, 26) = -1 ENOENT (No such file or directory)\n'
+)
+CUT_MPS_CONNECT_ARGS_TRACE = INET_LINE + '4242 connect(10<UNIX:[1]>, {sa_family=AF_UNIX, sun_path="/run/nvidia-mps/control"}, 26'
+CUT_MPS_CONNECT_RESULT_TRACE = INET_LINE + '4242 connect(10<UNIX:[1]>, {sa_family=AF_UNIX, sun_path="/run/nvidia-mps/control"}, 26) = -1 ENOENT (No such file or directory'
+PAIRED_MPS_CONNECT_TRACE = INET_LINE + (
+    '4242 connect(10<UNIX:[1]>, {sa_family=AF_UNIX, sun_path="/run/nvidia-mps/control"}, 26 <unfinished ...>\n'
+    '4242 <... connect resumed>) = -1 ENOENT (No such file or directory)\n'
+)
+DANGLING_MPS_CONNECT_TRACE = INET_LINE + '4242 connect(10<UNIX:[1]>, {sa_family=AF_UNIX, sun_path="/tmp/nvidia-mps/control"}, 26 <unfinished ...>\n'
+
 
 class ObserverTests(unittest.TestCase):
     def setUp(self):
@@ -161,10 +201,11 @@ class ObserverTests(unittest.TestCase):
         self.runs += 1
         return self.root / f"{name}-{self.runs}"
 
-    def run_observer(self, prefix, expect_exit, command, timeout_seconds=None, path=None, env_extra=None, replace_path=False):
+    def run_observer(self, prefix, expect_exit, command, timeout_seconds=None, path=None, env_extra=None, replace_path=False, observer_args=()):
         args = [sys.executable, str(OFFLINE), "--evidence", str(prefix), "--expect-exit", str(expect_exit)]
         if timeout_seconds is not None:
             args += ["--timeout-seconds", str(timeout_seconds)]
+        args += list(observer_args)
         args += ["--", *command]
         env = dict(os.environ, **(env_extra or {}))
         if path is not None:
@@ -663,6 +704,138 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
         self.assertIn("already exists", run.stderr)
         self.assertEqual(Path(f"{prefix}.json").read_text(), "existing evidence")
+
+    def test_mps_control_connect_is_refused_by_default(self):
+        # The recorded control-connect shape replayed through the fake tracer: with no
+        # opt-in the policy is exactly the strict one that recorded it as an attempt.
+        fixture = self.root / "mps-default.trace"
+        fixture.write_text(MPS_CONTROL_CONNECTS_TRACE)
+        path, env = self.fake_strace(f"fixture:{fixture}")
+        prefix = self.prefix("mps-default")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        evidence = self.evidence(prefix)
+        self.assertEqual(evidence["allow_nvidia_mps"], False, evidence)
+        self.assertEqual(evidence["allowed_local"], [])
+        self.assertEqual([entry["detail"] for entry in evidence["attempts"]],
+                         ["socket(AF_INET)", "connect(AF_UNIX)", "connect(AF_UNIX)"], evidence["attempts"])
+
+    def test_mps_opt_in_records_complete_success_and_failure_connects_as_ipc(self):
+        fixture = self.root / "mps-ipc.trace"
+        fixture.write_text(MPS_CONTROL_CONNECTS_TRACE)
+        path, env = self.fake_strace(f"fixture:{fixture}")
+        prefix = self.prefix("mps-ipc")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env, observer_args=MPS_OPT_IN)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        evidence = self.evidence(prefix)
+        self.assertEqual(evidence["allow_nvidia_mps"], True, evidence)
+        self.assertEqual(evidence["invalid_reasons"], [])
+        self.assertEqual(evidence["trace"]["unparsed"], [])
+        # Only the preflight fixture line is still a violation: both control connects, the
+        # failed one and the successful one, moved to the allowed local IPC records.
+        self.assertEqual([entry["detail"] for entry in evidence["attempts"]], ["socket(AF_INET)"], evidence["attempts"])
+        self.assertEqual([entry["detail"] for entry in evidence["allowed_local"]],
+                         ["connect(AF_UNIX) NVIDIA MPS control IPC /run/nvidia-mps/control",
+                          "connect(AF_UNIX) NVIDIA MPS control IPC /tmp/nvidia-mps/control"], evidence["allowed_local"])
+
+    def test_real_strace_probe_decides_the_two_control_paths_by_policy(self):
+        # The positive control for the CLI option is a live probe, not a fixture: the same
+        # two connects are refused by default and recorded as IPC only when opted in.
+        strict = self.prefix("mps-probe-strict")
+        strict_run = self.run_observer(strict, 0, [sys.executable, str(self.probe), "mps"])
+        self.assertEqual(strict_run.returncode, 1, strict_run.stdout + strict_run.stderr)
+        strict_evidence = self.evidence(strict)
+        self.assertEqual(strict_evidence["allow_nvidia_mps"], False, strict_evidence)
+        self.assertEqual([entry["detail"] for entry in strict_evidence["attempts"]], ["connect(AF_UNIX)"] * 2,
+                         strict_evidence["attempts"])
+
+        opted = self.prefix("mps-probe-opted")
+        opted_run = self.run_observer(opted, 0, [sys.executable, str(self.probe), "mps"], observer_args=MPS_OPT_IN)
+        self.assertEqual(opted_run.returncode, 0, opted_run.stdout + opted_run.stderr)
+        opted_evidence = self.evidence(opted)
+        self.assertEqual(opted_evidence["status"], "clean")
+        self.assertEqual(opted_evidence["allow_nvidia_mps"], True, opted_evidence)
+        self.assertEqual(opted_evidence["attempts"], [])
+        self.assertEqual(opted_evidence["invalid_reasons"], [])
+        self.assertEqual([entry["detail"] for entry in opted_evidence["allowed_local"] if entry["syscall"] == "connect"],
+                         ["connect(AF_UNIX) NVIDIA MPS control IPC /run/nvidia-mps/control",
+                          "connect(AF_UNIX) NVIDIA MPS control IPC /tmp/nvidia-mps/control"], opted_evidence["allowed_local"])
+
+    def test_mps_opt_in_refuses_nearby_paths(self):
+        fixture = self.root / "mps-nearby.trace"
+        fixture.write_text(MPS_NEARBY_PATHS_TRACE)
+        path, env = self.fake_strace(f"fixture:{fixture}")
+        prefix = self.prefix("mps-nearby")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env, observer_args=MPS_OPT_IN)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        evidence = self.evidence(prefix)
+        self.assertEqual(evidence["allowed_local"], [])
+        self.assertEqual([entry["detail"] for entry in evidence["attempts"]],
+                         ["socket(AF_INET)"] + ["connect(AF_UNIX)"] * 4, evidence["attempts"])
+
+    def test_mps_opt_in_refuses_other_unix_destinations_and_addressed_sends(self):
+        for mode, expected in (("unix", "connect(AF_UNIX)"),
+                               ("mps-abstract", "connect(AF_UNIX)"),
+                               ("unixgram", "sendto with destination address")):
+            with self.subTest(mode=mode):
+                prefix = self.prefix(f"mps-other-{mode}")
+                run = self.run_observer(prefix, 0, [sys.executable, str(self.probe), mode], observer_args=MPS_OPT_IN)
+                self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+                evidence = self.evidence(prefix)
+                self.assertEqual(evidence["allow_nvidia_mps"], True, evidence)
+                self.assertEqual(evidence["status"], "attempts", evidence)
+                self.assertIn(expected, [entry["detail"] for entry in evidence["attempts"]], evidence["attempts"])
+                self.assertEqual([entry for entry in evidence["allowed_local"] if entry["syscall"] == "connect"], [])
+
+    def test_mps_opt_in_does_not_relax_inet_families(self):
+        for mode, expected in (("tcp4", "socket(AF_INET)"), ("tcp6", "socket(AF_INET6)")):
+            with self.subTest(mode=mode):
+                prefix = self.prefix(f"mps-inet-{mode}")
+                run = self.run_observer(prefix, 0, [sys.executable, str(self.probe), mode], observer_args=MPS_OPT_IN)
+                self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+                evidence = self.evidence(prefix)
+                self.assertIn(expected, [entry["detail"] for entry in evidence["attempts"]], evidence["attempts"])
+
+    def test_mps_opt_in_keeps_truncated_control_records_invalid(self):
+        for name, text in (("cut-mps-args", CUT_MPS_CONNECT_ARGS_TRACE), ("cut-mps-result", CUT_MPS_CONNECT_RESULT_TRACE)):
+            with self.subTest(name=name):
+                fixture = self.root / f"{name}.trace"
+                fixture.write_text(text)
+                path, env = self.fake_strace(f"fixture:{fixture}")
+                prefix = self.prefix(name)
+                run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env, observer_args=MPS_OPT_IN)
+                self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                evidence = self.evidence(prefix)
+                self.assertEqual(evidence["status"], "invalid")
+                self.assertEqual(evidence["allowed_local"], [])
+                self.assertEqual([entry["line"] for entry in evidence["trace"]["unparsed"]], [text.splitlines()[-1]], evidence["trace"])
+
+    def test_mps_opt_in_keeps_unfinished_and_resumed_forms_honest(self):
+        fixture = self.root / "paired-mps.trace"
+        fixture.write_text(PAIRED_MPS_CONNECT_TRACE)
+        path, env = self.fake_strace(f"fixture:{fixture}")
+        prefix = self.prefix("paired-mps")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env, observer_args=MPS_OPT_IN)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        evidence = self.evidence(prefix)
+        self.assertEqual((evidence["trace"]["unfinished"], evidence["trace"]["resumed"]), (1, 1))
+        self.assertEqual(evidence["invalid_reasons"], [])
+        self.assertEqual([entry["detail"] for entry in evidence["allowed_local"]],
+                         ["connect(AF_UNIX) NVIDIA MPS control IPC /run/nvidia-mps/control"], evidence["allowed_local"])
+        self.assertEqual([entry["detail"] for entry in evidence["attempts"]], ["socket(AF_INET)"], evidence["attempts"])
+
+        # The exception cannot hide a pending record: an unfinished control connect whose
+        # resumed line never arrived leaves the whole trace invalid.
+        dangling = self.root / "dangling-mps.trace"
+        dangling.write_text(DANGLING_MPS_CONNECT_TRACE)
+        path, env = self.fake_strace(f"fixture:{dangling}")
+        prefix = self.prefix("dangling-mps")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env, observer_args=MPS_OPT_IN)
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        evidence = self.evidence(prefix)
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertTrue(any("unfinished" in reason for reason in evidence["invalid_reasons"]), evidence["invalid_reasons"])
+        self.assertEqual([entry["detail"] for entry in evidence["attempts"]], ["socket(AF_INET)"], evidence["attempts"])
 
 
 if __name__ == "__main__":

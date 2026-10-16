@@ -5,10 +5,15 @@ The whole process tree is traced with
 ``strace -f -qq -yy -s 4096 -e trace=%network -o TRACE -- COMMAND...``: INET and
 INET6 socket creation, connect and destination-addressed send, plus AF_UNIX
 connect and destination-addressed send that would bypass a resolver or proxy,
-are refused. AF_UNIX socketpair and other in-process IPC stay allowed. Unknown,
-blank or truncated trace lines are never rounded to zero: a record counts only
-once its argument list closes outside quotes and ``-yy`` annotations and its printed
-result is complete.
+are refused. AF_UNIX socketpair and other in-process IPC stay allowed. The
+test-only ``--allow-nvidia-mps`` opt-in records a fully decoded
+``connect(AF_UNIX)`` to the exact NVIDIA MPS control path as allowed IPC instead
+of a violation; every other AF_UNIX destination, including abstract and
+undecoded addresses, and every other family stay refused. The selected policy
+and the matching records it allowed are written to the result JSON and to
+``allowed_local``. Unknown, blank or truncated trace lines are never rounded to
+zero: a record counts only once its argument list closes outside quotes and
+``-yy`` annotations and its printed result is complete.
 
 Evidence is written next to ``--evidence PREFIX``: PREFIX.trace (raw trace),
 PREFIX.stdout, PREFIX.stderr (the target's streams) and PREFIX.json (detector
@@ -41,6 +46,9 @@ OPENERS = {"(": ")", "[": "]", "{": "}", "<": ">"}
 CLOSERS = ")]}>"
 SOCKADDR = re.compile(r"sa_family=(AF_[A-Z0-9_]+)")
 FAMILY = re.compile(r"\bAF_[A-Z0-9_]+")
+UNIX_PATH = re.compile(r'sun_path="((?:[^"\\]|\\.)*)"')
+# The two NVIDIA MPS control sockets a CUDA driver probes with connect(AF_UNIX).
+NVIDIA_MPS_CONTROL_PATHS = ("/run/nvidia-mps/control", "/tmp/nvidia-mps/control")
 
 SOCKET_FAMILY = ("socket", "socketpair")
 IDENTIFY = ("listen", "accept", "accept4")
@@ -53,8 +61,14 @@ TEARDOWN_INTERVAL = 0.05
 TEARDOWN: dict[str, Any] = {"descendants_stopped": [], "descendants_after_exit": None, "verified": False}
 
 
-def classify(name: str, args: str) -> tuple[str, str]:
-    """Return (kind, detail) for one traced syscall; kind is violation, allowed or unparsed."""
+def classify(name: str, args: str, allow_nvidia_mps: bool = False) -> tuple[str, str]:
+    """Return (kind, detail) for one traced syscall; kind is violation, allowed or unparsed.
+
+    ``allow_nvidia_mps`` is the test-only opt-in for the NVIDIA MPS control path. It is
+    exactly one address, so it cannot widen anything else: the record still needs a decoded
+    ``sa_family=AF_UNIX`` and a printed ``sun_path`` equal to a control path, and abstract
+    (``sun_path=@...``), empty, undecoded or any other destination stays refused.
+    """
     if name in SOCKET_FAMILY:
         families = FAMILY.findall(args)
         if not families:
@@ -68,6 +82,10 @@ def classify(name: str, args: str) -> tuple[str, str]:
         match = SOCKADDR.search(args)
         if match is None:
             return "unparsed", "connect destination not decoded"
+        if allow_nvidia_mps and match.group(1) == UNIX:
+            decoded = UNIX_PATH.search(args)
+            if decoded is not None and decoded.group(1) in NVIDIA_MPS_CONTROL_PATHS:
+                return "allowed", f"connect(AF_UNIX) NVIDIA MPS control IPC {decoded.group(1)}"
         return "violation", f"connect({match.group(1)})"
     if name == "bind":
         match = SOCKADDR.search(args)
@@ -176,7 +194,7 @@ def complete_record(body: str, start: int) -> bool:
     return end is not None and complete_result(body[end + 1:])
 
 
-def analyze(text: str) -> Analysis:
+def analyze(text: str, allow_nvidia_mps: bool = False) -> Analysis:
     result = Analysis()
     for raw in text.splitlines():
         result.lines += 1
@@ -217,7 +235,7 @@ def analyze(text: str) -> Analysis:
         if pid is None:
             result.unparsed.append({**entry, "reason": "trace line without pid prefix; -f following unverified"})
             continue
-        kind, detail = classify(name, args)
+        kind, detail = classify(name, args, allow_nvidia_mps)
         entry["detail"] = detail
         if kind == "violation":
             result.attempts.append(entry)
@@ -468,6 +486,8 @@ def main() -> int:
     parser.add_argument("--evidence", required=True, metavar="PREFIX", help="writes PREFIX.trace/.stdout/.stderr/.json")
     parser.add_argument("--expect-exit", required=True, type=int, metavar="CODE", help="exit code the target must produce")
     parser.add_argument("--timeout-seconds", type=int, default=1800, metavar="SECONDS")
+    parser.add_argument("--allow-nvidia-mps", action="store_true",
+                        help="test-only: record connect(AF_UNIX) to the exact NVIDIA MPS control paths as allowed IPC")
     parser.add_argument("command", nargs=argparse.REMAINDER, help="command after --")
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
@@ -484,6 +504,7 @@ def main() -> int:
     record: dict[str, Any] = {
         "command": command,
         "expect_exit": args.expect_exit,
+        "allow_nvidia_mps": args.allow_nvidia_mps,
         "observed_exit": None,
         "status": None,
         "timeout_seconds": args.timeout_seconds,
@@ -531,7 +552,7 @@ def main() -> int:
     reasons: list[str] = []
     if trace.is_file():
         text = trace.read_text(errors="replace")
-        parsed = analyze(text)
+        parsed = analyze(text, args.allow_nvidia_mps)
         record["trace"] = {"path": str(trace), "bytes": len(text), "lines": parsed.lines, "unfinished": parsed.unfinished,
                            "resumed": parsed.resumed, "markers": parsed.markers, "unparsed": parsed.unparsed}
         record["attempts"] = parsed.attempts
