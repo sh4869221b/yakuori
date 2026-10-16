@@ -1,5 +1,9 @@
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+# strace and python3 are test-only prerequisites for the offline observer
+# (ci/offline.py, its self-test and the model-free matrices in ci/verify.sh).
+# No native build prerequisite is added; the fail-closed check below stays.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl python3 strace \
     && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://go.dev/dl/go1.27.1.linux-amd64.tar.gz -o /tmp/go.tar.gz \
     && echo '63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445  /tmp/go.tar.gz' | sha256sum -c - \

@@ -19,7 +19,7 @@
 - 最終staged artifact検証 → 短いTM commit → 安全なpublish。既存outputは既定拒否、明示時のみ置換
 - 同一pathでは原文backupをrenameして保持。2 rename全体は非atomicで、backup上書きや復旧先の他fileの自動置換は禁止
 - 通常I/O失敗とプロセス停止からの安全な復旧を対象とし、電源断耐性はv1の正式保証外
-- 通常処理はoffline。モデル取得コマンドはなく、`models import` は指定されたローカルfileだけを読む。MVP完了には実MODの独立読み取りと代表訳の人手確認が必要
+- 通常処理はoffline。取得は明示的な `models pull`（絶対HTTPS URL、期待size・SHA-256・digest出所指定）と、指定されたローカルfileだけを読む `models import` の2経路のみ。自動取得・更新や既存IDの上書きはなく、通常処理は一切通信しない。取得元・期待値・digest出所の意味と取得履歴・失敗・取消し・残骸の扱いは「ローカルmodelの登録」を参照。MVP完了には実MODの独立読み取りと代表訳の人手確認が必要
 
 CLI・XDG namespaceは`yakuori`。旧Kotobaのコード・設定・TM・registryを暗黙移行しません。single binaryはmodel本体やGPU driverの内包を意味しません。
 
@@ -42,11 +42,18 @@ sh ci/verify.sh
 
 CLIのexit code、stdout/stderr、設定のfallback、fake試験の入口、clean CIの再現方法・制限は[基盤契約](docs/foundation.md)を参照してください。Linux arm64はcross-buildのみで、実行対応は未検証です。詳細な非目標・依存関係・受入れ試験はissue indexを参照してください。
 
+通常CIのclean gateはmodel不要です。`ci/verify.sh` は観測器自己試験、実binaryを使う取得失敗matrix、CLI/error matrixをmodelなしで走らせ、外部のmodel配布元には接続しません。実modelと実GPUのmatrix（`modelsmoke` / `offlinesmoke`、CUDA・driver不成立）は、事前配置したGGUFを明示したlocal実行として別に行われ、通常CIの成功はその代わりになりません。
+
 ## ローカルmodelの登録
 
 GGUFはsourceから個人用の管理copyへ登録します。sourceは変更・削除せず、登録IDは一意で既存IDを置換できません。importだけでは選択されないため、使うIDを明示してください。`models verify` は管理copyの登録時SHA-256とsizeを照合し、Engineも実際のload snapshotを同じ登録SHA-256と照合します。CPU/CUDAは同じGGUFと埋込みtokenizerを使います。
 
+`models pull` は絶対HTTPS URLからGGUFを一度だけ取得します。`--id`・`--sha256`（64桁小文字hex）・`--size`（正のbyte数）・`--digest-source`（空白を不可とする出所の申告）をURLより前に置き、位置引数はURL一個です。URLはhost必須でuserinfo・fragmentは不可、redirectはHTTPSのみ・最大10要求、HTTPは200のみ、1回の取得は30分で打ち切ります。retryと中断resumeはなく、半端なstageは再接続せず消します。受信bytesの実測が期待size・期待SHA-256（Content-Lengthは補助情報であり受入れ根拠ではない）に一致し、そのstageがCPU loader・tokenizerに受理されてCloseできるときだけ登録します。`--digest-source` は出所を示す利用者の申告で、独立検証済みの配布保証としては扱えません。取得は自動Useせず、選択済みmodelも既存IDも変えません。取得前にstderrへ引用・エスケープした期待値を一度だけ出力し、この出力に失敗したら通信しません。通常の失敗とSIGINT/SIGTERM取消しは当該実行のstageだけを削除し、旧model・旧選択を保持します。commitがregistry renameを通した後は取消し・出力失敗でも巻き戻さず、登録済みであることを区別して報告します。SIGKILL等の残骸は `<Data>/models/.pull-*` に保持され、自動公開・自動削除はしません。
+
+取得履歴はmodelと同じ `<Data>/models/<ID>/provenance.json` に `schema:1` で書かれます（`source_url`, `final_url`, `expected_sha256`, `expected_size_bytes`, `digest_source`、mode 0600）。初期URLと実際に200を返した `final_url` を区別するので、redirect後の実際の配布元まで追跡できます。ローカル `import` にはこのsidecarはなく、registry schemaと `models verify` のbyte identity照合は変わりません。
+
 ```sh
+./yakuori models pull --id fetched --sha256 <64桁小文字hex> --size <byte数> --digest-source <出所の申告> https://host.example/path/model.gguf
 ./yakuori models import --id index-translate /path/to/model.gguf
 ./yakuori models use index-translate
 ./yakuori models verify index-translate
@@ -64,14 +71,16 @@ GGUFはsourceから個人用の管理copyへ登録します。sourceは変更・
 | Config | `<Config>/config.json` | `{"schema":1,"selected_model":"index-translate"}` |
 | Registry | `<Data>/registry.json` | `{"schema":1,"models":{"index-translate":{"sha256":"<64 lowercase hex>","size_bytes":123}}}` |
 | Managed models | `<Data>/models/<ID>/model.gguf` | IDごとのprivate managed copy |
+| Provenance | `<Data>/models/<ID>/provenance.json` | `models pull` で取得したIDの取得履歴（schema 1 sidecar） |
 | Registry lock | `<Data>/registry.lock` | import/use中の協調lock |
 | TM | `<Data>/tm.sqlite` | translation memory |
 | Load snapshots | `<Cache>/model-snapshots` | Engine load時に作成し、load完了時にunlinkするtransient snapshot |
 | State | `<State>` | 現時点で保存物なし |
 
 Private directoryはmode `0700`、Config/Registry/lockとmanaged `model.gguf` は `0600`、Engine snapshotは `0400` です。登録には管理copy分の保存容量が別途必要で、model読込み時はtransient snapshot分も必要です。hardlinkは使いません。たとえば既存の研究用modelが `$HOME/.cache/yakuori/models/` にあっても、それは外部source fileです。登録先の `<Data>/models/` やtransient用 `<Cache>/model-snapshots/` と混同せず、cache全体を削除しないでください。
+provenance.json も `0600` です。取得中は `<Data>/models/.pull-*` に取得stage（model本体＋取得履歴）が加わり、CPU loaderでの検証時の容量peakは既存分＋取得stage＋load snapshotです。
 
-modelを手動削除するときは、先にすべてのYakuori processを停止します。`models remove` commandはありません。削除するIDが現在の `selected_model` と一致するときだけconfig fileを取り除き、`<Data>/models/<ID>/model.gguf` だけを削除して、ID directoryが空なら取り除いてから、registry JSONのそのIDだけを削除します。他IDのentryは保持し、最後の1件を消す場合はschema 1の空 `models` objectを残します。registryだけ先に消すと未登録directoryが残るため、その状態を作らないでください。directoryに予期しないfileがある場合や、中断したimportでregistryにないdirectoryがある場合は自動削除せず、個別に内容を確認してください。source modelは残します。
+modelを手動削除するときは、先にすべてのYakuori processを停止します。`models remove` commandはありません。削除するIDが現在の `selected_model` と一致するときだけconfig fileを取り除き、`<Data>/models/<ID>/` の中身（`model.gguf`、`models pull` で取得した場合は `provenance.json` も含む）を削除して、ID directoryが空なら取り除いてから、registry JSONのそのIDだけを削除します。他IDのentryは保持し、最後の1件を消す場合はschema 1の空 `models` objectを残します。registryだけ先に消すと未登録directoryが残るため、その状態を作らないでください。directoryに予期しないfileがある場合や、中断したimportでregistryにないdirectoryがある場合は自動削除せず、個別に内容を確認してください。source modelは残します。 `.pull-*` directoryは強制停止等で中断した取得の残骸として保持され、registryには登録されず、次の取得の実行でも残ります。不要になったら内容を確認の上で手動削除してください。
 
 TMを消すときは別途全processを止め、`tm.sqlite.lock` と `tm.sqlite-journal` / `-wal` / `-shm` を含むSQLite sidecar、Recovery条件を[TM契約](docs/sqlite-feasibility.md)に従って確認します。未解決journalやrecovery errorがあるときはDBとsidecarを保持します。publicationのsource、output、run record、原文backupは利用者が指定したsource/output parentにあり、XDG model/TM storageとは別です。未復旧backupやpublication recordを先に消さず、復旧対象と他runのfilesを維持してください。
 

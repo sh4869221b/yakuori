@@ -31,8 +31,10 @@ docker build --progress=plain -f ci/Dockerfile .
 The Docker gate contains no C/C++ compiler, CMake or SQLite development headers;
 it explicitly checks their absence before running the same script. It does not
 remove software from the host. No inference libraries, SQLite driver, submodules,
-CUDA toolkit, models or game fixtures are used. The tests are deterministic and
-use generated temporary directories and injected fake path resolvers/writers.
+CUDA toolkit, models or game fixtures are used. The only extras are the
+test-only `strace` and `python3` packages, needed by the offline observer and
+the model-free matrices wired into `ci/verify.sh`. The tests are deterministic
+and use generated temporary directories and injected fake path resolvers/writers.
 
 `ci/verify.sh` checks formatting, repository `import "C"` (including excluded files),
 its own negative fixture, selected non-standard dependency cgo files for Linux
@@ -44,6 +46,18 @@ The source guard parses Go imports, so comments containing `import "C"` do not f
 
 The arm64 artifact is only cross-built. No arm64 execution compatibility is claimed.
 Real CPU inference, model smoke, SQLite and .w3strings tests remain separate gates.
+The gate is model-free and additionally runs three offline additions: the
+observer self-test `python3 ci/test-offline.py`, the acquisition-failure suite
+`YAKUORI_PULL_BINARY="$PWD/yakuori" go test -count=1 -tags modelsmoke
+./internal/cli -run '^TestPullCLIFailure$' -v` against the freshly built
+`$PWD/yakuori` (served fixture bytes are deliberately invalid, so no model is
+needed), and the same binary's model-free CLI/error matrix
+(`go test -count=1 -tags offlinesmoke ./internal/cli -run
+'^TestOfflineCLIMatrix$/^model-free$' -v`) observed by `ci/offline.py`. None
+of the three fetches, places or loads a model. The real-model `modelsmoke` /
+`offlinesmoke` suites that need a preplaced GGUF, and the CUDA / driver-free
+matrices, are explicitly provisioned local QA runs away from the gate; a green
+normal CI never substitutes for them.
 
 ## Initial CLI / error contract
 
@@ -61,6 +75,28 @@ Real CPU inference, model smoke, SQLite and .w3strings tests remain separate gat
   are immutable; duplicate IDs or destinations are rejected. `verify` compares
   the managed file's SHA-256 and size with the registry. Loading also passes
   the expected SHA-256 to Engine, which checks the actual snapshot bytes.
+- `models pull --id ID --sha256 SHA --size BYTES --digest-source SOURCE URL`
+  acquires one model over HTTPS. The four flags precede the positional URL,
+  which must be absolute HTTPS with a host and no userinfo or fragment.
+  Redirects may only point at HTTPS URLs and are followed at most ten times;
+  only HTTP 200 is accepted; one pull is bounded by 30 minutes; there is no
+  retry and no resume. Usage errors and `--help` return exit 2 before storage
+  is resolved, a connection is opened or the notice is written. A one-line
+  notice with quoted and escaped expectation values is written to stderr
+  before the connection; when that write fails, no connection is opened.
+  SIGINT/SIGTERM are mapped onto the pull context only inside this dispatch and
+  report as a regular operational error (`pull was cancelled`); the cancelled
+  run's stage is removed and previous state is kept. A transfer or expectation
+  failure removes this run's stage and reports only a classified reason: raw
+  HTTP/TLS errors, response bodies, model and prompt text are never echoed.
+  The received bytes' measured size and SHA-256 must match the expectation and
+  the same stage must be accepted by the CPU loader and Close cleanly before
+  registration; Content-Length is auxiliary and never the acceptance basis.
+  Once the registry rename in the commit section happened, later cancellation,
+  stdout or lock Close errors keep the registration and say so; a returned
+  non-zero entry means registered. A successful pull writes `provenance.json`
+  beside the managed model and never selects the acquired ID; the registry
+  schema and `verify` byte identity checks are unchanged.
 - `doctor --check-model [--backend cpu|cuda]`: requires a selected model, opens
   it, reports `Engine.Info`, and closes it without generation. CPU is the
   default. It uses the existing configured 4096-token context candidate and
@@ -83,8 +119,12 @@ Real CPU inference, model smoke, SQLite and .w3strings tests remain separate gat
 
 There is no connected `translate` or `localize` pipeline and no placeholder
 translation output, no retry, and no legacy Kotoba reads/migration. Model
-import is local-file-only; network retrieval (`models pull`, tracked separately
-under #19) is not implemented.
+import and explicit `models pull` are the only acquisition paths, and `pull`
+is the only network path in the product. `models verify` and Engine loading
+cannot read the provenance sidecar: it is traceable storage, never a trust
+input, and the `digest_source` it records is the caller's own statement of
+where the digest came from — it is not independently verified and must not be
+presented as a distribution guarantee.
 
 ## Configuration boundary
 
@@ -110,6 +150,7 @@ above are used. The current storage paths are resolved without creating them:
 | Selected model | `<Config>/config.json` | `{"schema":1,"selected_model":"index-translate"}` |
 | Registry | `<Data>/registry.json` | `{"schema":1,"models":{"index-translate":{"sha256":"<64 lowercase hex>","size_bytes":123}}}` |
 | Managed model | `<Data>/models/<ID>/model.gguf` | Private copy for one immutable ID |
+| Provenance | `<Data>/models/<ID>/provenance.json` | Schema 1 sidecar recording `source_url`, `final_url`, `expected_sha256`, `expected_size_bytes`, `digest_source` for pulled IDs |
 | Registry lock | `<Data>/registry.lock` | Cooperative import/use lock |
 | TM | `<Data>/tm.sqlite` | SQLite translation memory |
 | Load snapshots | `<Cache>/model-snapshots` | Transient snapshots created during Engine load and unlinked when load completes |
@@ -117,22 +158,32 @@ above are used. The current storage paths are resolved without creating them:
 
 Model IDs match ASCII `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`. Managed directories
 use mode `0700`; config, registry, lock and managed model files use `0600`.
+Provenance sidecars use `0600` as well.
 Engine snapshots use `0400` and are transient. Import copies bytes and does not
 hardlink or modify the source. Storage requires one additional persistent model
-copy, plus a transient snapshot during model loading. For example, a research
+copy, plus a transient snapshot during model loading. While `models pull`
+runs, the `.pull-*` acquisition stage holds one more model copy, so the
+transient peak during CPU validation is stage plus snapshot on top of the
+registered copies. For example, a research
 model at `$HOME/.cache/yakuori/models/` remains an external source file even
 though it is inside the cache namespace. Do not remove the whole cache to clear
 snapshots.
 
 There is no model removal command. To remove one registered ID manually, first
 stop all Yakuori processes. Remove `config.json` only if it selects that ID,
-remove only `<Data>/models/<ID>/model.gguf` and its now-empty ID directory, then
+remove only `<Data>/models/<ID>/` contents (`model.gguf`, plus
+`provenance.json` when the ID was pulled) and its now-empty ID directory, then
 remove only that registry entry;
 keep the schema 1 registry with an empty `models` object if no entries remain.
 This order avoids leaving an unregistered, ambiguous managed directory. If an
 interrupted import left a directory without a registry entry, inspect that
-directory manually; there is no general automatic cleanup. Preserve the source
-model.
+directory manually; there is no general automatic cleanup. A
+`<Data>/models/.pull-*` directory is a forced-stop acquisition leftover: it
+stays unregistered, is neither auto-published nor auto-removed, and a later run
+leaves it in place; inspect and delete it manually after confirming no running
+pull owns it. Provenance sidecars are part of the acquired ID and are removed
+with it; they are never a removal precondition for registry edits. Preserve the
+source model.
 
 TM removal is separate: stop all processes, check ownership through
 `tm.sqlite.lock`, and follow the documented `-journal`, `-wal`, `-shm` sidecar

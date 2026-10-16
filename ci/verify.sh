@@ -19,6 +19,16 @@ for arch in amd64 arm64; do
 done
 [ -z "$(gofmt -l cmd internal ci/check-cgo.go)" ]
 go build ./cmd/yakuori
+# Test-only offline observer self-test (strace and python3 come from the CI image).
+python3 ci/test-offline.py
+# Model-free acquisition failures against the built binary; no MODEL env is set,
+# so normal CI never fetches or places a model.
+YAKUORI_PULL_BINARY="$PWD/yakuori" go test -count=1 -tags modelsmoke ./internal/cli -run '^TestPullCLIFailure$' -v
+# Model-free CLI/error matrix under the same offline observer.
+offline_evidence=$(mktemp -d)
+trap 'rm -rf "$fixture" "$offline_evidence"' EXIT
+YAKUORI_PULL_BINARY="$PWD/yakuori" YAKUORI_PULL_EVIDENCE="$offline_evidence" \
+  go test -count=1 -tags offlinesmoke ./internal/cli -run '^TestOfflineCLIMatrix$/^model-free$' -v
 go test -count=1 ./...
 go vet ./...
 mkdir -p bin
