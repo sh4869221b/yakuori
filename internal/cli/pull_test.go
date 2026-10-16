@@ -93,6 +93,7 @@ func TestPullCLIArguments(t *testing.T) {
 		{"userinfo url", change(func(a *pullArguments) { a.url = "https://user:private-text@example.invalid/model.gguf" })},
 		{"fragment url", change(func(a *pullArguments) { a.url = "https://example.invalid/model.gguf#private-text" })},
 		{"empty host url", change(func(a *pullArguments) { a.url = "https:///model.gguf" })},
+		{"port-only authority url", change(func(a *pullArguments) { a.url = "https://:443/model.gguf" })},
 		{"missing url", []string{"models", "pull", "--id", "fetched", "--sha256", pullDigest, "--size", "1024", "--digest-source", pullDigestSource}},
 		{"extra url", append(validPullArguments(nil), "https://example.invalid/other.gguf")},
 		{"flags after url", []string{"models", "pull", "https://example.invalid/model.gguf", "--id", "fetched", "--sha256", pullDigest, "--size", "1024", "--digest-source", pullDigestSource}},
@@ -125,6 +126,19 @@ func TestPullCLIArguments(t *testing.T) {
 			})
 			if code != ExitOK || !strings.Contains(out.String(), "models pull") || diag.Len() != 0 || calls != 0 {
 				t.Fatalf("code=%d stdout=%q stderr=%q resolver calls=%d", code, out.String(), diag.String(), calls)
+			}
+		})
+	}
+}
+
+// TestPullCLIValidAuthorities proves the authority check keeps accepting a
+// valid hostname and an IPv6 literal, each with an explicit port.
+func TestPullCLIValidAuthorities(t *testing.T) {
+	for _, url := range []string{"https://example.invalid:8443/model.gguf", "https://[::1]:8443/model.gguf"} {
+		t.Run(url, func(t *testing.T) {
+			command, err := parseStorage(validPullArguments(func(a *pullArguments) { a.url = url }))
+			if err != nil || command.url != url {
+				t.Fatalf("valid authority rejected: err=%v command=%+v", err, command)
 			}
 		})
 	}

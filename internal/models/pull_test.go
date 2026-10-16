@@ -475,6 +475,7 @@ func TestPullInvalidRequest(t *testing.T) {
 		{"URL with userinfo", func(r *PullRequest) { r.URL = "https://user@example.invalid/model" }},
 		{"URL with fragment", func(r *PullRequest) { r.URL += "#model" }},
 		{"relative URL", func(r *PullRequest) { r.URL = "/model" }},
+		{"port-only authority URL", func(r *PullRequest) { r.URL = "https://:443/model.gguf" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newPullFixture(t)
@@ -492,6 +493,17 @@ func TestPullInvalidRequest(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestPullValidAuthorities proves the tightened authority check keeps
+// accepting a valid hostname and an IPv6 literal, each with an explicit port.
+func TestPullValidAuthorities(t *testing.T) {
+	for _, source := range []string{"https://example.invalid:8443/model.gguf", "https://[::1]:8443/model.gguf"} {
+		req := PullRequest{URL: source, ID: "fetched", SHA256: strings.Repeat("a", 64), SizeBytes: 1024, DigestSource: "plan-pinned test fixture digest"}
+		if err := validatePullRequest(req); err != nil {
+			t.Fatalf("valid authority %s rejected: %v", source, err)
+		}
 	}
 }
 

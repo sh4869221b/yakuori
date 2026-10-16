@@ -136,7 +136,7 @@ func validatePullRequest(req PullRequest) error {
 	if err != nil {
 		return fmt.Errorf("source URL: %w", err)
 	}
-	if parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+	if parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" {
 		return errors.New("source URL must be an absolute HTTPS URL without userinfo or fragment")
 	}
 	return nil
