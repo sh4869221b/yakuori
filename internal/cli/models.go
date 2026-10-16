@@ -141,7 +141,7 @@ func validatePullArguments(command storageCommand) error {
 		return flag.ErrHelp
 	}
 	parsed, err := url.Parse(command.url)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" {
 		return flag.ErrHelp
 	}
 	return nil
