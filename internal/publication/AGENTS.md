@@ -12,13 +12,14 @@ Linuxのstage公開・原文backup・記録照合による復旧を扱う独立�
 | 公開状態 | `publish_linux.go` | renameとResult.State |
 | 記録形式 | `record_linux.go`, `record_read_linux.go` | 厳格JSONと実file照合 |
 | 中断復旧 | `recovery_linux.go`, `recovery_scan_linux.go` | backupの安全な復元 |
-| failure注入 | `*_failure_linux_test.go` | rename・sync・close・record失敗 |
+| failure注入 | `stage_linux_test.go`, `record_linux_test.go`, `prepare_recovery_failure_linux_test.go`, `recovery_failure_linux_test.go` | stage・record・復旧時の失敗 |
 
 ## CONVENTIONS
 - OS依存実装はlinux build tagと `_linux.go` に置く。
 - run directoryはoutput parent内のprivate directory。
 - stage・record・backupの識別情報と実fileを再照合する。
-- record内pathを探索根拠にせず、保持済みprivate directoryを使う。
+- record.jsonとstageは、record内pathで探索せず保持済みprivate directoryを基準に読む。
+- 復旧時のsource/outputはrecord内pathから親directoryを開き、保持済みlock・親識別情報・実fileと照合する。
 - Stage callbackは同期実行で、writer/readerを保持・共有しない。
 - stageの書込みFDを閉じてから検証用FDを開く。
 - stage rename成功後は、後続errorでもResult.StateはPublished。

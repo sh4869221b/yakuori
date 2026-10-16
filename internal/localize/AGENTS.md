@@ -23,8 +23,9 @@
 - TM候補は現在のsession・unit・profileで再検証する。
 - AdapterのImportは保持量を自身で制限する契約を持つ。
 - CoreはImport内部で既に行われたallocationを制限できない。
-- export後にManifestのinputを照合し、閉じたstageをObserveする。
-- `CompareFinal` とTMのmanifest照合が成功してからcommitを許可する。
+- export後にManifestのinputを照合し、Text系はメモリ上の出力、File系は閉じたstageをObserveする。
+- 全経路で `CompareFinal` が成功してから、渡されたTMのcommitを許可する。
+- TMのmanifest照合は `TextWithTM` / `FileWithTM` でのみ、commit前に `tm.Run.CheckManifest` で行う。
 - DB操作用timeoutと全体生成timeoutは別の上限。
 - `Error` のPhaseとUnitIDで失敗地点を識別する。
 
