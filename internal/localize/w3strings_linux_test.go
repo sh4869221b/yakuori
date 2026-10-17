@@ -20,6 +20,7 @@ import (
 	"github.com/sh4869221b/yakuori/internal/publication"
 	"github.com/sh4869221b/yakuori/internal/unit"
 	"github.com/sh4869221b/yakuori/internal/validate"
+	"golang.org/x/sys/unix"
 )
 
 type w3Engine struct {
@@ -153,8 +154,33 @@ func w3File(t *testing.T, malformed, tamper bool) (localize.Result, error, *w3En
 	return result, err, engine, memory, options, raw
 }
 
+func w3UnsupportedFilesystem(t *testing.T, result localize.Result, err error, engine *w3Engine, memory *w3TM, options publication.Options) bool {
+	t.Helper()
+	var st unix.Statfs_t
+	if statErr := unix.Statfs(filepath.Dir(options.Output), &st); statErr != nil {
+		t.Fatal(statErr)
+	}
+	if st.Type == unix.EXT4_SUPER_MAGIC || st.Type == unix.BTRFS_SUPER_MAGIC {
+		return false
+	}
+	var phase *localize.Error
+	if !errors.Is(err, publication.ErrUnsupportedFilesystem) || !errors.As(err, &phase) || phase.Phase != "prepare" ||
+		engine.calls != 0 || memory.calls != 0 || memory.adapter.observed || result.TMCommitted ||
+		result.BytesWritten != 0 || result.Publication.State != publication.NotPublished {
+		t.Fatalf("unsupported filesystem: result=%+v error=%v Generate=%d Commit=%d observed=%v", result, err, engine.calls, memory.calls, memory.adapter.observed)
+	}
+	if _, err := os.Lstat(options.Output); !os.IsNotExist(err) {
+		t.Fatal("unsupported filesystem produced output")
+	}
+	t.Log("unsupported-filesystem negative coverage: ErrUnsupportedFilesystem at prepare, Generate=0 Commit=0 NotPublished; source unchanged, output absent; intended Core scenario not reached")
+	return true
+}
+
 func TestW3StringsFile(t *testing.T) {
 	result, err, engine, memory, options, _ := w3File(t, false, false)
+	if w3UnsupportedFilesystem(t, result, err, engine, memory, options) {
+		return
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,6 +210,9 @@ func TestW3StringsFile(t *testing.T) {
 
 func TestW3StringsFileRejectsMalformed(t *testing.T) {
 	result, err, engine, memory, options, _ := w3File(t, true, false)
+	if w3UnsupportedFilesystem(t, result, err, engine, memory, options) {
+		return
+	}
 	var phase *localize.Error
 	if !errors.As(err, &phase) || phase.Phase != "import" || engine.calls != 0 || memory.calls != 0 ||
 		result.TMCommitted || result.Publication.State != publication.NotPublished {
@@ -197,6 +226,9 @@ func TestW3StringsFileRejectsMalformed(t *testing.T) {
 
 func TestW3StringsStageTamper(t *testing.T) {
 	result, err, engine, memory, options, _ := w3File(t, false, true)
+	if w3UnsupportedFilesystem(t, result, err, engine, memory, options) {
+		return
+	}
 	if !errors.Is(err, artifact.ErrFinalMismatch) || !memory.adapter.observed || engine.calls != 3 ||
 		memory.calls != 0 || result.TMCommitted || result.Publication.State != publication.NotPublished {
 		t.Fatalf("result=%+v error=%v Generate=%d Commit=%d", result, err, engine.calls, memory.calls)
