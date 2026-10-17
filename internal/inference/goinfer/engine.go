@@ -107,7 +107,7 @@ func OpenWithOptions(ctx context.Context, modelPath string, options Options) (*E
 func defaultLoaders() loaders {
 	return loaders{
 		model: func(path string, options decoder.Options) (modelBackend, error) {
-			model, err := decoder.Load(path, options)
+			model, err := loadDecoder(path, options)
 			if err != nil {
 				return nil, err
 			}
