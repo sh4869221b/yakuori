@@ -48,7 +48,7 @@ func TestOfflineCLIMatrix(t *testing.T) {
 			{"name": "instruction_shaped_model_bytes_are_not_echoed", "pass": !strings.Contains(importInvalid.Stderr, offlineSmokeInjectedInstruction)},
 			{"name": "translate_dispatch_is_usage_only", "pass": translate.TargetExit == 2},
 			{"name": "localize_dispatch_reports_unimplemented", "pass": localize.TargetExit == 1 && localize.Stdout == "" && localize.Stderr != ""},
-			{"name": "no_registry_selection_or_stage_was_written", "pass": !state.RegistryEntry && len(state.Models) == 0 && len(state.Stages) == 0 && state.Selection == ""},
+			{"name": "no_registry_selection_or_stage_was_written", "pass": !state.RegistryExists && len(state.RegistryIDs) == 0 && len(state.Models) == 0 && len(state.Stages) == 0 && state.Selection == ""},
 		}
 		offlineSmokeChecks(t, checks)
 		recordOfflineSmokeEvidence(t, "matrix-model-free", map[string]any{
@@ -79,6 +79,7 @@ func TestOfflineCLIMatrix(t *testing.T) {
 
 		selected := func(state offlineSmokeState) bool {
 			return state.RegistryEntry && state.RegistrySHA == offlineSmokeSHA256 && state.RegistrySize == offlineSmokeSizeBytes &&
+				len(state.RegistryIDs) == 1 && state.RegistryIDs[0] == "copy" &&
 				state.Selection == "copy" && len(state.Models) == 1 && state.Models[0] == "copy" && len(state.Stages) == 0
 		}
 		checks := []map[string]any{
@@ -104,19 +105,22 @@ func TestOfflineCLIMatrix(t *testing.T) {
 }
 
 type offlineSmokeState struct {
-	RegistryEntry bool     `json:"registry_entry"`
-	RegistrySHA   string   `json:"registry_sha256"`
-	RegistrySize  int64    `json:"registry_size_bytes"`
-	Selection     string   `json:"selection"`
-	Models        []string `json:"models"`
-	Stages        []string `json:"stages"`
-	ManagedSHA    string   `json:"managed_sha256"`
+	RegistryExists bool     `json:"registry_exists"`
+	RegistryIDs    []string `json:"registry_ids"`
+	RegistryEntry  bool     `json:"registry_entry"`
+	RegistrySHA    string   `json:"registry_sha256"`
+	RegistrySize   int64    `json:"registry_size_bytes"`
+	Selection      string   `json:"selection"`
+	Models         []string `json:"models"`
+	Stages         []string `json:"stages"`
+	ManagedSHA     string   `json:"managed_sha256"`
 }
 
 func (l *offlineSmokeLayout) snapshot(t *testing.T) offlineSmokeState {
 	t.Helper()
-	state := offlineSmokeState{Models: []string{}, Stages: []string{}}
+	state := offlineSmokeState{RegistryIDs: []string{}, Models: []string{}, Stages: []string{}}
 	if data, err := os.ReadFile(l.storage.RegistryFile); err == nil {
+		state.RegistryExists = true
 		var document struct {
 			Models map[string]struct {
 				SHA256    string `json:"sha256"`
@@ -126,6 +130,10 @@ func (l *offlineSmokeLayout) snapshot(t *testing.T) offlineSmokeState {
 		if err := json.Unmarshal(data, &document); err != nil {
 			t.Fatalf("registry %s: %v", l.storage.RegistryFile, err)
 		}
+		for id := range document.Models {
+			state.RegistryIDs = append(state.RegistryIDs, id)
+		}
+		sort.Strings(state.RegistryIDs)
 		if entry, ok := document.Models["copy"]; ok {
 			state.RegistryEntry, state.RegistrySHA, state.RegistrySize = true, entry.SHA256, entry.SizeBytes
 		}
@@ -161,6 +169,42 @@ func (l *offlineSmokeLayout) snapshot(t *testing.T) offlineSmokeState {
 		state.ManagedSHA = offlineSmokeFileDigest(t, managed)
 	}
 	return state
+}
+
+func TestOfflineSmokeSnapshotRegistry(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		document string
+		keys     []string
+	}{
+		{"empty registry", `{"models":{}}`, []string{}},
+		{"invalid import entry", `{"models":{"bad":{"sha256":"unexpected","size_bytes":1}}}`, []string{"bad"}},
+		{"multiple entries", `{"models":{"copy":{},"bad":{}}}`, []string{"bad", "copy"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			layout := newOfflineSmokeLayout(t)
+			if err := os.MkdirAll(filepath.Dir(layout.storage.RegistryFile), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(layout.storage.RegistryFile, []byte(tt.document), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			data, err := json.Marshal(layout.snapshot(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var recorded struct {
+				Exists bool     `json:"registry_exists"`
+				Keys   []string `json:"registry_ids"`
+			}
+			if err := json.Unmarshal(data, &recorded); err != nil {
+				t.Fatal(err)
+			}
+			if !recorded.Exists || strings.Join(recorded.Keys, ",") != strings.Join(tt.keys, ",") {
+				t.Fatalf("registry snapshot = %s, want existing registry with keys %v", data, tt.keys)
+			}
+		})
+	}
 }
 
 func recordOfflineSmokeEvidence(t *testing.T, name string, evidence map[string]any) {
