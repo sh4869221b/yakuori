@@ -716,6 +716,57 @@ class ObserverTests(unittest.TestCase):
         self.assertIn("already exists", run.stderr)
         self.assertEqual(Path(f"{prefix}.json").read_text(), "existing evidence")
 
+    def test_descriptor_path_arrows_are_not_annotation_closers(self):
+        for trace, expected in (
+            ('4242 recvfrom(3</tmp/a->b>, "x", 1, 0, NULL, NULL) = 1\n', 0),
+            ('4242 recvfrom(3</tmp/a->fake) = 5\n', 2),
+        ):
+            with self.subTest(trace=trace):
+                fixture = self.root / "arrows.trace"
+                fixture.write_text(trace)
+                path, extra = self.fake_strace(f"record:{fixture}")
+                prefix = self.prefix("arrows")
+                run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=extra)
+                self.assertEqual(run.returncode, expected, run.stdout + run.stderr)
+                self.assertEqual(self.evidence(prefix)["status"], "clean" if expected == 0 else "invalid")
+
+    def test_same_prefix_is_reserved_before_preflight(self):
+        prefix = self.prefix("reservation")
+        marker = self.root / "competing-target"
+        competing_codes = []
+        real_preflight = offline.preflight_tracer
+
+        def competing_observer(strace):
+            competing = self.run_observer(
+                prefix, 0, [sys.executable, "-c",
+                            f"from pathlib import Path; Path({str(marker)!r}).write_text('second')"])
+            competing_codes.append(competing.returncode)
+            return real_preflight(strace)
+
+        self.addCleanup(signal.signal, signal.SIGINT, signal.getsignal(signal.SIGINT))
+        self.addCleanup(signal.signal, signal.SIGTERM, signal.getsignal(signal.SIGTERM))
+        with mock.patch.object(sys, "argv", [str(OFFLINE), "--evidence", str(prefix),
+                                             "--expect-exit", "0", "--", sys.executable, "-c", "pass"]), \
+                mock.patch.object(offline, "preflight_tracer", side_effect=competing_observer):
+            self.assertEqual(offline.main(), 0)
+        self.assertEqual(competing_codes, [2])
+        self.assertFalse(marker.exists())
+        self.assertEqual(self.evidence(prefix)["status"], "clean")
+
+    def test_tracer_spawn_oserror_is_unusable(self):
+        directory = self.root / "bad-executable"
+        directory.mkdir()
+        tracer = directory / "strace"
+        tracer.write_text("not an executable\n")
+        tracer.chmod(0o700)
+        prefix = self.prefix("spawn-oserror")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=directory)
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        evidence = self.evidence(prefix)
+        self.assertEqual(evidence["status"], "unusable_tracer")
+        self.assertIsNone(evidence["observed_exit"])
+        self.assertFalse(evidence["target_executed"])
+
     def test_each_existing_artifact_prevents_preflight(self):
         for suffix in (".trace", ".stdout", ".stderr", ".json"):
             with self.subTest(suffix=suffix):

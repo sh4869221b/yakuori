@@ -169,6 +169,8 @@ def closer(body: str, start: int, stack: list[str]) -> int | None:
             quoted = True
         elif char in OPENERS:
             stack.append(OPENERS[char])
+        elif char == ">" and index > 0 and body[index - 1] in "-=":
+            pass  # A strace path/edge arrow is data, not an annotation closer.
         elif char in CLOSERS and char == stack[-1]:
             stack.pop()
             if not stack:
@@ -589,8 +591,18 @@ def main() -> int:
         artifact = prefix.with_name(prefix.name + suffix)
         if artifact.exists() or artifact.is_symlink():
             parser.error(f"evidence already exists: {artifact}")
-    prefix.parent.mkdir(parents=True, exist_ok=True)
     trace, stdout, stderr = (prefix.with_name(prefix.name + suffix) for suffix in (".trace", ".stdout", ".stderr"))
+    try:
+        prefix.parent.mkdir(parents=True, exist_ok=True)
+        # Claim the actual outputs, JSON first, before preflight can yield to a
+        # competing observer. Never truncate another invocation's artifacts.
+        for artifact in (prefix.with_name(prefix.name + ".json"), trace, stdout, stderr):
+            with artifact.open("x"):
+                pass
+    except FileExistsError as error:
+        parser.error(f"evidence already exists: {error.filename}")
+    except OSError as error:
+        parser.error(f"cannot reserve evidence: {error}")
 
     record: dict[str, Any] = {
         "command": command,
@@ -628,6 +640,10 @@ def main() -> int:
             record["invalid_reasons"] = [preflight["detail"]]
             return emit(prefix, record, 2)
         code, timed_out, group = run_strace(strace, trace, command, stdout, stderr, args.timeout_seconds)
+    except OSError as error:
+        record["status"] = "unusable_tracer"
+        record["invalid_reasons"] = [f"tracer startup or output failed: {error}"]
+        return emit(prefix, record, 2)
     except SystemExit as interrupted:
         record["status"] = "interrupted"
         record["descendants_stopped"] = TEARDOWN["descendants_stopped"]
