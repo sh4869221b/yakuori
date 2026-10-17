@@ -81,10 +81,17 @@ func TestOfflineCLIMatrix(t *testing.T) {
 		useCopy := layout.run(t, "real-models-use-copy", 0, "models", "use", "copy")
 		checkSelected := layout.run(t, "real-doctor-check-model-copy", 0, "doctor", "--check-model", "--backend", backend)
 		afterUse := layout.snapshot(t)
+		t.Run("translation", func(t *testing.T) { offlineTranslationMatrix(t, layout) })
+		t.Run("controlled_failures", testOfflineTranslationFailures)
 		layout.corruptManaged(t, "copy")
 		verifyCorrupt := layout.run(t, "real-models-verify-corrupt", 1, "models", "verify", "copy")
 		checkCorrupt := layout.run(t, "real-doctor-check-model-corrupt", 1, "doctor", "--check-model", "--backend", backend)
 		afterCorrupt := layout.snapshot(t)
+		t.Run("corrupt_translation", func(t *testing.T) { offlineTranslationModelFailure(t, layout, "corrupt") })
+		if err := os.Remove(filepath.Join(layout.storage.ModelsDir, "copy", "model.gguf")); err != nil {
+			t.Fatal(err)
+		}
+		t.Run("missing_translation", func(t *testing.T) { offlineTranslationModelFailure(t, layout, "missing") })
 
 		selected := func(state offlineSmokeState) bool {
 			return state.RegistryEntry && state.RegistrySHA == offlineSmokeSHA256 && state.RegistrySize == offlineSmokeSizeBytes &&
@@ -103,7 +110,7 @@ func TestOfflineCLIMatrix(t *testing.T) {
 			{"name": "old_state_survives_the_corrupted_copy", "pass": afterCorrupt.ManagedSHA != offlineSmokeSHA256 && selected(afterCorrupt)},
 		}
 		recordOfflineSmokeEvidence(t, "matrix-real-model", map[string]any{
-			"case": "real-model", "task": "issue-19-model-pull-offline/task-6",
+			"case": "real-model", "task": "issue-19-cli-offline-completion/task-4",
 			"binary": offlineSmokeBinary(t), "model": model, "layout": layout.describe(),
 			"fixture":            map[string]any{"sha256": offlineSmokeSHA256, "size_bytes": offlineSmokeSizeBytes, "origin": "owned copy of the preexisting local image fixture, no acquisition"},
 			"state_after_import": afterImport, "state_after_use": afterUse, "state_after_corruption": afterCorrupt, "checks": checks,
