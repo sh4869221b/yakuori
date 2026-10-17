@@ -7,6 +7,8 @@ import (
 	"testing"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/sh4869221b/yakuori/internal/artifact"
 )
 
 func FuzzParse(f *testing.F) {
@@ -74,6 +76,27 @@ func FuzzParse(f *testing.F) {
 		observed, err := parse(raw, l.ArtifactBytes, nil)
 		if err != nil || !reflect.DeepEqual(a, observed) {
 			t.Fatalf("input/output parser disagreement: %v", err)
+		}
+		if a.language == "jp" {
+			adapter := researchAdapter(t)
+			session := importSession(t, adapter, raw)
+			accepted := acceptedTexts(t, session, nil)
+			var output bytes.Buffer
+			manifest, err := adapter.Export(&output, session, exportProfile(t), accepted)
+			if err != nil || !bytes.Equal(output.Bytes(), raw) {
+				t.Fatalf("jp source-identical reconstruction changed bytes: %v", err)
+			}
+			final, err := adapter.Observe(bytes.NewReader(output.Bytes()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected, err := artifact.PrepareExport(session, exportProfile(t), accepted)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := artifact.CompareFinal(manifest, expected, final); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if len(raw) != 0 {
 			raw[0] ^= 1
