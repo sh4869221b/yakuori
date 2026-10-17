@@ -2,7 +2,7 @@
 """Run one command under strace and fail closed on any observed network attempt.
 
 The whole process tree is traced with
-``strace -f -qq -yy -s 4096 -e trace=%network -o TRACE -- COMMAND...``: INET and
+``strace -f -qq -yy -s 4096 -e trace=%network,execve,execveat -o TRACE -- COMMAND...``: INET and
 INET6 socket creation, connect and destination-addressed send, plus AF_UNIX
 connect and destination-addressed send that would bypass a resolver or proxy,
 are refused. AF_UNIX socketpair and other in-process IPC stay allowed. The
@@ -100,9 +100,20 @@ def classify(name: str, args: str, allow_nvidia_mps: bool = False) -> tuple[str,
             return "violation", f"{name}({match.group(1)})"
         return "allowed", name
     if name in SEND:
-        if SOCKADDR.search(args) is not None:
+        fields = split_fields(args)
+        destinations = []
+        if name == "sendto" and len(fields) == 6:
+            destinations = [fields[4]]
+        elif name == "sendmsg" and len(fields) == 3:
+            destinations = [message_destination(fields[1])]
+        elif name == "sendmmsg" and len(fields) == 4 and fields[1].startswith("[") and fields[1].endswith("]"):
+            for message in split_fields(fields[1][1:-1]):
+                header = next((part[len("msg_hdr="):] for part in split_fields(message[1:-1])
+                               if part.startswith("msg_hdr=")), "")
+                destinations.append(message_destination(header))
+        if any(SOCKADDR.search(destination) is not None for destination in destinations):
             return "violation", f"{name} with destination address"
-        if "NULL" in args:
+        if destinations and all(destination == "NULL" for destination in destinations):
             return "allowed", f"{name} to connected socket"
         return "unparsed", f"{name} destination not decoded"
     if name in EXISTING_SOCKET:
@@ -116,6 +127,7 @@ class Analysis:
     markers: int = 0
     unfinished: int = 0
     resumed: int = 0
+    executed: bool = False
     attempts: list[dict[str, Any]] = field(default_factory=list)
     allowed: list[dict[str, Any]] = field(default_factory=list)
     unparsed: list[dict[str, Any]] = field(default_factory=list)
@@ -165,6 +177,43 @@ def closer(body: str, start: int, stack: list[str]) -> int | None:
     return None
 
 
+def split_fields(text: str) -> list[str]:
+    """Split only top-level commas, skipping quoted values and nested strace annotations."""
+    fields = []
+    start = index = 0
+    while index < len(text):
+        char = text[index]
+        if char == '"':
+            quoted = re.match(r'"(?:[^"\\]|\\.)*"', text[index:])
+            if quoted is None:
+                return []
+            index += quoted.end()
+            continue
+        if char in OPENERS:
+            end = closer(text, index + 1, [OPENERS[char]])
+            if end is None:
+                return []
+            index = end + 1
+            continue
+        if char == ")":
+            break
+        if char == ",":
+            fields.append(text[start:index].strip())
+            start = index + 1
+        index += 1
+    if text[start:index].strip():
+        fields.append(text[start:index].strip())
+    return fields
+
+
+def message_destination(message: str) -> str:
+    """Read msg_name from the actual msghdr, never from its iovec payload or control data."""
+    if not message.startswith("{") or not message.endswith("}"):
+        return ""
+    return next((part[len("msg_name="):] for part in split_fields(message[1:-1])
+                 if part.startswith("msg_name=")), "")
+
+
 def complete_result(tail: str) -> bool:
     """True only for a result strace prints after a completed argument list.
 
@@ -196,6 +245,7 @@ def complete_record(body: str, start: int) -> bool:
 
 def analyze(text: str, allow_nvidia_mps: bool = False) -> Analysis:
     result = Analysis()
+    pending: dict[tuple[int, str], tuple[str, str]] = {}
     for raw in text.splitlines():
         result.lines += 1
         stripped = raw.strip()
@@ -218,11 +268,16 @@ def analyze(text: str, allow_nvidia_mps: bool = False) -> Analysis:
             if pid is None:
                 result.unparsed.append({"line": raw, "reason": "trace line without pid prefix; -f following unverified"})
                 continue
-            if not complete_record(body, resumed.end()):
+            opening = pending.pop((pid, resumed.group(1)), None)
+            if opening is None:
+                result.unparsed.append({"line": raw, "reason": "resumed syscall has no matching unfinished pid and syscall"})
+                continue
+            body = opening[0] + body[resumed.end():]
+            if not complete_record(body, body.index("(") + 1):
                 result.unparsed.append({"line": raw, "reason": "resumed line without a completed syscall result; truncated trace record"})
                 continue
             result.resumed += 1
-            continue
+            raw = opening[1] + "\n" + raw
         match = CALL.match(body)
         if match is None:
             result.unparsed.append({"line": raw, "reason": "neither a syscall line nor a marker"})
@@ -235,6 +290,17 @@ def analyze(text: str, allow_nvidia_mps: bool = False) -> Analysis:
         if pid is None:
             result.unparsed.append({**entry, "reason": "trace line without pid prefix; -f following unverified"})
             continue
+        if unfinished:
+            key = (pid, name)
+            if key in pending:
+                result.unparsed.append({**entry, "reason": "duplicate unfinished pid and syscall"})
+            pending[key] = (body, raw)
+            continue
+        if name in ("execve", "execveat"):
+            end = closer(body, match.start(2), [")"])
+            if body[end + 1:].strip() == "= 0":
+                result.executed = True
+            continue
         kind, detail = classify(name, args, allow_nvidia_mps)
         entry["detail"] = detail
         if kind == "violation":
@@ -246,8 +312,9 @@ def analyze(text: str, allow_nvidia_mps: bool = False) -> Analysis:
     return result
 
 
-INTERRUPTED = False
+INTERRUPTED = 0
 IN_TEARDOWN = False
+STARTING = False
 
 
 def terminate(signum: int, _frame: Any) -> None:
@@ -262,7 +329,9 @@ def terminate(signum: int, _frame: Any) -> None:
     global INTERRUPTED
     if INTERRUPTED or IN_TEARDOWN:
         return
-    INTERRUPTED = True
+    INTERRUPTED = signum
+    if STARTING:
+        return
     raise SystemExit(128 + signum)
 
 
@@ -339,10 +408,15 @@ def record_tree(identity: dict[int, str], root: int, tracer: str, group: int) ->
 
     Ownership stays exact: tree walks start only from pids that still hold the recorded
     process, the ptrace link is read only while our own tracer is still that process, and
-    group membership counts only because this run created that session itself.
+    group membership is admitted only while the verified session owner is still alive.
     """
-    members = [member["pid"] for member in group_members(group)]
-    linked = traced_pids(root) if owned_alive(root, tracer) else []
+    members, linked = [], []
+    if owned_alive(root, tracer):
+        members = [member["pid"] for member in group_members(group)]
+        linked = traced_pids(root)
+        # A start time recorded after the owner disappeared cannot establish ownership.
+        if not owned_alive(root, tracer):
+            members, linked = [], []
     for pid in [*live_tree([*owned_roots(root, tracer, identity), *members, *linked]), *members, *linked]:
         record = process_record(pid)
         if record is not None:
@@ -431,16 +505,25 @@ def interrupt_reason(signal_number: int) -> str:
 
 
 def run_strace(strace: str, trace: Path, command: list[str], stdout: Path, stderr: Path, timeout: int) -> tuple[int, bool, int]:
-    argv = [strace, "-f", "-qq", "-yy", "-s", "4096", "-e", "trace=%network", "-o", str(trace), "--", *command]
+    global STARTING
+    argv = [strace, "-f", "-qq", "-yy", "-s", "4096", "-e", "trace=%network,execve,execveat", "-o", str(trace), "--", *command]
     TEARDOWN.update({"descendants_stopped": [], "descendants_after_exit": None, "verified": False})
     with stdout.open("wb") as out, stderr.open("wb") as err:
-        child = subprocess.Popen(argv, stdout=out, stderr=err, start_new_session=True)
-        group = os.getpgid(child.pid)
-        root = child.pid
-        tracer_record = process_record(root)
-        tracer = tracer_record["starttime"] if tracer_record is not None else ""
+        child = None
         timed_out = False
         try:
+            # Defer interrupts until Popen has returned the child and its ownership is
+            # recorded. The child keeps the normal signal mask and dispositions.
+            STARTING = True
+            try:
+                child = subprocess.Popen(argv, stdout=out, stderr=err, start_new_session=True)
+                group = root = child.pid
+                tracer_record = process_record(root)
+                tracer = tracer_record["starttime"] if tracer_record is not None else ""
+            finally:
+                STARTING = False
+            if INTERRUPTED:
+                raise SystemExit(128 + INTERRUPTED)
             try:
                 code = child.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
@@ -450,9 +533,10 @@ def run_strace(strace: str, trace: Path, command: list[str], stdout: Path, stder
             stop_traced(root, tracer, group)
             code = child.wait()
         except SystemExit:
-            stop_traced(root, tracer, group)
-            if child.poll() is None:
-                child.wait()
+            if child is not None:
+                stop_traced(root, tracer, group)
+                if child.poll() is None:
+                    child.wait()
             raise
     return code, timed_out, group
 
@@ -463,10 +547,15 @@ def preflight_tracer(strace: str) -> dict[str, Any]:
         root = Path(tmp)
         trace = root / "preflight.trace"
         script = "import socket; socket.socket(socket.AF_INET, socket.SOCK_STREAM).close()"
-        run_strace(strace, trace, [sys.executable, "-c", script], root / "stdout", root / "stderr", timeout=PREFLIGHT_TIMEOUT)
+        code, timed_out, _ = run_strace(strace, trace, [sys.executable, "-c", script], root / "stdout", root / "stderr",
+                                       timeout=PREFLIGHT_TIMEOUT)
+        if code != 0 or timed_out or not TEARDOWN["verified"] or TEARDOWN["descendants_after_exit"]:
+            return {"ok": False, "detail": "tracer preflight did not complete successfully with verified teardown", "syscall": None}
         if not trace.is_file():
             return {"ok": False, "detail": "the tracer produced no trace file for its own probe", "syscall": None}
         parsed = analyze(trace.read_text(errors="replace"))
+        if parsed.reasons or not parsed.executed:
+            return {"ok": False, "detail": "tracer preflight trace is incomplete or lacks successful exec", "syscall": None}
         hit = next((entry for entry in parsed.attempts if "AF_INET" in entry["detail"]), None)
         if hit is None:
             return {"ok": False, "detail": "the tracer did not record its own AF_INET socket; tracing cannot be trusted", "syscall": None}
@@ -496,8 +585,10 @@ def main() -> int:
     if args.timeout_seconds < 1:
         parser.error("--timeout-seconds must be positive")
     prefix = Path(args.evidence).resolve()
-    if prefix.with_name(prefix.name + ".json").exists():
-        parser.error(f"evidence already exists: {prefix}.json")
+    for suffix in (".trace", ".stdout", ".stderr", ".json"):
+        artifact = prefix.with_name(prefix.name + suffix)
+        if artifact.exists() or artifact.is_symlink():
+            parser.error(f"evidence already exists: {artifact}")
     prefix.parent.mkdir(parents=True, exist_ok=True)
     trace, stdout, stderr = (prefix.with_name(prefix.name + suffix) for suffix in (".trace", ".stdout", ".stderr"))
 
@@ -506,6 +597,7 @@ def main() -> int:
         "expect_exit": args.expect_exit,
         "allow_nvidia_mps": args.allow_nvidia_mps,
         "observed_exit": None,
+        "target_executed": False,
         "status": None,
         "timeout_seconds": args.timeout_seconds,
         "strace": {"path": None, "returncode": None, "timed_out": None},
@@ -516,7 +608,7 @@ def main() -> int:
         "descendants_stopped": [],
         "descendants_after_exit": None,
         "preflight": None,
-        "note": "strace messages are suppressed with -qq, so PREFIX.stdout/PREFIX.stderr carry the target's streams",
+        "note": "PREFIX.stdout/PREFIX.stderr retain target streams and any tracer diagnostics; successful exec is verified from the trace",
         "exit_code": None,
     }
 
@@ -526,16 +618,15 @@ def main() -> int:
         record["invalid_reasons"] = ["strace is not on PATH"]
         return emit(prefix, record, 2)
     record["strace"]["path"] = strace
-    preflight = preflight_tracer(strace)
-    record["preflight"] = preflight
-    if not preflight["ok"]:
-        record["status"] = "unusable_tracer"
-        record["invalid_reasons"] = [preflight["detail"]]
-        return emit(prefix, record, 2)
-
     signal.signal(signal.SIGINT, terminate)
     signal.signal(signal.SIGTERM, terminate)
     try:
+        preflight = preflight_tracer(strace)
+        record["preflight"] = preflight
+        if not preflight["ok"]:
+            record["status"] = "unusable_tracer"
+            record["invalid_reasons"] = [preflight["detail"]]
+            return emit(prefix, record, 2)
         code, timed_out, group = run_strace(strace, trace, command, stdout, stderr, args.timeout_seconds)
     except SystemExit as interrupted:
         record["status"] = "interrupted"
@@ -543,7 +634,6 @@ def main() -> int:
         record["descendants_after_exit"] = TEARDOWN["descendants_after_exit"] if TEARDOWN["verified"] else None
         record["invalid_reasons"] = [interrupt_reason(int(interrupted.code) - 128)]
         return emit(prefix, record, int(interrupted.code))
-    record["observed_exit"] = code
     record["strace"]["returncode"] = code
     record["strace"]["timed_out"] = timed_out
     record["descendants_stopped"] = TEARDOWN["descendants_stopped"]
@@ -558,6 +648,11 @@ def main() -> int:
         record["attempts"] = parsed.attempts
         record["allowed_local"] = parsed.allowed
         reasons = parsed.reasons
+        record["target_executed"] = parsed.executed
+        if parsed.executed:
+            record["observed_exit"] = code
+        else:
+            reasons.append("trace contains no successful target exec")
     else:
         reasons = ["strace did not create the trace file"]
     if record["descendants_after_exit"]:

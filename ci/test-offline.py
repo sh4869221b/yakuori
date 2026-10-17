@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic checks for ci/offline.py; requires strace on PATH."""
 import json
+import importlib.util
 import os
 from pathlib import Path
 import select
@@ -12,8 +13,13 @@ import tempfile
 import textwrap
 import time
 import unittest
+from unittest import mock
 
 OFFLINE = Path(__file__).with_name("offline.py")
+SPEC = importlib.util.spec_from_file_location("offline", OFFLINE)
+offline = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = offline
+SPEC.loader.exec_module(offline)
 
 PROBE = textwrap.dedent(
     """\
@@ -99,7 +105,7 @@ PROBE = textwrap.dedent(
 FAKE_STRACE = textwrap.dedent(
     """\
     #!/usr/bin/env python3
-    import os, shutil, subprocess, sys
+    import os, subprocess, sys
 
     mode = os.environ["FAKE_STRACE_MODE"]
     args = sys.argv[1:]
@@ -110,9 +116,15 @@ FAKE_STRACE = textwrap.dedent(
         sys.exit(127)
     if mode == "empty":
         open(trace, "w").close()
-    else:
-        shutil.copyfile(mode.split(":", 1)[1], trace)
-    sys.exit(subprocess.run(command).returncode)
+        sys.exit(subprocess.run(command).returncode)
+    # Keep the real preflight and exec proof; inject only the network parser fixture.
+    real = os.environ["REAL_STRACE"]
+    if os.path.basename(trace) == "preflight.trace":
+        os.execv(real, [real, *args])
+    code = subprocess.run([real, *args]).returncode
+    with open(trace, "ab") as output, open(mode.split(":", 1)[1], "rb") as fixture:
+        output.write(fixture.read())
+    sys.exit(code)
     """
 )
 
@@ -125,8 +137,7 @@ DANGLING_TRACE = (
     '4242 connect(3<TCP:127.0.0.1:9>, {sa_family=AF_INET, sin_port=htons(9), sin_addr=inet_addr("127.0.0.1")}, 16 <unfinished ...>\n'
 )
 GARBAGE_TRACE = '4242 socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, IPPROTO_TCP) = 3\nnot a syscall line\n'
-# A complete AF_INET socket line comes first: the fake tracer replays the fixture as its own
-# preflight trace, which must show an INET attempt before tracing is trusted.
+# A complete AF_INET socket line precedes parser fixtures; preflight itself runs live.
 INET_LINE = "4242 socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, IPPROTO_TCP) = 3\n"
 COMPLETE_LOCAL_IPC_TRACE = INET_LINE + "4242 socketpair(AF_UNIX, SOCK_STREAM, 0, [3, 4]) = 0\n"
 CUT_LOCAL_IPC_TRACE = INET_LINE + "4242 socketpair(AF_UNIX, SOCK_STREAM, 0"
@@ -226,7 +237,7 @@ class ObserverTests(unittest.TestCase):
         shim = directory / "strace"
         shim.write_text(FAKE_STRACE)
         shim.chmod(0o700)
-        return str(directory), {"FAKE_STRACE_MODE": mode}
+        return str(directory), {"FAKE_STRACE_MODE": mode, "REAL_STRACE": shutil.which("strace")}
 
     def assert_attempt(self, prefix, mode):
         run = self.probe_run(mode, prefix)
@@ -704,6 +715,193 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
         self.assertIn("already exists", run.stderr)
         self.assertEqual(Path(f"{prefix}.json").read_text(), "existing evidence")
+
+    def test_each_existing_artifact_prevents_preflight(self):
+        for suffix in (".trace", ".stdout", ".stderr", ".json"):
+            with self.subTest(suffix=suffix):
+                prefix = self.prefix("existing-artifact")
+                artifact = Path(f"{prefix}{suffix}")
+                artifact.write_bytes(b"original evidence\n")
+                with mock.patch.object(sys, "argv", [str(OFFLINE), "--evidence", str(prefix),
+                                                     "--expect-exit", "0", "--", "/bin/true"]), \
+                        mock.patch.object(offline, "preflight_tracer", wraps=offline.preflight_tracer) as preflight:
+                    with self.assertRaises(SystemExit) as raised:
+                        offline.main()
+                self.assertEqual(raised.exception.code, 2)
+                preflight.assert_not_called()
+                self.assertEqual(artifact.read_bytes(), b"original evidence\n")
+
+    def test_send_destination_is_not_inferred_from_payload_or_control(self):
+        for name, args in (
+            ("sendto", '3, NULL, 0, 0, 0x1234, 16'),
+            ("sendto", '3, "NULL, sa_family=AF_UNIX", 23, 0, 0x1234, 16'),
+            ("sendmsg", '3, {msg_name=0x1234, msg_namelen=16, msg_iov=[], msg_control=NULL}, 0'),
+            ("sendmmsg", '3, [{msg_hdr={msg_name=NULL, msg_iov=[], msg_control=NULL}, msg_len=0}, '
+                         '{msg_hdr={msg_name=0x1234, msg_iov=[], msg_control=NULL}, msg_len=0}], 2, 0'),
+        ):
+            with self.subTest(name=name, args=args):
+                parsed = offline.analyze(f"4242 {name}({args}) = 0\n")
+                self.assertTrue(parsed.reasons)
+                self.assertEqual(parsed.allowed, [])
+
+    def test_connected_message_sends_ignore_payload_address_text(self):
+        for name, args in (
+            ("sendto", '3, "sa_family=AF_INET, NULL", 23, 0, NULL, 0'),
+            ("sendmsg", '3, {msg_name=NULL, msg_namelen=0, msg_iov=[{iov_base="msg_name=0x1", iov_len=12}], msg_control=NULL}, 0'),
+            ("sendmmsg", '3, [{msg_hdr={msg_name=NULL, msg_namelen=0, msg_iov=[], msg_control=NULL}, msg_len=0}], 1, 0'),
+        ):
+            with self.subTest(name=name):
+                parsed = offline.analyze(f"4242 {name}({args}) = 0\n")
+                self.assertEqual(parsed.reasons, [])
+                self.assertEqual(parsed.attempts, [])
+                self.assertEqual(len(parsed.allowed), 1)
+
+    def test_unfinished_records_require_same_pid_and_syscall(self):
+        for resumed in ("4242 <... connect resumed>) = 0",
+                        "4243 <... recvfrom resumed>) = 0"):
+            with self.subTest(resumed=resumed):
+                parsed = offline.analyze('4242 recvfrom(3, "", 0, 0, NULL, NULL <unfinished ...>\n'
+                                         + resumed + "\n")
+                self.assertTrue(parsed.reasons)
+
+    def test_resumed_destination_is_classified_after_pairing(self):
+        parsed = offline.analyze('4242 sendto(3, "x", 1, 0, <unfinished ...>\n'
+                                 '4242 <... sendto resumed>{sa_family=AF_INET, sin_port=htons(9)}, 16) = 1\n')
+        self.assertEqual(parsed.reasons, [])
+        self.assertEqual(len(parsed.attempts), 1)
+        self.assertEqual(parsed.attempts[0]["syscall"], "sendto")
+
+    def test_reused_group_is_not_adopted_after_owner_exit(self):
+        with subprocess.Popen(["/bin/sleep", "600"], start_new_session=True) as stranger:
+            try:
+                identity = {}
+                offline.record_tree(identity, stranger.pid, "previous-owner-starttime", stranger.pid)
+                self.assertEqual(identity, {})
+                self.assertIsNone(stranger.poll())
+            finally:
+                stranger.kill()
+                stranger.wait(timeout=10)
+
+    def test_failed_preflight_never_runs_target(self):
+        for failure in ("exit", "timeout", "survivor", "unverified", "incomplete"):
+            with self.subTest(failure=failure):
+                prefix = self.prefix(f"preflight-{failure}")
+                marker = self.root / f"target-{failure}"
+                real_run = offline.run_strace
+
+                def fail_probe(strace, trace, command, stdout, stderr, timeout):
+                    if failure == "exit":
+                        command = [*command[:-1], command[-1] + "; raise SystemExit(7)"]
+                    elif failure == "timeout":
+                        command = [*command[:-1], command[-1] + "; import signal; signal.pause()"]
+                        timeout = 1
+                    result = real_run(strace, trace, command, stdout, stderr, timeout)
+                    if failure == "survivor":
+                        offline.TEARDOWN["descendants_after_exit"] = [99999999]
+                    elif failure == "unverified":
+                        offline.TEARDOWN["verified"] = False
+                    elif failure == "incomplete":
+                        with trace.open("a") as output:
+                            output.write("4242 recvfrom(3,\n")
+                    return result
+
+                argv = [str(OFFLINE), "--evidence", str(prefix), "--expect-exit", "0", "--",
+                        sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+                with mock.patch.object(sys, "argv", argv), mock.patch.object(offline, "run_strace", side_effect=fail_probe):
+                    code = offline.main()
+                self.assertEqual(code, 2)
+                self.assertFalse(marker.exists())
+                self.assertEqual(self.evidence(prefix)["status"], "unusable_tracer")
+
+    def test_exec_failure_is_not_an_expected_target_exit(self):
+        inaccessible = self.root / "non-executable"
+        inaccessible.write_text("#!/bin/sh\nexit 1\n")
+        for command in ([str(self.root / "absent")], [str(inaccessible)]):
+            with self.subTest(command=command):
+                prefix = self.prefix("exec-failure")
+                run = self.run_observer(prefix, 1, command)
+                self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                self.assertEqual(self.evidence(prefix)["status"], "invalid")
+        prefix = self.prefix("genuine-exit-one")
+        run = self.run_observer(prefix, 1, [sys.executable, "-c", "raise SystemExit(1)"])
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertEqual(self.evidence(prefix)["observed_exit"], 1)
+
+    def test_spawn_and_preflight_interrupts_stop_owned_tracer(self):
+        for phase in ("spawn", "preflight"):
+            for signum in (signal.SIGINT, signal.SIGTERM):
+                with self.subTest(phase=phase, signum=signum):
+                    prefix = self.prefix(f"{phase}-{signum}")
+                    pidfile = self.root / f"tracer-{self.runs}.pid"
+                    ready_read, ready_write = os.pipe()
+                    gate_read, gate_write = os.pipe()
+                    launcher = textwrap.dedent(f"""\
+                        import importlib.util, os, select, signal, sys
+                        spec = importlib.util.spec_from_file_location("offline", {str(OFFLINE)!r})
+                        module = importlib.util.module_from_spec(spec)
+                        sys.modules[spec.name] = module
+                        spec.loader.exec_module(module)
+                        terminate = module.terminate
+                        def interrupted(signum, frame):
+                            os.write({ready_write}, b"signal")
+                            terminate(signum, frame)
+                        module.terminate = interrupted
+                        popen = module.subprocess.Popen
+                        def spawn(argv, **kwargs):
+                            preflight = argv[argv.index("-o") + 1].endswith("/preflight.trace")
+                            if preflight and {phase!r} == "preflight":
+                                argv[-1] += "; import signal; signal.pause()"
+                            child = popen(argv, **kwargs)
+                            if preflight == ({phase!r} == "preflight"):
+                                open({str(pidfile)!r}, "w").write(str(child.pid))
+                                if {phase!r} == "spawn":
+                                    os.write({ready_write}, b"ready")
+                                    assert select.select([{gate_read}], [], [], 20)[0]
+                                    os.read({gate_read}, 1)
+                                else:
+                                    wait = child.wait
+                                    def ready_wait(*args, **kwargs):
+                                        os.write({ready_write}, b"ready")
+                                        return wait(*args, **kwargs)
+                                    child.wait = ready_wait
+                            return child
+                        module.subprocess.Popen = spawn
+                        raise SystemExit(module.main())
+                        """)
+                    args = [sys.executable, "-c", launcher, "--evidence", str(prefix),
+                            "--expect-exit", "0", "--", sys.executable, "-c", "import signal; signal.pause()"]
+                    observer = subprocess.Popen(args, pass_fds=(ready_write, gate_read),
+                                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    os.close(ready_write)
+                    os.close(gate_read)
+                    try:
+                        self.assertTrue(select.select([ready_read], [], [], 20)[0])
+                        self.assertEqual(os.read(ready_read, 5), b"ready")
+                        observer.send_signal(signum)
+                        if phase == "spawn":
+                            self.assertTrue(select.select([ready_read], [], [], 20)[0])
+                            self.assertEqual(os.read(ready_read, 6), b"signal")
+                            try:
+                                os.write(gate_write, b"x")
+                            except BrokenPipeError:
+                                pass
+                        out, err = observer.communicate(timeout=20)
+                        self.assertEqual(observer.returncode, 128 + signum, (out, err))
+                        evidence = self.evidence(prefix)
+                        self.assertEqual(evidence["status"], "interrupted")
+                        self.assertEqual(evidence["descendants_after_exit"], [])
+                        self.assertIn(self.process_state(int(pidfile.read_text())), (None, "Z"))
+                    finally:
+                        os.close(ready_read)
+                        os.close(gate_write)
+                        if observer.poll() is None:
+                            observer.kill()
+                            observer.wait(timeout=10)
+                        if pidfile.exists():
+                            try:
+                                os.killpg(int(pidfile.read_text()), signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
 
     def test_mps_control_connect_is_refused_by_default(self):
         # The recorded control-connect shape replayed through the fake tracer: with no
