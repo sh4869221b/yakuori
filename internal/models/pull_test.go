@@ -207,6 +207,59 @@ func TestPull(t *testing.T) {
 			return err
 		},
 	}, {
+		name: "no replay of a redirected request",
+		run: func(t *testing.T, f *pullFixture) error {
+			var target atomic.Int64
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/start" {
+					http.Redirect(w, r, "/model", http.StatusFound)
+					return
+				}
+				// The redirect is followed over the keep-alive connection the
+				// fixture answered on, and that connection dies before the
+				// first byte of the response: the case net/http answers by
+				// re-sending a replayable GET. The second request is served, so
+				// a replay shows up as this pull succeeding, never as a flake.
+				if target.Add(1) > 1 {
+					w.Header().Set("Content-Length", strconv.Itoa(len(f.payload)))
+					w.Write(f.payload)
+					return
+				}
+				conn, _, err := w.(http.Hijacker).Hijack()
+				if err != nil {
+					t.Errorf("hijack: %v", err)
+					return
+				}
+				defer conn.Close()
+			}))
+			t.Cleanup(srv.Close)
+			err := f.pullWith(t, srv, f.request(srv.URL+"/start"))
+			if got := target.Load(); got != 1 {
+				t.Errorf("redirect target answered %d requests, want 1: the transport replayed the request", got)
+			}
+			return err
+		},
+	}, {
+		name:    "single request protocol with an HTTP2 server",
+		success: true,
+		run: func(t *testing.T, f *pullFixture) error {
+			srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.ProtoMajor != 1 {
+					t.Errorf("pull negotiated HTTP/%d, want HTTP/1 without protocol-level retries", r.ProtoMajor)
+				}
+				w.Write(f.payload)
+			}))
+			srv.EnableHTTP2 = true
+			srv.StartTLS()
+			t.Cleanup(srv.Close)
+			client := pullClient(t, srv)
+			// Restore normal HTTP/2 eligibility after the fixture adds its TLS CA.
+			client.Transport.(*http.Transport).ForceAttemptHTTP2 = true
+			f.used = f.request(srv.URL)
+			_, err := f.registry.pull(f.context(), client, f.used)
+			return err
+		},
+	}, {
 		name: "short body",
 		run: func(t *testing.T, f *pullFixture) error {
 			return f.pull(t, tlsServer(t, f.payload[:len(f.payload)-3]))

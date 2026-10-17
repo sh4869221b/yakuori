@@ -143,9 +143,12 @@ func validatePullRequest(req PullRequest) error {
 }
 
 // pullTransport is the transport of one pull. Compression is disabled so the
-// hashed bytes are the bytes the server sent.
+// hashed bytes are the bytes the server sent. Single-use HTTP/1 connections
+// prevent both reused-connection GET replay and HTTP/2 stream retries.
 func pullTransport() *http.Transport {
-	return &http.Transport{DisableCompression: true}
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	return &http.Transport{DisableCompression: true, DisableKeepAlives: true, Protocols: protocols}
 }
 
 // newPullClient builds the client for one pull: normal TLS verification, a
