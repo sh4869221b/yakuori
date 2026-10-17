@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -139,6 +140,12 @@ func validatePullRequest(req PullRequest) error {
 	if parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" {
 		return errors.New("source URL must be an absolute HTTPS URL without userinfo or fragment")
 	}
+	if port := parsed.Port(); port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return errors.New("source URL port must be between 1 and 65535")
+		}
+	}
 	return nil
 }
 
@@ -191,11 +198,27 @@ func fetchModel(ctx context.Context, client *http.Client, req PullRequest, path 
 	}
 	hash := sha256.New()
 	size, copyErr := io.Copy(io.MultiWriter(file, hash), io.LimitReader(response.Body, req.SizeBytes+1))
-	if err := errors.Join(copyErr, file.Close()); err != nil {
+	closeErr := file.Close()
+	if copyErr != nil || closeErr != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			err = errors.Join(err, ctxErr)
+			return "", errors.Join(copyErr, closeErr, ctxErr)
 		}
-		return "", err
+	}
+	if copyErr != nil {
+		// A connection that ends early reports its own error together with the
+		// bytes it did deliver. The received count still decides whether the
+		// transfer was short or too long, so the caller gets the documented
+		// size classification instead of an unknown transport failure.
+		if size > req.SizeBytes {
+			return "", errors.Join(fmt.Errorf("pull %s: body exceeds the expected %d bytes", req.ID, req.SizeBytes), copyErr, closeErr)
+		}
+		if size != req.SizeBytes {
+			return "", errors.Join(fmt.Errorf("pull %s: received %d bytes, expected %d", req.ID, size, req.SizeBytes), copyErr, closeErr)
+		}
+		return "", errors.Join(copyErr, closeErr)
+	}
+	if closeErr != nil {
+		return "", closeErr
 	}
 	if size > req.SizeBytes {
 		return "", fmt.Errorf("pull %s: body exceeds the expected %d bytes", req.ID, req.SizeBytes)

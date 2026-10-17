@@ -94,6 +94,9 @@ func TestPullCLIArguments(t *testing.T) {
 		{"fragment url", change(func(a *pullArguments) { a.url = "https://example.invalid/model.gguf#private-text" })},
 		{"empty host url", change(func(a *pullArguments) { a.url = "https:///model.gguf" })},
 		{"port-only authority url", change(func(a *pullArguments) { a.url = "https://:443/model.gguf" })},
+		{"zero source port url", change(func(a *pullArguments) { a.url = "https://example.invalid:0/model.gguf" })},
+		{"source port above 65535 url", change(func(a *pullArguments) { a.url = "https://example.invalid:65536/model.gguf" })},
+		{"five digit source port url", change(func(a *pullArguments) { a.url = "https://example.invalid:99999/model.gguf" })},
 		{"missing url", []string{"models", "pull", "--id", "fetched", "--sha256", pullDigest, "--size", "1024", "--digest-source", pullDigestSource}},
 		{"extra url", append(validPullArguments(nil), "https://example.invalid/other.gguf")},
 		{"flags after url", []string{"models", "pull", "https://example.invalid/model.gguf", "--id", "fetched", "--sha256", pullDigest, "--size", "1024", "--digest-source", pullDigestSource}},
@@ -132,9 +135,9 @@ func TestPullCLIArguments(t *testing.T) {
 }
 
 // TestPullCLIValidAuthorities proves the authority check keeps accepting a
-// valid hostname and an IPv6 literal, each with an explicit port.
+// valid hostname, with or without an explicit port, and an IPv6 literal.
 func TestPullCLIValidAuthorities(t *testing.T) {
-	for _, url := range []string{"https://example.invalid:8443/model.gguf", "https://[::1]:8443/model.gguf"} {
+	for _, url := range []string{"https://example.invalid/model.gguf", "https://example.invalid:8443/model.gguf", "https://example.invalid:65535/model.gguf", "https://[::1]:8443/model.gguf"} {
 		t.Run(url, func(t *testing.T) {
 			command, err := parseStorage(validPullArguments(func(a *pullArguments) { a.url = url }))
 			if err != nil || command.url != url {

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -143,6 +144,15 @@ func validatePullArguments(command storageCommand) error {
 	parsed, err := url.Parse(command.url)
 	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" {
 		return flag.ErrHelp
+	}
+	// url.Parse accepts a numeric port outside TCP's range, so reject it here
+	// as a usage error instead of letting the transport fail after storage is
+	// resolved.
+	if port := parsed.Port(); port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return flag.ErrHelp
+		}
 	}
 	return nil
 }
