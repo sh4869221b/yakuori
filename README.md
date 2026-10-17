@@ -1,10 +1,10 @@
 # Yakuori（訳織り）
 
-ゲームのID・tag・placeholder・binary構造を保ち、ローカルLLMの検証済み翻訳だけを成果物へ戻すPure Goのローカライズ基盤です。最初の目標はWitcher 3の実MOD `.w3strings` の日本語化です。
+ゲームのID・tag・placeholder・binary構造を保持するPure Goローカライズ基盤を目指します。現在、翻訳CLIが扱う形式は全文 `text-v1` です。最初のproduction adapterの目標はWitcher 3の実MOD `.w3strings` の日本語化です。
 
 ## 状態
 
-#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）と、全件生成・保護復元・最終artifact検証・一括TM commitを接続するCore（#11）、明示的にCPU/CUDAを選べるinference EngineとCore adapter（#12/#52）を実装しています。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverを必要とします。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使い、取消し後のdrainを終えてから再利用・Closeします。text Adapterは全文1unitを扱い、最終検証とcommit後に訳bytesをstdoutへ一括出力します。Coreの `TextWithTM` / `FileWithTM` はSQLite TMの完全一致候補を現在unitで再検証し、全件と最終artifactの検証後だけ保存します。通常の `localize` はEngine・TM未接続のため、出力指定の解析後も `localize pipeline is not implemented` でno-I/O終了します。実ゲーム検証、翻訳modelの品質選定、releaseはまだありません。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
+#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDAを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。実ゲーム用adapter、Witcher 3 MODの読み書き、人手による訳質確認、releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 
@@ -13,7 +13,7 @@
 ## v1の採用方針
 
 - Linuxのみ。Go 1.27 baseline、`CGO_ENABLED=0`、通常のCPU buildに加え、明示選択するLinux amd64向けoptional CUDA（`-tags cuda`、NVIDIA driverが必要）
-- goinferはwrapper内へ閉じ、TMは`database/sql`とCGO-free SQLite。具体pin・model・形式fixture・上限は実現性gateで確定
+- goinferはwrapper内へ閉じ、TMは`database/sql`とCGO-free SQLiteを使用します。採用済みの依存pin、text-v1上限とmodel fixtureは[基盤契約](docs/foundation.md)および受入れ記録を参照してください
 - 未検証candidateを確定せず、1 unitでも失敗なら成果fileを公開しない。生成の自動retryなし
 - TMはsource/profileの完全一致＋現在unitでの再検証
 - 最終staged artifact検証 → 短いTM commit → 安全なpublish。既存outputは既定拒否、明示時のみ置換
@@ -22,6 +22,21 @@
 - 通常処理はoffline。取得は明示的な `models pull`（絶対HTTPS URL、期待size・SHA-256・digest出所指定）と、指定されたローカルfileだけを読む `models import` の2経路のみ。自動取得・更新や既存IDの上書きはなく、通常処理は一切通信しない。取得元・期待値・digest出所の意味と取得履歴・失敗・取消し・残骸の扱いは「ローカルmodelの登録」を参照。MVP完了には実MODの独立読み取りと代表訳の人手確認が必要
 
 CLI・XDG namespaceは`yakuori`。旧Kotobaのコード・設定・TM・registryを暗黙移行しません。single binaryはmodel本体やGPU driverの内包を意味しません。
+
+## テキスト翻訳
+
+選択済みのローカルGGUFを使います。先にmodelを登録して選択してください。`models import` はローカルfileを登録し、`models pull` は期待size・SHA-256・digest出所を指定した明示的なHTTPS取得です。どちらも取得したmodelを自動選択しません。翻訳commandにmodel overrideや標準入力の入口はなく、`SOURCE` はregularなUTF-8 file pathです。`--backend` は `cpu` が既定で、CUDAを使うときだけ `cuda` を指定します。CUDAにはLinux amd64向け `-tags cuda` buildとNVIDIA driverが必要で、失敗時にCPUへ切り替わりません。
+
+```sh
+./yakuori translate --source-language en --target-language ja --game qa --artifact sample --backend cpu ./source.txt
+./yakuori localize --format text --source-language en --target-language ja --game qa --artifact sample --backend cpu --output ./translated.txt ./source.txt
+./yakuori localize --format text --source-language en --target-language ja --game qa --artifact sample --backend cpu --output ./translated.txt --replace-output ./source.txt
+./yakuori localize --format text --source-language en --target-language ja --game qa --artifact sample --backend cpu --in-place ./source.txt
+```
+
+言語、game namespace、artifact namespaceは空でない値を明示します。CLIは値を正規化したり、file pathからnamespaceを推定したりしません。`translate` は全文をstdoutへ返します。`localize` は形式 `text` を必須とし、`--output OUT` で新規公開、`--output OUT --replace-output` で既存出力の置換、または `--in-place` で原文をbackupとして残す置換をします。`--replace-output` には `--output` が必要で、公開モードは同時指定できません。
+
+対応形式は全文を一つのunitとして扱う `text-v1` です。tagやplaceholderらしい箇所を自動検出して保護する機能はありません。現在の `DefaultLimits` はartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76、context候補4096 tokens、最大出力2048 tokensです。text-v1は一つのunitなのでsource textは最大980 UTF-8 bytesです。Witcher 3 `.w3strings` のproduction adapter、実MODの入出力、人手による翻訳品質の受入れは未実装です。
 
 ## Build / test / run
 
@@ -36,9 +51,9 @@ CGO_ENABLED=0 GOTOOLCHAIN=local go vet ./...
 sh ci/verify.sh
 ```
 
-通常の `doctor` は保存先をstatし、小さなconfig/registryを読みますが、modelのhash・load、TMのopen、書込みはしません。欠落は表示し、既存の不正schemaや不安全なmodeは失敗として報告します。`doctor --check-model` は選択済みmodelを指定backendで開き、Engine情報を表示して閉じます。生成せず、snapshot directoryも作りません。`localize` はまだsource/configを読み込まず、publisherも呼びません。実装済みprimitiveはoutput parentにmode `0700` の `.yakuori-run-<runID>` を作り、その中へmode `0600` の候補stageと `record.json` を保存します。記録に本文やpromptは含めず、path・identity・hash・size・phase等のmetadataだけを含めます。in-placeの原文backupはsourceと同じdirectoryに置き、成功後も保持します。
+通常の `doctor` は保存先をstatし、小さなconfig/registryを読みますが、modelのhash・load、TMのopen、書込みはしません。欠落は表示し、既存の不正schemaや不安全なmodeは失敗として報告します。`doctor --check-model` は選択済みmodelを指定backendで開き、Engine情報を表示して閉じます。生成せず、snapshot directoryも作りません。翻訳CLIはモデルとprofileの準備後に実TMを開きます。`localize` はsourceをsnapshotし、output parentにmode `0700` の `.yakuori-run-<runID>` とmode `0600` のstage、`record.json` を作って検証・公開します。記録に本文やpromptは含めず、path・identity・hash・size・phase等のmetadataだけを含めます。in-placeの原文backupはsourceと同じdirectoryに置き、成功後も保持します。
 
-失敗時のrun/stage/recordは自動削除しません。`Prepare` は新しいsource snapshotの前に記録と実fileを照合し、安全に戻せる原文backupを `RENAME_NOREPLACE` で復元します。`Publish` もbackup移動後の通常error・取消しで同じ復旧を試みます。復元時はbackupを原文pathへ移動し、公開済みの場合はbackupを保持します。旧stageの自動公開は行いません。記録の欠落・破損やfileの競合は `RecoveryError` と診断pathを返し、証拠を残して手動確認で停止します。`Run.Close` はFDとlockだけを解放し、cleanup commandはありません。CLIはまだこれらのAPIを呼びません。実装範囲と検証結果は[Linux publication調査記録](docs/research/linux-publication.md)を参照してください。
+失敗時のrun/stage/recordは自動削除しません。`Prepare` は新しいsource snapshotの前に記録と実fileを照合し、安全に戻せる原文backupを `RENAME_NOREPLACE` で復元します。`Publish` もbackup移動後の通常error・取消しで同じ復旧を試みます。復元時はbackupを原文pathへ移動し、公開済みの場合はbackupを保持します。旧stageの自動公開は行いません。記録の欠落・破損やfileの競合は `RecoveryError` と診断pathを返し、証拠を残して手動確認で停止します。`Run.Close` はFDとlockだけを解放し、cleanup commandはありません。CLIは公開primitiveの復旧契約を使用しますが、残ったrun/stage/recordの自動掃除はしません。実装範囲と検証結果は[Linux publication調査記録](docs/research/linux-publication.md)を参照してください。
 
 CLIのexit code、stdout/stderr、設定のfallback、fake試験の入口、clean CIの再現方法・制限は[基盤契約](docs/foundation.md)を参照してください。Linux arm64はcross-buildのみで、実行対応は未検証です。詳細な非目標・依存関係・受入れ試験はissue indexを参照してください。
 
@@ -102,7 +117,7 @@ TMを消すときは別途全processを止め、`tm.sqlite.lock` と `tm.sqlite-
 
 ## SQLite feasibility
 
-[SQLiteの調査記録と現在のTM契約](docs/sqlite-feasibility.md#current-core-tm-integration-16)に、明示的な `Create` / `Open` / `Recover`、scope・manifest照合、競合時停止と公開境界を記録しています。Btrfs上で既定の件数・入力byte上限のfixtureを検証済みですが、実modelの最大出力bytesと低速な対応filesystemの性能は未検証です。通常CLIへの接続は含みません。
+[SQLiteの調査記録と現在のTM契約](docs/sqlite-feasibility.md#current-core-tm-integration-16)に、明示的な `Create` / `Open` / `Recover`、scope・manifest照合、競合時停止と公開境界を記録しています。CLIはTM pathが存在しない場合だけ `Create` し、既存pathには `Open` を使います。Create失敗時のOpen fallbackも、CLIからの暗黙 `Recover` もありません。Btrfs上で既定の件数・入力byte上限のfixtureを検証済みですが、実modelの最大出力bytesと低速な対応filesystemの性能は未検証です。
 
 ## 公開準備と権利表示
 

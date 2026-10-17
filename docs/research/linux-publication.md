@@ -1,6 +1,6 @@
 # Linux publication / recovery contract (issue #8)
 
-Status (2026-10-04): the Linux #9 publisher primitive and #10 strict schema-v1 record reader/recovery are implemented for create, replace and in-place modes. The CLI only parses those modes and refuses to run the pipeline; #11 pipeline connection, translation and #16 TM integration are not implemented.
+Status (2026-10-17): the Linux #9 publisher primitive and #10 strict schema-v1 record reader/recovery are implemented for create, replace and in-place modes. The `localize --format text` CLI now connects the selected Engine and SQLite TM to the existing Core and publisher. This enables the whole-file text-v1 path only; it does not add a Witcher 3 production adapter or change the publisher and recovery contracts below.
 Design reference: maintainer’s private Draft v0.2, sections 5/9/15.
 The public API contract and reproduction evidence are documented below.
 The historical probe below remains separate, unexported research code and is not called by the CLI. No new runtime dependency.
@@ -74,24 +74,31 @@ explains why overlay results are not a certification of lower/upper configuratio
 ## CLI mapping (approved 2026-10-03 for #9)
 
 The CLI parser accepts these mutually exclusive forms and maps them to
-`publication.Options`. A valid form currently exits 1 with
-`localize pipeline is not implemented`, empty stdout, and no source/config or
-publisher I/O. Invalid syntax exits 2 with a generic diagnostic. The table
-describes the intended publication behavior once the pipeline is connected:
+`publication.Options`. Valid forms require `--format text`, non-empty
+source-language, target-language, game and artifact values, and a regular
+UTF-8 source file. All flags precede `SOURCE`; stdin is unsupported. CPU is the
+default backend and CUDA is explicit. A selected local model is required.
+Invalid syntax exits 2 with a generic diagnostic before config, model, TM or
+source I/O. For valid syntax, the CLI uses the existing localize Core path,
+which runs publication preflight and recovery before snapshotting the source.
+The table describes the implemented publication mode mapping:
 
 | Form | Behavior |
 | --- | --- |
-| `localize --output OUT SOURCE` | OUT must not exist; no-replace publish |
-| `localize --output OUT --replace-output SOURCE` | atomic replacement of a different existing OUT; absent OUT is created with no-replace |
-| `localize --in-place SOURCE` | same validated path; preserve original backup, then no-replace publish |
+| `localize --format text --source-language LANG --target-language LANG --game GAME --artifact ARTIFACT --output OUT SOURCE` | OUT must not exist; no-replace publish |
+| `localize --format text --source-language LANG --target-language LANG --game GAME --artifact ARTIFACT --output OUT --replace-output SOURCE` | atomic replacement of a different existing OUT; absent OUT is created with no-replace |
+| `localize --format text --source-language LANG --target-language LANG --game GAME --artifact ARTIFACT --in-place SOURCE` | same validated path; preserve original backup, then no-replace publish |
 
 Reject `--in-place` together with `--output` or `--replace-output`; reject
 `--replace-output` without `--output`. Reject source=output in ordinary mode
 and explain `--in-place`; symlink/hardlink aliases are rejected, not admitted as
 the same validated path. Existing backup collisions are never overwritten.
 A separate automatic cleanup/backup deletion/recovery command is not introduced.
-Recovery runs before new localization as the design requires. Any later proposal
-to remove backup, follow symlinks or broaden replacement needs product review.
+Recovery runs before a new source snapshot as the design requires. Any later
+proposal to remove backup, follow symlinks or broaden replacement needs product
+review. The CLI does not recover or recreate a failed translation-memory
+database; its Create/Open behavior is described in
+[`foundation.md`](../foundation.md#current-cli--error-contract).
 
 ## Run record and backup naming
 
@@ -127,8 +134,8 @@ Safe restoration returns `Restored` and retains the original error. A conflict
 keeps `SourceBackedUp`; a recovery or completion-record failure adds a typed
 `RecoveryError` with the observed result, reason, run/record/final/backup paths
 and cause. A completed stage rename keeps `Published` even on later error and
-never rolls back. `Publish` remains the caller's post-#16-TM-commit step; the
-current CLI is not that caller.
+never rolls back. The current `localize` Core caller commits accepted TM rows
+before invoking `Publish`.
 
 Record schema v1, mode, run ID, absolute source/output/stage/backup paths, parent
 identities, source and stage identity+SHA-256+size, existing-output identity/hash
@@ -150,9 +157,10 @@ single renames too. These precautions do **not** claim power-loss durability.
 
 ## Implemented stop/recovery behavior (#10)
 
-The publication/recovery actions below are implemented; import, generation and
-TM ordering remain the future pipeline caller's contract. The CLI does not call
-these APIs. All recovery requires valid record, directory locks, trusted parent identities,
+The publication/recovery actions below are implemented. The `localize` Core
+uses these APIs after model/profile/TM setup and before a new source snapshot.
+It stages and validates the text artifact, commits accepted rows, then invokes
+publication. All recovery requires valid record, directory locks, trusted parent identities,
 regular single-link files and the exact recorded hashes/identities. No old stage
 is automatically published. If evidence is ambiguous: retain everything, non-zero,
 print run ID, final/backup paths and the conflict reason without file bodies.
@@ -344,13 +352,13 @@ It does not qualify the root subvolume `@`, every Btrfs configuration, arm64
 runtime, power-loss durability, or the product publisher/recovery/pipeline gates
 described above.
 
-### Current product publisher validation (2026-10-04)
+### Historical CLI parsing and publisher validation (2026-10-04)
 
 Task 4 ran `go test -count=1 -v ./internal/cli ./cmd/yakuori`; built-binary QA
-observed valid `localize --in-place SOURCE` exit 1 with empty stdout, invalid
-`localize --replace-output SOURCE` exit 2, and help/doctor exit 0. Source and
-existing output bytes remained unchanged. The command still performs no source
-or config I/O.
+observed the then-current valid `localize --in-place SOURCE` exit 1 with empty
+stdout, invalid `localize --replace-output SOURCE` exit 2, and help/doctor exit
+0. Source and existing output bytes remained unchanged. This is historical
+parser-only behavior, not the current translation pipeline.
 
 As UID 1000 with official Go 1.27.1 and `CGO_ENABLED=0`, the native Btrfs
 `/home` (`@home`) run passed `go test -count=1 -v ./internal/publication ./internal/artifact`;
@@ -366,3 +374,26 @@ product suite on ext4; the corresponding PR CI run is the authoritative hosted
 result, and these local Btrfs results do not substitute for it. These product
 checks do not connect TM commit after #16 or the full pipeline fault suite in
 #21. Power-loss durability remains outside v1 scope.
+
+### Current text CLI integration and runtime evidence (2026-10-17)
+
+The current CLI connects `localize --format text` to the selected Engine,
+canonical inference profile, real SQLite TM and `FileWithTM` Core path.
+`FileWithTM` runs the publication preflight, snapshots the source, validates
+the translated artifact, commits accepted TM rows, then publishes. Create
+refuses an existing output, Replace atomically replaces an eligible output,
+and InPlace keeps the original backup after publication. Failures do not trigger
+partial publication or automatic stage cleanup; post-commit failures preserve
+the recorded TM/publication state.
+
+The actual CPU and CUDA matrices, native cancellation states, complete SQLite
+key readback, driver-free refusal, and the bounded initialization-diagnostic
+repair are mapped in
+[`foundation.md`](../foundation.md#issue-19-acceptance-evidence-observed-2026-10-17).
+Those reports distinguish the clean `4b5c8e4` CPU runtime, Task6 pre-commit
+runtime metadata with the recorded D1 diff, and the final clean `897c01a`
+metadata build. The diagnostic repair covers the measured CUDA initialization
+refusal only; later pinned-upstream resident/device failures may still write to
+stderr. These scoped runtime records do not claim Witcher 3 MOD compatibility,
+human translation-quality acceptance, arm64 execution, unrestricted-multicore
+tracing, or completion of the later final clean gate.

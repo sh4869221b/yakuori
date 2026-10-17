@@ -7,7 +7,7 @@
 ## OVERVIEW
 
 Pure GoのローカルLLM翻訳基盤。ID・tag・placeholder・binaryを保持し、最初の対象形式はWitcher 3の `.w3strings`。
-Linux向けの基盤で、翻訳Coreは存在するがCLIの `localize` には未接続。
+Linux向けの基盤です。CLIの `translate` と `localize --format text` は既存Core・Engine・SQLite TMへ接続済みです。最初の実ゲーム形式であるWitcher 3 `.w3strings` のproduction adapterは未実装です。
 
 ## STRUCTURE
 
@@ -54,7 +54,7 @@ LSPで確認済みの主要シンボル。シンボル単位の参照数はダ�
 - Go moduleは `1.27.0`、CIは厳密に `1.27.1` を使用する。
 - 通常のbuild・test・vetは `CGO_ENABLED=0 GOTOOLCHAIN=local` で実行する。
 - 設定はXDG配下の `/yakuori` を使用し、相対overrideは無視する。パス解決だけではディレクトリを作成しない。
-- モデルはローカルGGUFを登録・選択・照合する。download機能はない。
+- モデルはローカルGGUFを登録・選択・照合する。`models pull` は期待size・SHA-256・digest出所を指定した明示的HTTPS取得です。自動取得はありません。
 - 各対象サブディレクトリの `AGENTS.md` に固有契約を記載し、ルートには横断情報を置く。
 
 ## ANTI-PATTERNS (THIS PROJECT)
@@ -85,7 +85,7 @@ docker build --progress=plain -f ci/Dockerfile .
 
 ## NOTES
 
-- CLIで実装済みなのはhelp・doctor・models。Coreの存在とCLIの `localize` 対応を混同しない。
+- CLIで実装済みなのはhelp・doctor・models・whole-file textの`translate`と`localize`。CLIに接続した形式をWitcher 3 production adapterや実MOD対応と混同しない。
 - `ci/verify.sh` はcgo負例・依存監査、gofmt・build・test・vet、arm64 cross-buildを検証する。
 - `ci/Dockerfile` はclean gate用。CPU・CUDA・長文脈の調査資料と、`docs/evidence/` の結果を区別する。
 - 主要依存はgoinfer/cuda `0.23.0`、x/sys `0.48.0`、modernc SQLite `1.60.1`。
