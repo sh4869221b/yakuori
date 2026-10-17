@@ -2,7 +2,8 @@
 """Run one command under strace and fail closed on any observed network attempt.
 
 The whole process tree is traced with
-``strace -f -qq -yy -s 4096 -e trace=%network,execve,execveat -o TRACE -- COMMAND...``: INET and
+``strace --kill-on-exit -f -qq -xx -yy -s 4096 -e trace=%network,execve,execveat
+-o TRACE -- COMMAND...``: INET and
 INET6 socket creation, connect and destination-addressed send, plus AF_UNIX
 connect and destination-addressed send that would bypass a resolver or proxy,
 are refused. AF_UNIX socketpair and other in-process IPC stay allowed. The
@@ -13,7 +14,8 @@ undecoded addresses, and every other family stay refused. The selected policy
 and the matching records it allowed are written to the result JSON and to
 ``allowed_local``. Unknown, blank or truncated trace lines are never rounded to
 zero: a record counts only once its argument list closes outside quotes and
-``-yy`` annotations and its printed result is complete.
+``-yy`` annotations and its printed result is complete. Hex string rendering
+keeps descriptor path suffixes distinct from structural arrows and delimiters.
 
 Evidence is written next to ``--evidence PREFIX``: PREFIX.trace (raw trace),
 PREFIX.stdout, PREFIX.stderr (the target's streams) and PREFIX.json (detector
@@ -36,7 +38,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 UNFINISHED = " <unfinished ...>"
-MARKER = re.compile(r"^(?:\d+\s+)?(?:\+\+\+|---)")
+MARKER = re.compile(
+    r"^(?:\d+\s+)?(?:(?P<signal>--- SIG[A-Z0-9_]+ \{)"
+    r"|\+\+\+ (?:exited with \d+|killed by SIG[A-Z0-9_]+(?: \(core dumped\))?) \+\+\+$)"
+)
 RESUMED = re.compile(r"^<\.\.\.\s+([a-z_][a-z0-9_]*)\s+resumed>")
 CALL = re.compile(r"^([a-z_][a-z0-9_]*)\((.*)$")
 ASSIGNMENT = re.compile(r"\s*=\s*")
@@ -64,8 +69,8 @@ TEARDOWN: dict[str, Any] = {"descendants_stopped": [], "descendants_after_exit":
 def classify(name: str, args: str, allow_nvidia_mps: bool = False) -> tuple[str, str]:
     """Return (kind, detail) for one traced syscall; kind is violation, allowed or unparsed.
 
-    ``allow_nvidia_mps`` is the test-only opt-in for the NVIDIA MPS control path. It is
-    exactly one address, so it cannot widen anything else: the record still needs a decoded
+    ``allow_nvidia_mps`` is the test-only opt-in for two exact NVIDIA MPS control addresses.
+    It cannot widen anything else: the record still needs a decoded
     ``sa_family=AF_UNIX`` and a printed ``sun_path`` equal to a control path, and abstract
     (``sun_path=@...``), empty, undecoded or any other destination stays refused.
     """
@@ -84,8 +89,11 @@ def classify(name: str, args: str, allow_nvidia_mps: bool = False) -> tuple[str,
             return "unparsed", "connect destination not decoded"
         if allow_nvidia_mps and match.group(1) == UNIX:
             decoded = UNIX_PATH.search(args)
-            if decoded is not None and decoded.group(1) in NVIDIA_MPS_CONTROL_PATHS:
-                return "allowed", f"connect(AF_UNIX) NVIDIA MPS control IPC {decoded.group(1)}"
+            if decoded is not None:
+                for path in NVIDIA_MPS_CONTROL_PATHS:
+                    hex_path = "".join(f"\\x{ord(char):02x}" for char in path)
+                    if decoded.group(1) in (path, hex_path):
+                        return "allowed", f"connect(AF_UNIX) NVIDIA MPS control IPC {path}"
         return "violation", f"connect({match.group(1)})"
     if name == "bind":
         match = SOCKADDR.search(args)
@@ -254,7 +262,13 @@ def analyze(text: str, allow_nvidia_mps: bool = False) -> Analysis:
         if not stripped:
             result.unparsed.append({"line": raw, "reason": "blank trace line"})
             continue
-        if MARKER.match(stripped) is not None:
+        marker = MARKER.match(stripped)
+        if marker is not None:
+            if marker.group("signal") is not None:
+                end = closer(stripped, marker.end(), ["}"])
+                if end is None or stripped[end + 1:] != " ---":
+                    result.unparsed.append({"line": raw, "reason": "incomplete signal marker"})
+                    continue
             result.markers += 1
             continue
         pid, body = None, stripped
@@ -508,7 +522,7 @@ def interrupt_reason(signal_number: int) -> str:
 
 def run_strace(strace: str, trace: Path, command: list[str], stdout: Path, stderr: Path, timeout: int) -> tuple[int, bool, int]:
     global STARTING
-    argv = [strace, "-f", "-qq", "-yy", "-s", "4096", "-e", "trace=%network,execve,execveat", "-o", str(trace), "--", *command]
+    argv = [strace, "--kill-on-exit", "-f", "-qq", "-xx", "-yy", "-s", "4096", "-e", "trace=%network,execve,execveat", "-o", str(trace), "--", *command]
     TEARDOWN.update({"descendants_stopped": [], "descendants_after_exit": None, "verified": False})
     with stdout.open("wb") as out, stderr.open("wb") as err:
         child = None
@@ -640,6 +654,45 @@ def main() -> int:
             record["invalid_reasons"] = [preflight["detail"]]
             return emit(prefix, record, 2)
         code, timed_out, group = run_strace(strace, trace, command, stdout, stderr, args.timeout_seconds)
+        record["strace"]["returncode"] = code
+        record["strace"]["timed_out"] = timed_out
+        record["descendants_stopped"] = TEARDOWN["descendants_stopped"]
+        record["descendants_after_exit"] = TEARDOWN["descendants_after_exit"] if TEARDOWN["verified"] else None
+
+        reasons: list[str] = []
+        if trace.is_file():
+            text = trace.read_text(errors="replace")
+            parsed = analyze(text, args.allow_nvidia_mps)
+            record["trace"] = {"path": str(trace), "bytes": len(text), "lines": parsed.lines, "unfinished": parsed.unfinished,
+                               "resumed": parsed.resumed, "markers": parsed.markers, "unparsed": parsed.unparsed}
+            record["attempts"] = parsed.attempts
+            record["allowed_local"] = parsed.allowed
+            reasons = parsed.reasons
+            record["target_executed"] = parsed.executed
+            if parsed.executed:
+                record["observed_exit"] = code
+            else:
+                reasons.append("trace contains no successful target exec")
+        else:
+            reasons = ["strace did not create the trace file"]
+        if record["descendants_after_exit"]:
+            reasons.append("traced descendants survived the tracer exit")
+        elif record["descendants_after_exit"] is None:
+            reasons.append("traced group teardown could not be verified")
+        record["invalid_reasons"] = reasons
+
+        if timed_out:
+            status, code = "timeout", 4
+        elif reasons:
+            status, code = "invalid", 2
+        elif record["attempts"]:
+            status, code = "attempts", 1
+        elif record["observed_exit"] != args.expect_exit:
+            status, code = "exit_mismatch", 3
+        else:
+            status, code = "clean", 0
+        record["status"] = status
+        return emit(prefix, record, code)
     except OSError as error:
         record["status"] = "unusable_tracer"
         record["invalid_reasons"] = [f"tracer startup or output failed: {error}"]
@@ -650,45 +703,6 @@ def main() -> int:
         record["descendants_after_exit"] = TEARDOWN["descendants_after_exit"] if TEARDOWN["verified"] else None
         record["invalid_reasons"] = [interrupt_reason(int(interrupted.code) - 128)]
         return emit(prefix, record, int(interrupted.code))
-    record["strace"]["returncode"] = code
-    record["strace"]["timed_out"] = timed_out
-    record["descendants_stopped"] = TEARDOWN["descendants_stopped"]
-    record["descendants_after_exit"] = TEARDOWN["descendants_after_exit"] if TEARDOWN["verified"] else None
-
-    reasons: list[str] = []
-    if trace.is_file():
-        text = trace.read_text(errors="replace")
-        parsed = analyze(text, args.allow_nvidia_mps)
-        record["trace"] = {"path": str(trace), "bytes": len(text), "lines": parsed.lines, "unfinished": parsed.unfinished,
-                           "resumed": parsed.resumed, "markers": parsed.markers, "unparsed": parsed.unparsed}
-        record["attempts"] = parsed.attempts
-        record["allowed_local"] = parsed.allowed
-        reasons = parsed.reasons
-        record["target_executed"] = parsed.executed
-        if parsed.executed:
-            record["observed_exit"] = code
-        else:
-            reasons.append("trace contains no successful target exec")
-    else:
-        reasons = ["strace did not create the trace file"]
-    if record["descendants_after_exit"]:
-        reasons.append("traced descendants survived the tracer exit")
-    elif record["descendants_after_exit"] is None:
-        reasons.append("traced group teardown could not be verified")
-    record["invalid_reasons"] = reasons
-
-    if timed_out:
-        status, code = "timeout", 4
-    elif reasons:
-        status, code = "invalid", 2
-    elif record["attempts"]:
-        status, code = "attempts", 1
-    elif record["observed_exit"] != args.expect_exit:
-        status, code = "exit_mismatch", 3
-    else:
-        status, code = "clean", 0
-    record["status"] = status
-    return emit(prefix, record, code)
 
 
 if __name__ == "__main__":

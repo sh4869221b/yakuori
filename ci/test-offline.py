@@ -716,6 +716,110 @@ class ObserverTests(unittest.TestCase):
         self.assertIn("already exists", run.stderr)
         self.assertEqual(Path(f"{prefix}.json").read_text(), "existing evidence")
 
+    def test_complete_marker_syntax_is_required(self):
+        for marker, expected in (
+            ("4242 --- SIGTERM {si_signo=SIGTERM} ---\n", 0),
+            ("4242 +++ exited with 0 +++\n", 0),
+            ("4242 +++ killed by SIGKILL +++\n", 0),
+            ("4242 --- SIGTERM {si_signo=SIGTERM\n", 2),
+            ("4242 ---\n", 2),
+            ("4242 +++ exited with\n", 2),
+        ):
+            with self.subTest(marker=marker):
+                fixture = self.root / "marker.trace"
+                fixture.write_text(marker)
+                path, extra = self.fake_strace(f"record:{fixture}")
+                prefix = self.prefix("marker")
+                run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=extra)
+                self.assertEqual(run.returncode, expected, run.stdout + run.stderr)
+                self.assertEqual(self.evidence(prefix)["status"], "clean" if expected == 0 else "invalid")
+
+    def test_terminal_descriptor_path_symbols_are_supported(self):
+        paths = [str(self.root / "file-"), str(self.root / "file=")]
+        code = ("import ctypes, os\n"
+                f"for path in {paths!r}:\n"
+                " fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)\n"
+                " try: ctypes.CDLL(None).recvfrom(fd, ctypes.create_string_buffer(1), 1, 0, None, None)\n"
+                " finally: os.close(fd)\n")
+        prefix = self.prefix("descriptor-suffix")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", code])
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertEqual(self.evidence(prefix)["status"], "clean")
+
+    def test_tracer_death_kills_owned_tracee(self):
+        pid_file = self.root / "tracee.pid"
+        code = ("import os, signal\n"
+                "from pathlib import Path\n"
+                "start = Path('/proc/self/stat').read_text().rsplit(')', 1)[-1].split()[19]\n"
+                f"Path({str(pid_file)!r}).write_text(str(os.getpid()) + ' ' + start)\n"
+                "os.kill(os.getppid(), signal.SIGKILL)\n"
+                "signal.pause()\n")
+        prefix = self.prefix("tracer-death")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", code])
+        self.assertNotEqual(run.returncode, 0)
+        pid, start = pid_file.read_text().split()
+        pid = int(pid)
+        try:
+            pidfd = os.pidfd_open(pid)
+        except ProcessLookupError:
+            return
+        try:
+            if self.process_field(pid, 19) not in (None, start):
+                return
+            poller = select.poll()
+            poller.register(pidfd, select.POLLIN)
+            try:
+                self.assertTrue(poller.poll(5000), "owned tracee survived its tracer")
+            finally:
+                try:
+                    signal.pidfd_send_signal(pidfd, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                self.assertTrue(poller.poll(5000), "owned tracee cleanup did not complete")
+                try:
+                    os.waitpid(pid, 0)
+                except ChildProcessError:
+                    pass
+        finally:
+            os.close(pidfd)
+
+    def test_post_run_interrupt_is_recorded(self):
+        self.addCleanup(signal.signal, signal.SIGINT, signal.getsignal(signal.SIGINT))
+        self.addCleanup(signal.signal, signal.SIGTERM, signal.getsignal(signal.SIGTERM))
+        for phase in ("analysis", "emission"):
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                with self.subTest(phase=phase, signal=sig):
+                    prefix = self.prefix("post-run-interrupt")
+                    target_finished = False
+                    real_run, real_analyze, real_emit = offline.run_strace, offline.analyze, offline.emit
+
+                    def finish_target(strace, trace, *args, **kwargs):
+                        nonlocal target_finished
+                        result = real_run(strace, trace, *args, **kwargs)
+                        if trace == Path(f"{prefix}.trace"):
+                            target_finished = True
+                        return result
+
+                    def during_analysis(text, *args, **kwargs):
+                        if phase == "analysis" and target_finished:
+                            os.kill(os.getpid(), sig)
+                        return real_analyze(text, *args, **kwargs)
+
+                    def during_emission(path, record, code):
+                        if phase == "emission" and record["status"] == "clean":
+                            os.kill(os.getpid(), sig)
+                        return real_emit(path, record, code)
+
+                    with mock.patch.object(sys, "argv", [str(OFFLINE), "--evidence", str(prefix),
+                                                         "--expect-exit", "0", "--", sys.executable, "-c", "pass"]), \
+                            mock.patch.object(offline, "INTERRUPTED", 0), \
+                            mock.patch.object(offline, "run_strace", side_effect=finish_target), \
+                            mock.patch.object(offline, "analyze", side_effect=during_analysis), \
+                            mock.patch.object(offline, "emit", side_effect=during_emission):
+                        self.assertEqual(offline.main(), 128 + sig)
+                    self.assertEqual(self.evidence(prefix)["status"], "interrupted")
+                    self.assertEqual(self.evidence(prefix)["descendants_after_exit"], [])
+
     def test_descriptor_path_arrows_are_not_annotation_closers(self):
         for trace, expected in (
             ('4242 recvfrom(3</tmp/a->b>, "x", 1, 0, NULL, NULL) = 1\n', 0),
@@ -1012,7 +1116,12 @@ class ObserverTests(unittest.TestCase):
 
     def test_mps_opt_in_refuses_nearby_paths(self):
         fixture = self.root / "mps-nearby.trace"
-        fixture.write_text(MPS_NEARBY_PATHS_TRACE)
+        text = MPS_NEARBY_PATHS_TRACE
+        for wrong in ("/run/nvidia-mps/controlx", "/tmp/nvidia-mps/control/other"):
+            hex_path = "".join(f"\\x{ord(char):02x}" for char in wrong)
+            text += (f'4242 connect(3, {{sa_family=AF_UNIX, sun_path="{hex_path}"}}, {len(wrong) + 3})'
+                     ' = -1 ENOENT (No such file or directory)\n')
+        fixture.write_text(text)
         path, env = self.fake_strace(f"fixture:{fixture}")
         prefix = self.prefix("mps-nearby")
         run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env, observer_args=MPS_OPT_IN)
@@ -1020,7 +1129,7 @@ class ObserverTests(unittest.TestCase):
         evidence = self.evidence(prefix)
         self.assertEqual(evidence["allowed_local"], [])
         self.assertEqual([entry["detail"] for entry in evidence["attempts"]],
-                         ["socket(AF_INET)"] + ["connect(AF_UNIX)"] * 4, evidence["attempts"])
+                         ["socket(AF_INET)"] + ["connect(AF_UNIX)"] * 6, evidence["attempts"])
 
     def test_mps_opt_in_refuses_other_unix_destinations_and_addressed_sends(self):
         for mode, expected in (("unix", "connect(AF_UNIX)"),
