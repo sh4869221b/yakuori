@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,7 @@ func TestTranslationSignalCancellation(t *testing.T) {
 		t.Run(signal.String(), func(t *testing.T) {
 			// Given: subscribe to dedicated ready pipe before starting the child.
 			root := t.TempDir()
+			supported := translationPublicationSupported(t, root)
 			reader, writer, err := os.Pipe()
 			if err != nil {
 				t.Fatal(err)
@@ -45,7 +47,7 @@ func TestTranslationSignalCancellation(t *testing.T) {
 			ready := make(chan error, 1)
 			go func() {
 				line, err := bufio.NewReader(reader).ReadString('\n')
-				if err == nil && line != "READY\n" {
+				if line != "READY\n" && (err == nil || line != "") {
 					err = errors.New("unexpected ready event")
 				}
 				ready <- err
@@ -72,14 +74,16 @@ func TestTranslationSignalCancellation(t *testing.T) {
 			// When: no signal can be sent until Generate has announced readiness.
 			select {
 			case err := <-ready:
-				if err != nil {
+				if supported && err != nil || !supported && !errors.Is(err, io.EOF) {
 					t.Fatalf("Generate ready: %v", err)
 				}
 			case <-ctx.Done():
 				t.Fatal("Generate ready timed out")
 			}
-			if err := child.Process.Signal(signal); err != nil {
-				t.Fatal(err)
+			if supported {
+				if err := child.Process.Signal(signal); err != nil {
+					t.Fatal(err)
+				}
 			}
 			select {
 			case <-done:
@@ -98,22 +102,37 @@ func TestTranslationSignalCancellation(t *testing.T) {
 				t.Fatal(err)
 			}
 			rows := readTranslationTM(t, record.Paths)
+			source, sourceErr := os.ReadFile(filepath.Join(root, "source.txt"))
+			if sourceErr != nil || string(source) != "private signal source\n" {
+				t.Fatalf("source=%q err=%v", source, sourceErr)
+			}
 			_, outputErr := os.Lstat(filepath.Join(root, "output.txt"))
 			passed := record.Ready && record.Canceled && record.Drained && record.CloseAfterDrain &&
 				record.Closed == 1 && record.Generated == 1 && record.Code == ExitFailure &&
 				child.ProcessState.ExitCode() == ExitFailure && out.Len() == 0 && len(rows) == 0 &&
 				!record.Result.TMCommitted && record.Result.BytesWritten == 0 &&
 				record.Result.Publication.State == publication.NotPublished && errors.Is(outputErr, os.ErrNotExist) &&
+				!record.UnsupportedFilesystem && record.Phase == "generate" &&
 				strings.Contains(diag.String(), "localize generate failed") && strings.Contains(diag.String(), "TMCommitted=false")
+			if !supported {
+				passed = record.UnsupportedFilesystem && record.Phase == "prepare" &&
+					!record.Ready && !record.Canceled && !record.Drained && !record.CloseAfterDrain &&
+					record.Closed == 1 && record.Generated == 0 && record.Code == ExitFailure &&
+					child.ProcessState.ExitCode() == ExitFailure && out.Len() == 0 && len(rows) == 0 &&
+					!record.Result.TMCommitted && record.Result.BytesWritten == 0 &&
+					record.Result.Publication.State == publication.NotPublished && errors.Is(outputErr, os.ErrNotExist) &&
+					strings.Contains(diag.String(), "TMCommitted=false")
+			}
 			evidence := struct {
 				translationSignalRecord
-				Signal string             `json:"signal"`
-				PID    int                `json:"pid"`
-				Stdout string             `json:"stdout"`
-				Stderr string             `json:"stderr"`
-				Rows   []translationTMRow `json:"tm"`
-				Pass   bool               `json:"pass"`
-			}{record, signal.String(), child.Process.Pid, out.String(), diag.String(), rows, passed}
+				Signal     string             `json:"signal"`
+				SignalSent bool               `json:"signal_sent"`
+				PID        int                `json:"pid"`
+				Stdout     string             `json:"stdout"`
+				Stderr     string             `json:"stderr"`
+				Rows       []translationTMRow `json:"tm"`
+				Pass       bool               `json:"pass"`
+			}{record, signal.String(), supported, child.Process.Pid, out.String(), diag.String(), rows, passed}
 			if dir := os.Getenv("YAKUORI_SIGNAL_EVIDENCE"); dir != "" {
 				data, err := json.MarshalIndent(evidence, "", "  ")
 				if err != nil {
@@ -125,6 +144,10 @@ func TestTranslationSignalCancellation(t *testing.T) {
 			}
 			if !passed {
 				t.Fatalf("signal=%s evidence=%+v", signal, evidence)
+			}
+			if !supported {
+				t.Logf("requested_signal=%s signal_sent=false typed ErrUnsupportedFilesystem refusal; generated=0 closed=1 tm_rows=0 reaped=true; signal cancellation not exercised", signal)
+				return
 			}
 			t.Logf("signal=%s pid=%d ready_before_signal=true canceled=true drained=true closed_after_drain=true exit=1 stdout_bytes=0 tm_rows=0 reaped=true", signal, child.Process.Pid)
 		})

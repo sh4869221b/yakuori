@@ -16,15 +16,17 @@ import (
 )
 
 type translationSignalRecord struct {
-	Paths           config.Paths    `json:"paths"`
-	Ready           bool            `json:"ready"`
-	Canceled        bool            `json:"canceled"`
-	Drained         bool            `json:"drained"`
-	CloseAfterDrain bool            `json:"close_after_drain"`
-	Generated       int             `json:"generated"`
-	Closed          int             `json:"closed"`
-	Code            int             `json:"exit_code"`
-	Result          localize.Result `json:"result"`
+	Paths                 config.Paths    `json:"paths"`
+	Ready                 bool            `json:"ready"`
+	Canceled              bool            `json:"canceled"`
+	Drained               bool            `json:"drained"`
+	CloseAfterDrain       bool            `json:"close_after_drain"`
+	UnsupportedFilesystem bool            `json:"unsupported_filesystem"`
+	Phase                 string          `json:"phase"`
+	Generated             int             `json:"generated"`
+	Closed                int             `json:"closed"`
+	Code                  int             `json:"exit_code"`
+	Result                localize.Result `json:"result"`
 }
 
 type translationSignalEngine struct {
@@ -69,6 +71,11 @@ func TestTranslationSignalHelper(t *testing.T) {
 			command.action, command.options = "localize", options
 			result, err := command.execute(ctx, os.Stdout, paths, open)
 			record.Result = result
+			record.UnsupportedFilesystem = errors.Is(err, publication.ErrUnsupportedFilesystem)
+			var failure *localize.Error
+			if errors.As(err, &failure) {
+				record.Phase = failure.Phase
+			}
 			record.Canceled = record.Canceled && errors.Is(err, context.Canceled)
 			return result, err
 		}

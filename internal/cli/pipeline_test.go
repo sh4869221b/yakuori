@@ -115,14 +115,32 @@ func TestPipelineResults(t *testing.T) {
 		command, paths, engine := translationFixture(t, "Hello.\n")
 		output := filepath.Join(filepath.Dir(command.options.Source), "output")
 		command.action, command.options.Output, command.options.Mode = "localize", output, publication.Create
+		supported := translationPublicationSupported(t, filepath.Dir(output))
 		engine.duringGenerate = func(context.Context) error { return os.WriteFile(output, []byte("external"), 0600) }
 		result, err := command.execute(context.Background(), io.Discard, paths, engine.open)
+		if !supported {
+			checkTranslationFilesystemRefusal(t, result, err)
+			if engine.generated != 0 || engine.closed != 1 || len(translationRows(t, paths)) != 0 {
+				t.Fatalf("generated=%d closed=%d", engine.generated, engine.closed)
+			}
+			if raw, err := os.ReadFile(command.options.Source); err != nil || string(raw) != "Hello.\n" {
+				t.Fatalf("source=%q err=%v", raw, err)
+			}
+			if _, err := os.Lstat(output); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("output stat=%v", err)
+			}
+			return
+		}
 		if err == nil || !result.TMCommitted || result.Publication.State != publication.NotPublished || len(translationRows(t, paths)) != 1 {
 			t.Fatalf("result=%+v err=%v", result, err)
 		}
 		if raw, err := os.ReadFile(output); err != nil || string(raw) != "external" {
 			t.Fatalf("output=%q err=%v", raw, err)
 		}
+		if engine.generated != 1 || engine.closed != 1 {
+			t.Fatalf("generated=%d closed=%d", engine.generated, engine.closed)
+		}
+		t.Log("generated=1 tm_rows=1 publication=not-published external_output=preserved closed=1")
 	})
 	t.Run("Core text success", func(t *testing.T) {
 		core, tm, profile := cliPipeline(t, "訳\n文")

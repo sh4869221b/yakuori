@@ -1,14 +1,42 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
+	"github.com/sh4869221b/yakuori/internal/localize"
 	"github.com/sh4869221b/yakuori/internal/prompt"
+	"github.com/sh4869221b/yakuori/internal/publication"
+	"golang.org/x/sys/unix"
 )
+
+func translationPublicationSupported(t *testing.T, dir string) bool {
+	t.Helper()
+	var st unix.Statfs_t
+	if err := unix.Statfs(dir, &st); err != nil {
+		t.Fatal(err)
+	}
+	// This only selects the refusal expectation for an unsupported magic.
+	// A qualified magic still requires every production mount/capability check
+	// to succeed; an unexpected Prepare error must not become a passing test.
+	supported := st.Type == unix.EXT4_SUPER_MAGIC || st.Type == unix.BTRFS_SUPER_MAGIC
+	t.Logf("fixture filesystem magic=%x supported_magic=%t", st.Type, supported)
+	return supported
+}
+
+func checkTranslationFilesystemRefusal(t *testing.T, result localize.Result, err error) {
+	t.Helper()
+	var failure *localize.Error
+	if !errors.Is(err, publication.ErrUnsupportedFilesystem) || !errors.As(err, &failure) || failure.Phase != "prepare" ||
+		result.TMCommitted || result.BytesWritten != 0 || result.Publication.State != publication.NotPublished {
+		t.Fatalf("want typed unsupported filesystem refusal: result=%+v err=%v", result, err)
+	}
+	t.Log("typed ErrUnsupportedFilesystem refusal; generation/publication scenario not reached")
+}
 
 func translationFixture(t *testing.T, source string) (translationCommand, config.Paths, *translationEngine) {
 	t.Helper()

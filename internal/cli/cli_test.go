@@ -233,9 +233,31 @@ func testTranslationFiles(t *testing.T) {
 				output = source
 			}
 			command.action, command.options = "localize", publication.Options{Source: source, Output: output, Mode: mode}
+			supported := translationPublicationSupported(t, filepath.Dir(output))
 			engine.closeErr = errors.New("private close after publication")
 			var out, diag bytes.Buffer
 			result, err := command.execute(context.Background(), &out, paths, engine.open)
+			if !supported {
+				checkTranslationFilesystemRefusal(t, result, err)
+				if reportPipeline(&diag, result, err) != ExitFailure || out.Len() != 0 || strings.Contains(diag.String(), "private") ||
+					engine.generated != 0 || engine.closed != 1 || len(translationRows(t, paths)) != 0 {
+					t.Fatalf("result=%+v err=%v generated=%d closed=%d diag=%q", result, err, engine.generated, engine.closed, diag.String())
+				}
+				if raw, err := os.ReadFile(source); err != nil || string(raw) != "Hello.\n" {
+					t.Fatalf("source=%q err=%v", raw, err)
+				}
+				switch mode {
+				case publication.Replace:
+					if raw, err := os.ReadFile(output); err != nil || string(raw) != "old output" {
+						t.Fatalf("output=%q err=%v", raw, err)
+					}
+				case publication.Create:
+					if _, err := os.Lstat(output); !errors.Is(err, os.ErrNotExist) {
+						t.Fatalf("output stat=%v", err)
+					}
+				}
+				return
+			}
 			if reportPipeline(&diag, result, err) != 1 || !result.TMCommitted || result.Publication.State != publication.Published || out.Len() != 0 || strings.Contains(diag.String(), "private") {
 				t.Fatalf("result=%+v err=%v diag=%q", result, err, diag.String())
 			}
@@ -252,6 +274,10 @@ func testTranslationFiles(t *testing.T) {
 			if len(translationRows(t, paths)) != 1 {
 				t.Fatal("missing committed row")
 			}
+			if engine.generated != 1 || engine.closed != 1 {
+				t.Fatalf("generated=%d closed=%d", engine.generated, engine.closed)
+			}
+			t.Logf("mode=%s generated=1 tm_rows=1 publication=published closed=1 backup=%q", mode, result.Publication.BackupPath)
 		})
 	}
 }
