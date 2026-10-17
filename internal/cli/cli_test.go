@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -12,15 +13,6 @@ import (
 	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/publication"
 )
-
-type brokenWriter struct{ short bool }
-
-func (w brokenWriter) Write(p []byte) (int, error) {
-	if w.short {
-		return 0, nil
-	}
-	return 0, errors.New("broken")
-}
 
 func TestContracts(t *testing.T) {
 	for _, tt := range []struct {
@@ -94,8 +86,8 @@ func TestParseLocalizeOutputModes(t *testing.T) {
 		{"end of options", []string{"--output", "out", "--", "source"}, publication.Options{Source: "source", Output: "out", Mode: publication.Create}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got, help, err := parseLocalize(tt.args)
-			if err != nil || help != "" || got != tt.want {
+			got, help, err := parseTranslation("localize", translationArgs("localize", tt.args...)[1:])
+			if err != nil || help != "" || got.options != tt.want {
 				t.Fatalf("options=%+v help=%q error=%v", got, help, err)
 			}
 		})
@@ -120,13 +112,14 @@ func TestParseLocalizeRejectsInvalidArguments(t *testing.T) {
 		{"same lexical path", []string{"--output", "./source", "source"}, errSameLocalizePath},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			_, help, err := parseLocalize(tt.args)
+			args := translationArgs("localize", tt.args...)
+			_, help, err := parseTranslation("localize", args[1:])
 			if !errors.Is(err, tt.want) || help != "" {
 				t.Fatalf("help=%q error=%v, want error %v", help, err, tt.want)
 			}
 			var out, diag bytes.Buffer
 			calls := 0
-			code := run(append([]string{"localize"}, tt.args...), &out, &diag, func() (config.Paths, error) {
+			code := run(args, &out, &diag, func() (config.Paths, error) {
 				calls++
 				return config.Paths{}, nil
 			})
@@ -157,24 +150,12 @@ func TestRunLocalizeHelpUsesFlagUsage(t *testing.T) {
 	}
 }
 
-func TestRunLocalizeRejectsSamePathWithoutEchoingPaths(t *testing.T) {
-	var out, diag bytes.Buffer
-	code := run([]string{"localize", "--output", "./private-source", "private-source"}, &out, &diag, nil)
-	if code != ExitUsage || out.Len() != 0 || !strings.Contains(diag.String(), "--in-place") || strings.Contains(diag.String(), "private-source") {
-		t.Fatalf("code=%d stdout=%q stderr=%q", code, out.String(), diag.String())
-	}
-}
-
-func TestRunLocalizeKeepsPipelineUnimplementedWithoutFileAccess(t *testing.T) {
+func TestRunLocalizeRejectsUnselectedModelWithoutChangingFiles(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "private-source.txt")
 	output := filepath.Join(dir, "private-output.txt")
-	if err := os.WriteFile(source, []byte("original source"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(output, []byte("existing output"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeFixture(t, source, "original source")
+	writeFixture(t, output, "existing output")
 	for _, tt := range []struct {
 		name string
 		args []string
@@ -187,11 +168,11 @@ func TestRunLocalizeKeepsPipelineUnimplementedWithoutFileAccess(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var out, diag bytes.Buffer
 			calls := 0
-			code := run(tt.args, &out, &diag, func() (config.Paths, error) {
+			code := run(translationArgs("localize", tt.args[1:]...), &out, &diag, func() (config.Paths, error) {
 				calls++
-				return config.Paths{}, nil
+				return config.Paths{Config: filepath.Join(dir, "absent-config"), Data: filepath.Join(dir, "absent-data")}, nil
 			})
-			if code != ExitFailure || out.Len() != 0 || diag.String() != "yakuori: localize pipeline is not implemented\n" || calls != 0 {
+			if code != ExitFailure || out.Len() != 0 || diag.String() != "yakuori: localize model failed; TMCommitted=false\n" || calls != 1 {
 				t.Fatalf("code=%d stdout=%q stderr=%q resolver calls=%d", code, out.String(), diag.String(), calls)
 			}
 		})
@@ -208,5 +189,69 @@ func TestRunLocalizeKeepsPipelineUnimplementedWithoutFileAccess(t *testing.T) {
 	entries, err := os.ReadDir(dir)
 	if err != nil || len(entries) != 2 {
 		t.Fatalf("directory entries=%v error=%v", entries, err)
+	}
+}
+
+func testTranslationArguments(t *testing.T) {
+	for _, action := range []string{"translate", "localize"} {
+		for _, args := range [][]string{
+			{}, {"--help"}, {"--source-language", "en", "source"},
+			translationArgs(action, "--backend", "automatic", "source")[1:],
+			translationArgs(action, "-")[1:],
+			translationArgs(action, "source", "--backend", "cuda")[1:],
+			translationArgs(action, "--game", "", "source")[1:],
+			translationArgs(action, "--artifact", "", "source")[1:],
+			translationArgs(action, "--target-language", "", "source")[1:],
+			translationArgs(action, "--source-language", "", "source")[1:],
+			translationArgs(action, "--format", "w3strings", "source")[1:],
+		} {
+			var out, diag bytes.Buffer
+			calls := 0
+			// Given an inaccessible storage resolver, syntax/help must finish before I/O.
+			code := run(append([]string{action}, args...), &out, &diag, func() (config.Paths, error) { calls++; return config.Paths{}, errors.New("private") })
+			want := ExitUsage
+			if len(args) == 1 && args[0] == "--help" {
+				want = ExitOK
+			}
+			if code != want || calls != 0 || strings.Contains(diag.String(), "private") {
+				t.Fatalf("args=%v code=%d calls=%d diag=%q", args, code, calls, diag.String())
+			}
+		}
+	}
+}
+
+func testTranslationFiles(t *testing.T) {
+	for _, mode := range []publication.Mode{publication.Create, publication.Replace, publication.InPlace} {
+		t.Run(string(mode), func(t *testing.T) {
+			command, paths, engine := translationFixture(t, "Hello.\n")
+			source := command.options.Source
+			output := filepath.Join(filepath.Dir(source), "output.txt")
+			if mode == publication.Replace {
+				writeFixture(t, output, "old output")
+			}
+			if mode == publication.InPlace {
+				output = source
+			}
+			command.action, command.options = "localize", publication.Options{Source: source, Output: output, Mode: mode}
+			engine.closeErr = errors.New("private close after publication")
+			var out, diag bytes.Buffer
+			result, err := command.execute(context.Background(), &out, paths, engine.open)
+			if reportPipeline(&diag, result, err) != 1 || !result.TMCommitted || result.Publication.State != publication.Published || out.Len() != 0 || strings.Contains(diag.String(), "private") {
+				t.Fatalf("result=%+v err=%v diag=%q", result, err, diag.String())
+			}
+			raw, err := os.ReadFile(output)
+			if err != nil || string(raw) != engine.text {
+				t.Fatalf("output=%q err=%v", raw, err)
+			}
+			if mode == publication.InPlace {
+				raw, err := os.ReadFile(result.Publication.BackupPath)
+				if err != nil || string(raw) != "Hello.\n" {
+					t.Fatalf("backup=%q err=%v", raw, err)
+				}
+			}
+			if len(translationRows(t, paths)) != 1 {
+				t.Fatal("missing committed row")
+			}
+		})
 	}
 }

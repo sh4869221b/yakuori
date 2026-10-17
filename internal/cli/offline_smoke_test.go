@@ -22,22 +22,23 @@ import (
 //
 //	YAKUORI_PULL_BINARY=... YAKUORI_PULL_EVIDENCE=... go test -tags offlinesmoke ./internal/cli -run '^TestOfflineCLIMatrix$/^model-free$'
 //
-// translate and localize are dispatch-only: neither implements translation, so
-// their cases assert the current dispatch exit codes and are never reported as a
-// real translation path.
+// The model-free translation cases stop at selected-model admission.
 func TestOfflineCLIMatrix(t *testing.T) {
 	t.Run("model-free", func(t *testing.T) {
 		layout := newOfflineSmokeLayout(t)
 		invalid := layout.invalidModel(t)
-		source := filepath.Join(layout.root, "unused-source.txt")
+		source := filepath.Join(layout.root, "source.txt")
 		output := filepath.Join(layout.root, "unused-output.txt")
+		if err := os.WriteFile(source, []byte("Hello.\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
 
 		doctor := layout.run(t, "doctor-empty", 0, "doctor")
 		checkMissing := layout.run(t, "doctor-check-model-missing", 1, "doctor", "--check-model", "--backend", "cpu")
 		useMissing := layout.run(t, "models-use-missing", 1, "models", "use", "absent")
 		importInvalid := layout.run(t, "models-import-invalid", 1, "models", "import", "--id", "bad", invalid)
-		translate := layout.run(t, "translate-dispatch", 2, "translate")
-		localize := layout.run(t, "localize-dispatch", 1, "localize", "--output", output, source)
+		translate := layout.run(t, "translate-unselected", 1, translationArgs("translate", source)...)
+		localize := layout.run(t, "localize-unselected", 1, translationArgs("localize", "--output", output, source)...)
 		state := layout.snapshot(t)
 
 		checks := []map[string]any{
@@ -46,16 +47,15 @@ func TestOfflineCLIMatrix(t *testing.T) {
 			{"name": "unregistered_use_is_a_command_failure", "pass": useMissing.TargetExit == 1 && useMissing.Stderr != ""},
 			{"name": "invalid_gguf_import_is_rejected_without_leaking_the_path", "pass": importInvalid.TargetExit == 1 && importInvalid.Stdout == "" && importInvalid.Stderr != "" && !strings.Contains(importInvalid.Stderr, invalid)},
 			{"name": "instruction_shaped_model_bytes_are_not_echoed", "pass": !strings.Contains(importInvalid.Stderr, offlineSmokeInjectedInstruction)},
-			{"name": "translate_dispatch_is_usage_only", "pass": translate.TargetExit == 2},
-			{"name": "localize_dispatch_reports_unimplemented", "pass": localize.TargetExit == 1 && localize.Stdout == "" && localize.Stderr != ""},
+			{"name": "translate_rejects_unselected_model", "pass": translate.TargetExit == 1 && translate.Stdout == "" && strings.Contains(translate.Stderr, "localize model failed")},
+			{"name": "localize_rejects_unselected_model", "pass": localize.TargetExit == 1 && localize.Stdout == "" && strings.Contains(localize.Stderr, "localize model failed")},
 			{"name": "no_registry_selection_or_stage_was_written", "pass": !state.RegistryExists && len(state.RegistryIDs) == 0 && len(state.Models) == 0 && len(state.Stages) == 0 && state.Selection == ""},
 		}
 		recordOfflineSmokeEvidence(t, "matrix-model-free", map[string]any{
 			"case": "model-free", "task": "issue-19-model-pull-offline/task-6",
 			"binary": offlineSmokeBinary(t), "layout": layout.describe(), "invalid_model": invalid,
 			"state_after": state, "checks": checks,
-			"runs":          []offlineSmokeRun{doctor, checkMissing, useMissing, importInvalid, translate, localize},
-			"dispatch_only": []string{"translate: unknown command, exit 2", "localize: pipeline is not implemented, exit 1"},
+			"runs": []offlineSmokeRun{doctor, checkMissing, useMissing, importInvalid, translate, localize},
 		})
 		offlineSmokeChecks(t, checks)
 	})
