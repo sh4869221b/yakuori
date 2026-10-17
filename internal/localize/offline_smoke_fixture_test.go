@@ -86,7 +86,6 @@ func offlineSmokeRegistry(t *testing.T) (*models.Registry, config.StoragePaths) 
 type offlineSmokeEngine struct {
 	inference.Engine
 	countErr, generateErr, closeErr error
-	cancel                          context.CancelFunc
 }
 
 func (e offlineSmokeEngine) CountTokens(ctx context.Context, request inference.GenerationRequest) (int, error) {
@@ -99,9 +98,6 @@ func (e offlineSmokeEngine) CountTokens(ctx context.Context, request inference.G
 func (e offlineSmokeEngine) Generate(ctx context.Context, request inference.GenerationRequest) (inference.GenerationResult, error) {
 	if e.generateErr != nil {
 		return inference.GenerationResult{}, e.generateErr
-	}
-	if e.cancel != nil {
-		e.cancel()
 	}
 	return e.Engine.Generate(ctx, request)
 }

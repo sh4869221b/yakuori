@@ -32,8 +32,9 @@ The Docker gate contains no C/C++ compiler, CMake or SQLite development headers;
 it explicitly checks their absence before running the same script. It does not
 remove software from the host. No inference libraries, SQLite driver, submodules,
 CUDA toolkit, models or game fixtures are used. The only extras are the
-test-only `strace` and `python3` packages, needed by the offline observer and
-the model-free matrices wired into `ci/verify.sh`. The tests are deterministic
+test-only `strace` (>= 6.8, which provides `--kill-on-exit`) and `python3`,
+needed by the offline observer and the
+model-free matrices wired into `ci/verify.sh`. The tests are deterministic
 and use generated temporary directories and injected fake path resolvers/writers.
 
 `ci/verify.sh` checks formatting, repository `import "C"` (including excluded files),
@@ -72,8 +73,12 @@ destinations, malformed or incomplete traces, or hidden preinitialization.
 The `offlinesmoke` CLI fixture adds the option only when
 `YAKUORI_OFFLINE_BACKEND=cuda`; its own record must match the selected policy.
 An unset backend remains model-free and strict (`allow_nvidia_mps=false`), and
-CPU runs remain strict. For example, on a Linux/amd64 host with the pinned GGUF
-already present and an NVIDIA driver, the CLI matrix can be reproduced with:
+CPU runs remain strict. Descriptor paths use `-xx -yy` so literal terminal
+hyphens and equals signs cannot be confused with annotation arrows.
+The observer's target timeout is ten minutes, and its tracer preflight may take
+another two, so the Go test timeout is raised above the default ten minutes.
+On a Linux/amd64 host with the pinned GGUF already present and an NVIDIA driver,
+the CLI matrix can be reproduced with:
 
 ```sh
 YAKUORI_OFFLINE_MODEL="$MODEL" \
@@ -81,7 +86,7 @@ YAKUORI_OFFLINE_BACKEND=cuda \
 YAKUORI_PULL_BINARY="$CUDA_BIN" \
 YAKUORI_PULL_EVIDENCE="$E/task-7-cli" \
 CGO_ENABLED=0 GOTOOLCHAIN=local \
-go test -count=1 -tags cuda,offlinesmoke ./internal/cli \
+go test -count=1 -timeout 15m -tags cuda,offlinesmoke ./internal/cli \
   -run '^TestOfflineCLIMatrix$/^real-model$' -v
 ```
 
@@ -100,18 +105,31 @@ YAKUORI_OFFLINE_MODEL="$MODEL" \
 YAKUORI_OFFLINE_BACKEND=cuda \
 python3 ci/offline.py --evidence "$E/task-7-cuda-core" --expect-exit 0 \
   --allow-nvidia-mps -- "$E/localize-offline-cuda.test" \
-  -test.run '^TestOfflineCoreMatrix$' -test.v
+  -test.run '^TestOfflineCoreMatrix$' -test.v -test.timeout 15m
 ```
 
 The driver-free refusal is a separate run inside the existing container with
-the CUDA binary and pinned model available but no NVIDIA driver. Keep the
+the pinned model available but no NVIDIA driver. Build the cuda-tagged driver
+matrix test binary and run its real-load branch with the driver declared absent.
+The test rejects a loadable `libcuda.so.1`, requires the cuda-tagged backend pin,
+asserts `backend=cuda` returns no engine rather than a not-built-in error, and
+loads the same model with `backend=cpu` as the explicit control. Keep the
 observer strict, with no MPS option:
 
 ```sh
-python3 ci/offline.py --evidence "$E/task-7-driverfree-doctor" --expect-exit 1 \
-  -- "$CUDA_BIN" doctor --check-model --backend cuda
+CGO_ENABLED=0 GOTOOLCHAIN=local \
+go test -c -tags cuda,offlinesmoke -o "$E/goinfer-offline-cuda.test" \
+  ./internal/inference/goinfer
+
+YAKUORI_OFFLINE_MODEL="$MODEL" \
+YAKUORI_OFFLINE_BACKEND=cuda \
+YAKUORI_OFFLINE_CUDA_DRIVER=absent \
+python3 ci/offline.py --evidence "$E/task-7-driverfree-cuda" --expect-exit 0 \
+  -- "$E/goinfer-offline-cuda.test" \
+  -test.run '^TestOfflineCUDAMatrix$/^real_load$' -test.v -test.timeout 15m
 ```
 
+A timeout, a model failure or any other refusal is not accepted as success.
 This refusal checks that CUDA does not fall back to CPU or acquire a driver;
 it is not a real-GPU success result. The exception changes only observer
 classification for the two control connects. It does not itself establish that

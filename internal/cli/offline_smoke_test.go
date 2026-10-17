@@ -50,7 +50,6 @@ func TestOfflineCLIMatrix(t *testing.T) {
 			{"name": "localize_dispatch_reports_unimplemented", "pass": localize.TargetExit == 1 && localize.Stdout == "" && localize.Stderr != ""},
 			{"name": "no_registry_selection_or_stage_was_written", "pass": !state.RegistryExists && len(state.RegistryIDs) == 0 && len(state.Models) == 0 && len(state.Stages) == 0 && state.Selection == ""},
 		}
-		offlineSmokeChecks(t, checks)
 		recordOfflineSmokeEvidence(t, "matrix-model-free", map[string]any{
 			"case": "model-free", "task": "issue-19-model-pull-offline/task-6",
 			"binary": offlineSmokeBinary(t), "layout": layout.describe(), "invalid_model": invalid,
@@ -58,6 +57,7 @@ func TestOfflineCLIMatrix(t *testing.T) {
 			"runs":          []offlineSmokeRun{doctor, checkMissing, useMissing, importInvalid, translate, localize},
 			"dispatch_only": []string{"translate: unknown command, exit 2", "localize: pipeline is not implemented, exit 1"},
 		})
+		offlineSmokeChecks(t, checks)
 	})
 
 	t.Run("real-model", func(t *testing.T) {
@@ -93,7 +93,6 @@ func TestOfflineCLIMatrix(t *testing.T) {
 			{"name": "corrupted_bytes_fail_verify_and_check_model", "pass": verifyCorrupt.TargetExit == 1 && verifyCorrupt.Stdout == "" && strings.Contains(verifyCorrupt.Stderr, "model identity mismatch") && checkCorrupt.TargetExit == 1 && strings.Contains(checkCorrupt.Stderr, "model identity mismatch")},
 			{"name": "old_state_survives_the_corrupted_copy", "pass": afterCorrupt.ManagedSHA != offlineSmokeSHA256 && selected(afterCorrupt)},
 		}
-		offlineSmokeChecks(t, checks)
 		recordOfflineSmokeEvidence(t, "matrix-real-model", map[string]any{
 			"case": "real-model", "task": "issue-19-model-pull-offline/task-6",
 			"binary": offlineSmokeBinary(t), "model": model, "layout": layout.describe(),
@@ -101,6 +100,7 @@ func TestOfflineCLIMatrix(t *testing.T) {
 			"state_after_import": afterImport, "state_after_use": afterUse, "state_after_corruption": afterCorrupt, "checks": checks,
 			"runs": []offlineSmokeRun{importCopy, verifyCopy, checkUnselected, useCopy, checkSelected, verifyCorrupt, checkCorrupt},
 		})
+		offlineSmokeChecks(t, checks)
 	})
 }
 
@@ -207,6 +207,9 @@ func TestOfflineSmokeSnapshotRegistry(t *testing.T) {
 	}
 }
 
+// recordOfflineSmokeEvidence is called before offlineSmokeChecks so a failing
+// matrix check still leaves the aggregate state, failed checks and run streams
+// in the evidence artifact.
 func recordOfflineSmokeEvidence(t *testing.T, name string, evidence map[string]any) {
 	t.Helper()
 	data, err := json.MarshalIndent(evidence, "", "  ")

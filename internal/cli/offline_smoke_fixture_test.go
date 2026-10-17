@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -28,6 +29,13 @@ const (
 	offlineSmokeSHA256          = "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32"
 	offlineSmokeSizeBytes       = 491400064
 	offlineSmokeObserverTimeout = 10 * time.Minute
+	// ci/offline.py gives the tracer preflight its own 120-second budget before
+	// the target timeout starts. The outer watchdog covers that preflight, the
+	// full target budget and the observer's bounded teardown; otherwise it would
+	// kill an observer still inside its own limits.
+	offlineSmokePreflightTimeout = 2 * time.Minute
+	offlineSmokeTeardownTimeout  = 30 * time.Second
+	offlineSmokeWatchdogTimeout  = offlineSmokeObserverTimeout + offlineSmokePreflightTimeout + offlineSmokeTeardownTimeout
 )
 
 // offlineSmokeInjectedInstruction is instruction-shaped content planted in the
@@ -201,7 +209,53 @@ func newOfflineSmokeLayout(t *testing.T) *offlineSmokeLayout {
 	for _, key := range keys {
 		env = append(env, key+"="+home[key])
 	}
+	// CUDA children resolve libcuda through the caller's library path, and
+	// CUDA_VISIBLE_DEVICES chooses the devices this experiment may see. Inherit
+	// only those runtime values, including an explicitly empty device list;
+	// HOME and the XDG roots above stay fixture-owned and unrelated caller
+	// environment is not copied.
+	for _, key := range []string{"LD_LIBRARY_PATH", "CUDA_VISIBLE_DEVICES"} {
+		if value, ok := os.LookupEnv(key); ok {
+			env = append(env, key+"="+value)
+		}
+	}
 	return &offlineSmokeLayout{root: root, env: env, paths: paths, storage: config.ResolveStoragePaths(paths)}
+}
+
+// TestOfflineSmokeLayoutPreservesCUDARuntimeEnv keeps the caller's CUDA
+// runtime configuration while the fixture-owned HOME/XDG values stay private.
+// An explicitly empty CUDA_VISIBLE_DEVICES has to survive as empty instead of
+// being dropped, which would expose every device.
+func TestOfflineSmokeLayoutPreservesCUDARuntimeEnv(t *testing.T) {
+	const libraryPath = "/opt/nvidia/container/lib"
+	t.Setenv("LD_LIBRARY_PATH", libraryPath)
+	t.Setenv("CUDA_VISIBLE_DEVICES", "")
+	t.Setenv("OFFLINE_SMOKE_UNRELATED", "secret")
+	layout := newOfflineSmokeLayout(t)
+	values := make(map[string]string, len(layout.env))
+	for _, entry := range layout.env {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			t.Fatalf("child env entry %q is not KEY=VALUE", entry)
+		}
+		values[key] = value
+	}
+	if value := values["LD_LIBRARY_PATH"]; value != libraryPath {
+		t.Fatalf("LD_LIBRARY_PATH = %q, want %q", value, libraryPath)
+	}
+	visible, ok := values["CUDA_VISIBLE_DEVICES"]
+	if !ok || visible != "" {
+		t.Fatalf("CUDA_VISIBLE_DEVICES = %q (present=%t), want an explicitly empty value", visible, ok)
+	}
+	if value := values["HOME"]; value != layout.root {
+		t.Fatalf("HOME = %q, want synthetic %q", value, layout.root)
+	}
+	if value := values["XDG_CONFIG_HOME"]; value != filepath.Join(layout.root, "config") {
+		t.Fatalf("XDG_CONFIG_HOME = %q, want the fixture value", value)
+	}
+	if _, ok := values["OFFLINE_SMOKE_UNRELATED"]; ok {
+		t.Fatal("unrelated caller environment leaked into the child")
+	}
 }
 
 func (l *offlineSmokeLayout) describe() map[string]string {
@@ -318,10 +372,18 @@ func (l *offlineSmokeLayout) run(t *testing.T, name string, expect int, args ...
 	go func() { done <- cmd.Wait() }()
 	select {
 	case <-done:
-	case <-time.After(offlineSmokeObserverTimeout + time.Minute):
-		_ = cmd.Process.Kill()
-		<-done
-		t.Fatalf("observer for %q did not finish within its own timeout", name)
+	case <-time.After(offlineSmokeWatchdogTimeout):
+		// ci/offline.py owns the exact tracee teardown. SIGTERM asks it to stop
+		// its traced session and write what it observed instead of killing only
+		// the Python process and leaving the tracer's session behind.
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		select {
+		case <-done:
+		case <-time.After(offlineSmokeTeardownTimeout):
+			_ = cmd.Process.Kill()
+			<-done
+		}
+		t.Fatalf("observer for %q did not finish within its preflight, target and teardown budget", name)
 	}
 	record := offlineSmokeObserver(t, prefix)
 	// ci/offline.py keeps the target's own streams beside the record, so the

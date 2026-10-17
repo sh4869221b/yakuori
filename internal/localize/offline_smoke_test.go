@@ -217,14 +217,31 @@ func TestOfflineCoreMatrix(t *testing.T) {
 
 	t.Run("cancel_during_generate", func(t *testing.T) {
 		cancelled, cancel := context.WithCancel(ctx)
-		broken := NewCore(NewInferenceEngine(offlineSmokeEngine{Engine: engine, cancel: cancel}, build))
+		defer cancel()
+		observed, restore, err := engine.OfflineSmokeCancelAfterToken(cancel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tm := &fakeTM{}
 		var out bytes.Buffer
-		_, err := broken.Text(cancelled, []byte(offlineSmokeText), textadapter.New("en", "ja"), profile, &fakeTM{}, &out)
+		result, err := core.Text(cancelled, []byte(offlineSmokeText), textadapter.New("en", "ja"), profile, tm, &out)
+		restore()
+		select {
+		case <-observed:
+		default:
+			t.Fatalf("cancellation did not observe a real native token: err=%v", err)
+		}
 		if !errors.Is(err, context.Canceled) || out.Len() != 0 || offlineSmokePhase(t, err) != "generate" {
 			t.Fatalf("cancelled generation: bytes=%d phase=%s err=%v", out.Len(), offlineSmokePhase(t, err), err)
 		}
-		cancel()
-		t.Logf("case=cancel_during_generate kind=injected_trigger_real_cancel reached=generate error=%q chain=%q", err, offlineSmokeChain(err))
+		if result.TMCommitted || tm.calls != 0 || len(tm.rows) != 0 {
+			t.Fatalf("cancelled generation accepted TM: committed=%t calls=%d rows=%d", result.TMCommitted, tm.calls, len(tm.rows))
+		}
+		reused, reuseErr := engine.Generate(ctx, base)
+		if reuseErr != nil || reused.Finish != inference.Stop || reused.OutputTokens == 0 || strings.TrimSpace(reused.Text) == "" {
+			t.Fatalf("reuse after active cancellation: finish=%s output=%d err=%v", reused.Finish, reused.OutputTokens, reuseErr)
+		}
+		t.Logf("case=cancel_during_generate kind=injected_trigger_real_cancel reached=generate native_token_observed=true backend=%s reused_tokens=%d reused_finish=%s error=%q chain=%q", info.Backend, reused.OutputTokens, reused.Finish, err, offlineSmokeChain(err))
 	})
 
 	t.Run("cancel_before_any_work", func(t *testing.T) {
