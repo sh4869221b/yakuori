@@ -15,4 +15,4 @@ COPY --from=oracle /oracle/target/debug/yakuori-w3strings-oracle /usr/local/bin/
 ENV PATH="/usr/local/go/bin:${PATH}" CGO_ENABLED=0 GOTOOLCHAIN=local W3STRINGS_ORACLE=/usr/local/bin/w3strings-oracle
 WORKDIR /src
 COPY . .
-RUN sh ci/w3strings-spike.sh
+RUN sh ci/w3strings-spike.sh && sh ci/w3strings-adapter.sh

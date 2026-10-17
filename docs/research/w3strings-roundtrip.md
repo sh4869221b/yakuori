@@ -11,11 +11,12 @@ original CSV through independent encode/decode and saved expected CSVs.
 This establishes named historical MOD/sample no-translation compatibility
 through an independent tool, beyond successful re-import by the Go parser.
 
-This remains a bounded research result, not a production Adapter or universal
+This original spike remains a bounded research result, not a production Adapter or universal
 format specification. Game startup, current Next-Gen/version-164 compatibility,
-large MODs, translation quality and human MVP acceptance were not tested. #6 and
-#20 may use the limited identity/preservation contract below; wider support and
-translation behavior require separate evidence.
+large MODs, translation quality and human MVP acceptance were not tested.
+#20 adopts the limited contract below. The subsequent production implementation
+and its separate evidence are recorded in the Issue #20 section; the original
+spike results do not establish translation behavior.
 
 ## Fixture provenance and rights boundary
 
@@ -286,7 +287,7 @@ relations, UTF-16 offset/length units, explicit en/jp language keys, and exact
 no-translation preservation for the tested version-162 files. Both independent
 CSV comparisons are limited to at most one key per ID. Translating text and
 recalculating offsets/lengths/payload counts or target-language encoded IDs remain
-proposed follow-up behavior, not a verified writer contract. There is no remaining
+proposed follow-up behavior in the original spike, not its verified writer contract. There is no remaining
 blocker to this bounded research adoption; the wider cases below remain outside
 its evidence. This report does not automatically close the Issue or change the
 canonical design Page.
@@ -306,6 +307,144 @@ key-only records, shared/overlapping payloads, embedded NULs, invalid UTF-16,
 other versions/languages and empty files need additional independent fixtures
 before an implementation-support decision. The observed failures are not proof
 that such files are invalid in the game.
+
+## Issue #20 production adoption (2026-10-17)
+
+The production [Adapter contract and usage](../w3strings-adapter.md) is the
+single integration guide. `internal/adapter/w3strings` now implements
+`New`, checked `NewWithLimits`, `Import`, session-bound copying
+`KeyRelations`, Accepted-only `Export`, and bounded actual-byte `Observe`.
+It uses adapter `witcher3-w3strings`, schema `w3strings-v162-en-jp-v1`,
+unsigned-decimal decoded IDs and opaque four-byte LE key hashes. Hash0 is
+not keyless. The adopted subset remains version162 en/jp and minimal
+one/two-byte counts 0..4095; output is Japanese only. Source binary `jp`
+maps to unit language `ja`. CLI dispatch remains text-only.
+
+All original string/key table orders and physical gap bytes/adjacency are
+preserved. Changed text permits only new ciphertext, UTF-16 lengths and
+subsequent offsets, aggregate payload/count width, and derived gap positions,
+plus Japanese language bytes and encoded IDs in both tables. jp no-op is
+byte-exact; en -> jp source-identical changes only language/encoded-ID/ciphertext
+bytes. Ordered metadata additionally rejects table-order-only or gap-only
+tampering despite unchanged ID/text/key multisets.
+
+The complete Manifest names are `fixed-header`, `string-count`, `key-count`,
+`decoded-id-order`, `decoded-key-order` (preserved), and `language`,
+`string-records`, `key-records`, `payload-count`, `terminators`,
+`opaque-layout` (expected). The guide specifies their byte encodings and the
+low-level `Import -> KeyRelations(session) -> unit.NewSourceIdentity` sequence.
+`Core.FileWithTM` imports internally; this accessor does not automatically
+provide `scope.Keys`. The Core real-file test proves File/final-observation/
+TM-commit/publication boundaries, not automatic persistent-TM key wiring.
+
+Input limits are unchanged: 1495 binary bytes, 76 units, 980 UTF-8 bytes/unit,
+1036 total UTF-8 text bytes and 76 segments. The authored fixtures and QA use
+explicit research overrides 65536/4095/16384/32768/4095 respectively. These
+input budgets are not reapplied to Japanese expansion. Output payload includes
+terminators and opaque gaps and remains `P <= 4095` UTF-16 units. For imported
+`Ns`, `Nk` and original count widths `cs`, `ck`, Observe uses
+`Bmax = 10+cs+12*Ns+ck+8*Nk+2+2*4095+2` bytes and reads one extra byte only
+for overflow detection. Structural/Unicode checks still apply.
+
+The saved new translation CSV is authored project content, not regenerated
+from the writer. It changes ID1001 to `短い訳文😀`, leaves ID1002 empty,
+uses 2050 `長` units for ID1003 and preserves ID4294967295's spaces/pipe
+literal. The production script independently decodes that en -> jp export,
+authored jp no-op, and both named historical MOD en -> jp source-identical
+exports, comparing saved rows and explicit target-language metadata.
+
+The independent reader/pins/rights above are unchanged. CSV still conflates
+keyless/hash0, and multiple-key relations are collapsed rather than proven.
+Production raw-structure tests separately cover these, minimal zero counts,
+empty tables, unordered physical extents and opaque gaps. Independent
+empty-table/multiple-key compatibility is unverified. The original script
+still asserts the oracle's exact zero-key `0x80`/exit1/`UnexpectedEof` bug.
+Larger count forms, other versions/languages, shared extents and malformed
+Unicode remain rejected by the adopted parser; this does not classify every
+such game file as invalid.
+
+The dedicated existing workflow builds `ci/w3strings-spike.Dockerfile`, which
+now runs both old and production scripts with the locked Rust1.90.0 reader
+and official Go1.27.1. Normal Go tests/builds do not need Rust or a new product
+dependency. Reproduce both independent and clean gates with:
+
+```sh
+docker build --progress=plain -f ci/w3strings-spike.Dockerfile .
+docker build --progress=plain -f ci/Dockerfile .
+# With the owned Btrfs RUN_TMP/cache setup in the Adapter guide:
+W3STRINGS_ORACLE="$RUN_TMP/absent-oracle" sh ci/w3strings-adapter.sh
+```
+
+The missing-oracle command must fail, without a success claim or leftover QA
+directory. No model, GPU, host package install, CLI game dispatch, default
+limit expansion, game launch, Next-Gen compatibility or human quality
+acceptance is implied. #21/#22 remain separate.
+
+### Initial execution and CI repair
+
+The first Task6 validation on 2026-10-17 used Task5 head `772e327` plus
+the documentation and one-line dedicated-CI integration above. Its failures
+remain historical evidence, not current acceptance.
+
+| Invocation / scenario | Actual result |
+| --- | --- |
+| Btrfs-owned `TMPDIR`, `CGO_ENABLED=0 GOTOOLCHAIN=local go test -count=1 -v ./internal/adapter/w3strings ./tools/w3adapterqa ./tools/w3spike ./internal/localize ./internal/adapter/text` before edits | exit0; five packages passed, including real Core.File publication and malformed/stage-tamper rejections |
+| Host `go build -o "$RUN_TMP/yakuori" ./cmd/yakuori`, `go test -count=1 ./...`, `go vet ./...` with CGO=0 | exit0; host is `go1.27.1-X:nodwarf5`, not the exact official clean gate |
+| `docker build --progress=plain -f ci/w3strings-spike.Dockerfile .` | exit0; both scripts actually executed, four old fixture comparisons/zero-key negative and four production export projections passed; base toolchain/oracle layers reused Docker cache |
+| Official independent-image `go version` / temporary-path read-back | `go1.27.1 linux/amd64`, CGO=0; Adapter QA temporary directory absent and `/tmp` empty after scripts |
+| `W3STRINGS_ORACLE="$RUN_TMP/absent-oracle" sh ci/w3strings-adapter.sh` | exit1, `Independent oracle executable unavailable`; owned runtime's top-level contents unchanged, no success reported |
+| Initial `docker build --progress=plain -f ci/Dockerfile .` | exit1 at all three Task5 W3 Core.File tests with `localize prepare failed`; exact Go1.27.1, cgo guard, 55 offline-observer self-tests and model-free CLI checks had run successfully |
+| Clean-image vet and arm64 cross-build | not reached after the failed Go suite; not counted as passed |
+
+The clean Docker runtime uses overlayfs; publication qualifies only ext4/Btrfs.
+The original tests failed during Prepare, before positive/import/tamper
+boundaries. The separate test-only repair `c50c54b` retains those qualified
+assertions and adds explicit unsupported-filesystem checks: prepare-phase
+`ErrUnsupportedFilesystem`, Generate0, Commit0, NotPublished, no observation
+or output, and unchanged source. A green overlay test therefore proves
+unsupported rejection only, not successful publication or import/stage checks.
+
+The independent repair verifier confirmed official Go1.27.1 non-root Btrfs
+coverage for the real Core success/import/tamper paths and a distinct overlay
+rejection replay. Its first nominal overlay invocation accidentally kept
+`GOTMPDIR` on Btrfs: exit0/17PASS with zero unsupported branches was not accepted
+as negative evidence. The corrected invocation set both `TMPDIR` and
+`GOTMPDIR` to the owned overlay directory and recorded all three prepare
+rejections, 17RUN/17PASS/0SKIP and no qualified Core messages. These surfaces
+must remain separate when reproducing the commands.
+
+### Repaired-head execution results
+
+Task6 revalidation on 2026-10-17 used repaired head `c50c54b` and the
+four documentation/CI paths above. No Go production or test source was changed
+by Task6. Both Docker test RUN layers executed afresh; only existing base,
+official toolchain and locked Rust-reader build layers were cached.
+
+| Invocation / scenario | Actual result |
+| --- | --- |
+| Unchanged five-package baseline above, owned Btrfs `TMPDIR` and `GOTMPDIR`, before further edits | exit0; 586RUN/586PASS/0SKIP across five packages, including qualified Core success, malformed import and valid table-order stage tamper |
+| `docker build --progress=plain -f ci/w3strings-spike.Dockerfile .` | exit0; old four-fixture exact-byte comparisons and exact zero-key negative executed, followed by all four production export/independent decode/saved-CSV comparisons and jp no-op |
+| `docker build --progress=plain -f ci/Dockerfile .` | exit0; official Go1.27.1, cgo negative/dependency audit, gofmt, CLI build, 55 observer self-tests, model-free CLI checks, full 24-package Go suite, vet and all three Linux arm64 cross-builds completed |
+| Official-Go independent image, non-root UID/GID1000, read-only source/modules, network disabled, capabilities dropped, owned Btrfs bind mount for both temp variables | exit0; `go test -count=1 -v ./tools/w3adapterqa ./internal/localize -run '^(TestRun\|TestRunRejectsInvalid\|TestW3StringsFile\|TestW3StringsFileRejectsMalformed\|TestW3StringsStageTamper)$'`: 17RUN/17PASS/0SKIP; actual Core Publish/Commit1, malformed Import/Generate0/Commit0 and valid stage-tamper/CompareFinal rejection/Commit0 reached |
+| Official clean-image compiled-artifact read-back | CLI is linux/amd64; CLI, SQLite probe and TM test cross-builds are linux/arm64, all official Go1.27.1 and CGO=0; arm64 binaries were not executed |
+| `W3STRINGS_ORACLE="$RUN_TMP/absent-oracle" sh ci/w3strings-adapter.sh` | exit1 with `Independent oracle executable unavailable`; runtime entries before/after identical, no QA directory allocated or success reported |
+
+The clean Docker suite's ordinary overlayfs result is unsupported-filesystem
+rejection coverage, not the qualified Core proof in the separate Btrfs row.
+The nonverbose full suite does not establish a universal zero-skip count;
+the named Btrfs and baseline selections above do. The offline observer emitted
+its pre-existing Python `ResourceWarning` while all 55 self-tests passed.
+No warning or test was suppressed.
+
+The independent-image read-back confirmed official Go1.27.1/CGO0, an empty
+container `/tmp` and absence of the script's reported temporary directory.
+Raw Task6 logs are retained under
+`.omo/evidence/issue-20-w3strings-adapter/execution/task-6/`
+(`repaired-baseline.log`, `repaired-independent-ci.log`,
+`repaired-clean-ci.log`, `repaired-official-btrfs.log`,
+`repaired-clean-artifacts.log`, `repaired-missing-oracle.log`).
+The initial failure logs remain alongside them. Later independent root
+acceptance and integration are separate; these results do not close #20.
 
 ## Remaining gates
 
