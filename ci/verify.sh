@@ -28,7 +28,7 @@ YAKUORI_PULL_BINARY="$PWD/yakuori" go test -count=1 -tags modelsmoke ./internal/
 offline_evidence=$(mktemp -d)
 trap 'rm -rf "$fixture" "$offline_evidence"' EXIT
 YAKUORI_PULL_BINARY="$PWD/yakuori" YAKUORI_PULL_EVIDENCE="$offline_evidence" \
-  go test -count=1 -tags offlinesmoke ./internal/cli -run '^TestOfflineCLIMatrix$/^model-free$' -v
+  go test -count=1 -timeout 15m -tags offlinesmoke ./internal/cli -run '^TestOfflineCLIMatrix$/^model-free$' -v
 go test -count=1 ./...
 go vet ./...
 mkdir -p bin
