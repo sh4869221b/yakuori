@@ -40,6 +40,10 @@ func offlineSmokeBinary(t *testing.T) string {
 	if path == "" {
 		t.Fatal("YAKUORI_PULL_BINARY must name the built product CLI")
 	}
+	path, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() {
 		t.Fatalf("YAKUORI_PULL_BINARY %s is not a regular file: %v", path, err)
@@ -52,6 +56,10 @@ func offlineSmokeModel(t *testing.T) string {
 	path := os.Getenv("YAKUORI_OFFLINE_MODEL")
 	if path == "" {
 		t.Fatal("YAKUORI_OFFLINE_MODEL must name the pinned local Qwen GGUF fixture")
+	}
+	path, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -89,10 +97,42 @@ func offlineSmokeEvidence(t *testing.T) string {
 	if dir == "" {
 		t.Fatal("YAKUORI_PULL_EVIDENCE must name the directory for the observer artifacts")
 	}
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return dir
+}
+
+func TestOfflineSmokeRelativePaths(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "bin"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "bin", "probe"), []byte("#!/bin/sh\nprintf observed > \"$1\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+	t.Setenv("YAKUORI_PULL_BINARY", filepath.Join("bin", "probe"))
+	t.Setenv("YAKUORI_PULL_EVIDENCE", "evidence")
+	binary := offlineSmokeBinary(t)
+	evidence := offlineSmokeEvidence(t)
+
+	child := exec.Command(binary, filepath.Join(evidence, "record"))
+	child.Dir = t.TempDir()
+	if output, err := child.CombinedOutput(); err != nil {
+		t.Fatalf("child from a different working directory: %v: %s", err, output)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "evidence", "record"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "observed" {
+		t.Fatalf("child evidence = %q", data)
+	}
 }
 
 // offlineSmokeRepoRoot finds the checkout that owns ci/offline.py, so the test
