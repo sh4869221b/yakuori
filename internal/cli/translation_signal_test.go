@@ -9,57 +9,19 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/sh4869221b/yakuori/internal/publication"
 )
 
-// A test-only overlay changes only the opener expression. The real dispatcher
-// still creates NotifyContext and calls the actual assembly/Core/Store.
-func translationSignalBinary(t *testing.T) string {
-	t.Helper()
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("signal fixture source path unavailable")
-	}
-	dir := filepath.Dir(filename)
-	path := filepath.Join(dir, "cli.go")
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	const seam = "models.New(paths).OpenSelected"
-	if strings.Count(string(raw), seam) != 1 {
-		t.Fatal("dispatcher selected-engine seam changed")
-	}
-	root := t.TempDir()
-	replacement := filepath.Join(root, "cli.go")
-	if err := os.WriteFile(replacement, []byte(strings.Replace(string(raw), seam, "translationSignalOpen("+seam+")", 1)), 0600); err != nil {
-		t.Fatal(err)
-	}
-	overlay, err := json.Marshal(struct{ Replace map[string]string }{map[string]string{path: replacement}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	overlayPath := filepath.Join(root, "overlay.json")
-	if err := os.WriteFile(overlayPath, overlay, 0600); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	binary := filepath.Join(root, "signal.test")
-	build := exec.CommandContext(ctx, "go", "test", "-c", "-overlay", overlayPath, "-o", binary, ".")
-	build.Dir = dir
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("signal helper build: %v\n%s", err, output)
-	}
-	return binary
-}
-
 func TestTranslationSignalCancellation(t *testing.T) {
-	binary := translationSignalBinary(t)
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, signal := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(signal.String(), func(t *testing.T) {
 			// Given: subscribe to dedicated ready pipe before starting the child.
@@ -136,9 +98,12 @@ func TestTranslationSignalCancellation(t *testing.T) {
 				t.Fatal(err)
 			}
 			rows := readTranslationTM(t, record.Paths)
+			_, outputErr := os.Lstat(filepath.Join(root, "output.txt"))
 			passed := record.Ready && record.Canceled && record.Drained && record.CloseAfterDrain &&
 				record.Closed == 1 && record.Generated == 1 && record.Code == ExitFailure &&
 				child.ProcessState.ExitCode() == ExitFailure && out.Len() == 0 && len(rows) == 0 &&
+				!record.Result.TMCommitted && record.Result.BytesWritten == 0 &&
+				record.Result.Publication.State == publication.NotPublished && errors.Is(outputErr, os.ErrNotExist) &&
 				strings.Contains(diag.String(), "localize generate failed") && strings.Contains(diag.String(), "TMCommitted=false")
 			evidence := struct {
 				translationSignalRecord

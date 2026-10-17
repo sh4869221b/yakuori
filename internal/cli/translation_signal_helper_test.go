@@ -11,17 +11,20 @@ import (
 
 	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
+	"github.com/sh4869221b/yakuori/internal/localize"
+	"github.com/sh4869221b/yakuori/internal/publication"
 )
 
 type translationSignalRecord struct {
-	Paths           config.Paths `json:"paths"`
-	Ready           bool         `json:"ready"`
-	Canceled        bool         `json:"canceled"`
-	Drained         bool         `json:"drained"`
-	CloseAfterDrain bool         `json:"close_after_drain"`
-	Generated       int          `json:"generated"`
-	Closed          int          `json:"closed"`
-	Code            int          `json:"exit_code"`
+	Paths           config.Paths    `json:"paths"`
+	Ready           bool            `json:"ready"`
+	Canceled        bool            `json:"canceled"`
+	Drained         bool            `json:"drained"`
+	CloseAfterDrain bool            `json:"close_after_drain"`
+	Generated       int             `json:"generated"`
+	Closed          int             `json:"closed"`
+	Code            int             `json:"exit_code"`
+	Result          localize.Result `json:"result"`
 }
 
 type translationSignalEngine struct {
@@ -32,15 +35,6 @@ type translationSignalEngine struct {
 func (e *translationSignalEngine) Close() error {
 	e.record.CloseAfterDrain = e.record.Drained
 	return e.translationEngine.Close()
-}
-
-var translationSignalSelected selectedEngineOpener
-
-func translationSignalOpen(original selectedEngineOpener) selectedEngineOpener {
-	if translationSignalSelected != nil {
-		return translationSignalSelected
-	}
-	return original
 }
 
 func TestTranslationSignalHelper(t *testing.T) {
@@ -67,13 +61,20 @@ func TestTranslationSignalHelper(t *testing.T) {
 			return ctx.Err()
 		}
 		wrapped := &translationSignalEngine{translationEngine: engine, record: &record}
-		translationSignalSelected = func(ctx context.Context, backend string) (string, inference.Engine, error) {
+		open := func(ctx context.Context, backend string) (string, inference.Engine, error) {
 			id, _, err := engine.open(ctx, backend)
 			return id, wrapped, err
 		}
-		defer func() { translationSignalSelected = nil }()
-		code = run(translationArgs("translate", command.options.Source), os.Stdout, os.Stderr,
-			func() (config.Paths, error) { return paths, nil })
+		runner := func(ctx context.Context, options publication.Options) (localize.Result, error) {
+			command.action, command.options = "localize", options
+			result, err := command.execute(ctx, os.Stdout, paths, open)
+			record.Result = result
+			record.Canceled = record.Canceled && errors.Is(err, context.Canceled)
+			return result, err
+		}
+		code = runWithPipeline(context.Background(),
+			translationArgs("localize", "--output", filepath.Join(root, "output.txt"), command.options.Source),
+			os.Stdout, os.Stderr, nil, runner)
 		record.Code, record.Generated, record.Closed = code, engine.generated, engine.closed
 		data, err := json.Marshal(record)
 		if err != nil {

@@ -76,12 +76,12 @@ func runWithPipeline(ctx context.Context, args []string, stdout, stderr io.Write
 			return fail(ExitUsage, "invalid "+args[0]+" arguments; use --help")
 		}
 		if help == "" {
+			ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+			defer stop()
 			if runner != nil && command.action == "localize" {
 				result, err := runner(ctx, command.options)
 				return reportPipeline(stderr, result, err)
 			}
-			ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-			defer stop()
 			paths, err := resolve()
 			if err != nil {
 				return reportPipeline(stderr, localize.Result{}, &localize.Error{Phase: "config", Err: err})

@@ -134,14 +134,25 @@ func TestPipelineResults(t *testing.T) {
 		}
 	})
 	t.Run("file runner receives parsed options and context", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		type callerKey struct{}
+		ctx, cancel := context.WithCancel(context.WithValue(context.Background(), callerKey{}, "caller"))
 		defer cancel()
 		var out, diag bytes.Buffer
 		calls := 0
 		runner := func(gotCtx context.Context, options publication.Options) (localize.Result, error) {
 			calls++
-			if gotCtx != ctx || options != (publication.Options{Source: "source", Output: "out", Mode: publication.Replace}) {
+			if gotCtx.Value(callerKey{}) != "caller" || options != (publication.Options{Source: "source", Output: "out", Mode: publication.Replace}) {
 				t.Fatalf("context=%v options=%+v", gotCtx, options)
+			}
+			done := gotCtx.Done()
+			cancel()
+			select {
+			case <-done:
+			default:
+				t.Fatal("parent cancellation was not propagated")
+			}
+			if !errors.Is(gotCtx.Err(), context.Canceled) {
+				t.Fatalf("parent cancellation = %v", gotCtx.Err())
 			}
 			return localize.Result{TMCommitted: true, Publication: publication.Result{State: publication.Published}}, nil
 		}
