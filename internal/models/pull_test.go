@@ -357,6 +357,12 @@ func TestPull(t *testing.T) {
 			t.Cleanup(srv.Close)
 			return f.pull(t, srv)
 		},
+		check: func(t *testing.T, f *pullFixture, err error) {
+			want := fmt.Sprintf("received %d bytes, expected %d", 4, len(f.payload))
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("truncated body not classified as a size mismatch: %v", err)
+			}
+		},
 	}, {
 		name: "body cancellation",
 		run: func(t *testing.T, f *pullFixture) error {
@@ -529,6 +535,9 @@ func TestPullInvalidRequest(t *testing.T) {
 		{"URL with fragment", func(r *PullRequest) { r.URL += "#model" }},
 		{"relative URL", func(r *PullRequest) { r.URL = "/model" }},
 		{"port-only authority URL", func(r *PullRequest) { r.URL = "https://:443/model.gguf" }},
+		{"zero source port", func(r *PullRequest) { r.URL = "https://example.invalid:0/model.gguf" }},
+		{"source port above 65535", func(r *PullRequest) { r.URL = "https://example.invalid:65536/model.gguf" }},
+		{"five digit source port", func(r *PullRequest) { r.URL = "https://example.invalid:99999/model.gguf" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newPullFixture(t)
@@ -550,9 +559,10 @@ func TestPullInvalidRequest(t *testing.T) {
 }
 
 // TestPullValidAuthorities proves the tightened authority check keeps
-// accepting a valid hostname and an IPv6 literal, each with an explicit port.
+// accepting a valid hostname, with or without an explicit port, and an IPv6
+// literal.
 func TestPullValidAuthorities(t *testing.T) {
-	for _, source := range []string{"https://example.invalid:8443/model.gguf", "https://[::1]:8443/model.gguf"} {
+	for _, source := range []string{"https://example.invalid/model.gguf", "https://example.invalid:8443/model.gguf", "https://example.invalid:65535/model.gguf", "https://[::1]:8443/model.gguf"} {
 		req := PullRequest{URL: source, ID: "fetched", SHA256: strings.Repeat("a", 64), SizeBytes: 1024, DigestSource: "plan-pinned test fixture digest"}
 		if err := validatePullRequest(req); err != nil {
 			t.Fatalf("valid authority %s rejected: %v", source, err)
