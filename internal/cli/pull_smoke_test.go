@@ -29,8 +29,10 @@ func TestPullCLIRealModel(t *testing.T) {
 
 	pull := layout.run(t, bin, server.caFile, args...)
 	pullState := layout.snapshot(t)
-	managedDigest := layout.managedDigest(t, "fetched")
-	provenance := layout.readFile(t, filepath.Join(layout.storage.ModelsDir, "fetched", "provenance.json"))
+	// A pull that failed before registration leaves no managed artifact behind;
+	// reading them fallibly keeps this run's evidence written on its failure path.
+	managedDigest, managedDigestPresent := pullSmokeOptionalDigest(t, filepath.Join(layout.storage.ModelsDir, "fetched", "model.gguf"))
+	provenance, provenancePresent := pullSmokeOptionalRead(t, filepath.Join(layout.storage.ModelsDir, "fetched", "provenance.json"))
 	verify := layout.run(t, bin, server.caFile, "models", "verify", "fetched")
 	use := layout.run(t, bin, server.caFile, "models", "use", "fetched")
 	useState := layout.snapshot(t)
@@ -39,20 +41,21 @@ func TestPullCLIRealModel(t *testing.T) {
 	entry, registered := pullSmokeEntryOf(t, pullState, "fetched")
 	managed, managedPresent := pullState.Models["fetched"]
 	previous, previousRegistered := pullSmokeEntryOf(t, useState, planted.ID)
+	plantedDigest, plantedDigestPresent := pullSmokeOptionalDigest(t, filepath.Join(layout.storage.ModelsDir, planted.ID, "model.gguf"))
 	checks := []pullSmokeCheck{
 		{Name: "pull_exit_ok", Pass: pull.ExitCode == ExitOK && pull.Signal == "", Detail: fmt.Sprintf("exit=%d signal=%s", pull.ExitCode, pull.Signal)},
 		{Name: "pull_stdout_result", Pass: pull.Stdout == fmt.Sprintf("pull: fetched\nmodel_sha256: %s\nsize_bytes: %d\n", pullSmokeDigest, pullSmokeModelSize), Detail: pull.Stdout},
 		{Name: "pull_notice_precedes_acquisition", Pass: pull.Stderr == pullSmokeNotice("fetched", source, pullSmokeDigest, pullSmokeModelSize, pullSmokeDigestSource), Detail: pull.Stderr},
 		{Name: "registry_entry_matches_pin", Pass: registered && entry.SHA256 == pullSmokeDigest && entry.SizeBytes == pullSmokeModelSize, Detail: fmt.Sprintf("%+v registered=%t", entry, registered)},
-		{Name: "managed_bytes_match_pin", Pass: managedPresent && managed.ModelSizeBytes == pullSmokeModelSize && managedDigest == pullSmokeDigest, Detail: fmt.Sprintf("%+v digest=%s", managed, managedDigest)},
-		{Name: "provenance_records_the_expected_identity", Pass: pullSmokeProvenanceMatches(provenance, source, pullSmokeDigest, pullSmokeModelSize, pullSmokeDigestSource), Detail: provenance},
+		{Name: "managed_bytes_match_pin", Pass: managedPresent && managed.ModelSizeBytes == pullSmokeModelSize && managedDigestPresent && managedDigest == pullSmokeDigest, Detail: fmt.Sprintf("%+v digest=%q present=%t", managed, managedDigest, managedDigestPresent)},
+		{Name: "provenance_records_the_expected_identity", Pass: provenancePresent && pullSmokeProvenanceMatches(provenance, source, pullSmokeDigest, pullSmokeModelSize, pullSmokeDigestSource), Detail: fmt.Sprintf("present=%t %s", provenancePresent, provenance)},
 		{Name: "pull_keeps_the_selection", Pass: pullSmokeSelectionOf(t, pullState) == planted.ID && pullState.Selection != nil && *pullState.Selection == planted.Selection, Detail: pullSmokeSelectionOf(t, pullState)},
 		{Name: "pull_leaves_no_stage", Pass: len(pullState.Stages) == 0, Detail: strings.Join(pullState.Stages, ",")},
 		{Name: "verify_exit_ok", Pass: verify.ExitCode == ExitOK && verify.Stdout == fmt.Sprintf("verify: fetched\nmodel_sha256: %s\nsize_bytes: %d\n", pullSmokeDigest, pullSmokeModelSize), Detail: fmt.Sprintf("exit=%d stdout=%q stderr=%q", verify.ExitCode, verify.Stdout, verify.Stderr)},
 		{Name: "use_exit_ok", Pass: use.ExitCode == ExitOK && use.Stdout == "use: fetched\n", Detail: fmt.Sprintf("exit=%d stdout=%q stderr=%q", use.ExitCode, use.Stdout, use.Stderr)},
 		{Name: "use_changes_the_selection", Pass: pullSmokeSelectionOf(t, useState) == "fetched", Detail: pullSmokeSelectionOf(t, useState)},
 		{Name: "real_loader_accepts_the_selection", Pass: doctor.ExitCode == ExitOK && strings.Contains(doctor.Stdout, "model_sha256: "+pullSmokeDigest) && strings.Contains(doctor.Stdout, "effective_backend: cpu"), Detail: fmt.Sprintf("exit=%d stdout=%q stderr=%q", doctor.ExitCode, doctor.Stdout, doctor.Stderr)},
-		{Name: "previous_registration_intact", Pass: previousRegistered && previous.SHA256 == planted.ModelSHA256 && previous.SizeBytes == planted.ModelSizeBytes && layout.managedDigest(t, planted.ID) == planted.ModelSHA256, Detail: fmt.Sprintf("%+v", previous)},
+		{Name: "previous_registration_intact", Pass: previousRegistered && previous.SHA256 == planted.ModelSHA256 && previous.SizeBytes == planted.ModelSizeBytes && plantedDigestPresent && plantedDigest == planted.ModelSHA256, Detail: fmt.Sprintf("%+v digest=%q present=%t", previous, plantedDigest, plantedDigestPresent)},
 	}
 	recordPullSmokeEvidence(t, "real-cli", &pullSmokeEvidence{
 		Case:     "real-cli",
