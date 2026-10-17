@@ -1,10 +1,10 @@
 # Yakuori（訳織り）
 
-ゲームのID・tag・placeholder・binary構造を保持するPure Goローカライズ基盤を目指します。現在、翻訳CLIが扱う形式は全文 `text-v1` です。最初のproduction adapterの目標はWitcher 3の実MOD `.w3strings` の日本語化です。
+ゲームのID・tag・placeholder・binary構造を保持するPure Goローカライズ基盤を目指します。現在、翻訳CLIが扱う形式は全文 `text-v1` です。[Witcher 3 `.w3strings` Adapter](docs/w3strings-adapter.md)はversion162 en/jp入力・日本語出力のGo APIで、CLIには未接続です。
 
 ## 状態
 
-#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDAを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。実ゲーム用adapter、Witcher 3 MODの読み書き、人手による訳質確認、releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
+#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDAを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。Witcher 3形式のCLI接続、人手による訳質確認、releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 
@@ -36,7 +36,7 @@ CLI・XDG namespaceは`yakuori`。旧Kotobaのコード・設定・TM・registry
 
 言語、game namespace、artifact namespaceは空でない値を明示します。CLIは値を正規化したり、file pathからnamespaceを推定したりしません。`translate` は全文をstdoutへ返します。`localize` は形式 `text` を必須とし、`--output OUT` で新規公開、`--output OUT --replace-output` で既存出力の置換、または `--in-place` で原文をbackupとして残す置換をします。`--replace-output` には `--output` が必要で、公開モードは同時指定できません。
 
-対応形式は全文を一つのunitとして扱う `text-v1` です。tagやplaceholderらしい箇所を自動検出して保護する機能はありません。現在の `DefaultLimits` はartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76、context候補4096 tokens、最大出力2048 tokensです。text-v1は一つのunitなのでsource textは最大980 UTF-8 bytesです。Witcher 3 `.w3strings` のproduction adapter、実MODの入出力、人手による翻訳品質の受入れは未実装です。
+対応形式は全文を一つのunitとして扱う `text-v1` です。tagやplaceholderらしい箇所を自動検出して保護する機能はありません。現在の `DefaultLimits` はartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76、context候補4096 tokens、最大出力2048 tokensです。text-v1は一つのunitなのでsource textは最大980 UTF-8 bytesです。Witcher 3形式のCLI接続と人手による翻訳品質の受入れは未実施です。
 
 ## Build / test / run
 
