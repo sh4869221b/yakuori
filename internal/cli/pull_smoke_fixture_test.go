@@ -116,6 +116,26 @@ func (l *pullSmokeLayout) managedDigest(t *testing.T, id string) string {
 	return pullSmokeFileDigest(t, filepath.Join(l.storage.ModelsDir, id, "model.gguf"))
 }
 
+// pullSmokeOptionalRead reads an artifact a failing run may not have produced,
+// reporting its absence instead of stopping the test before its evidence exists.
+func pullSmokeOptionalRead(t *testing.T, path string) (string, bool) {
+	t.Helper()
+	if text := pullSmokeReadOrNil(t, path); text != nil {
+		return *text, true
+	}
+	return "", false
+}
+
+// pullSmokeOptionalDigest digests a managed model a failing run may not have
+// registered, reporting its absence instead of stopping the test.
+func pullSmokeOptionalDigest(t *testing.T, path string) (string, bool) {
+	t.Helper()
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return "", false
+	}
+	return pullSmokeFileDigest(t, path), true
+}
+
 type pullSmokePlanted struct {
 	ID             string `json:"id"`
 	Registry       string `json:"registry"`
