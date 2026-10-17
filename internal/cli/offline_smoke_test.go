@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -29,7 +30,8 @@ func TestOfflineCLIMatrix(t *testing.T) {
 		invalid := layout.invalidModel(t)
 		source := filepath.Join(layout.root, "source.txt")
 		output := filepath.Join(layout.root, "unused-output.txt")
-		if err := os.WriteFile(source, []byte("Hello.\n"), 0600); err != nil {
+		sourceBody := []byte("Hello.\n")
+		if err := os.WriteFile(source, sourceBody, 0600); err != nil {
 			t.Fatal(err)
 		}
 
@@ -37,9 +39,12 @@ func TestOfflineCLIMatrix(t *testing.T) {
 		checkMissing := layout.run(t, "doctor-check-model-missing", 1, "doctor", "--check-model", "--backend", "cpu")
 		useMissing := layout.run(t, "models-use-missing", 1, "models", "use", "absent")
 		importInvalid := layout.run(t, "models-import-invalid", 1, "models", "import", "--id", "bad", invalid)
-		translate := layout.run(t, "translate-unselected", 1, translationArgs("translate", source)...)
-		localize := layout.run(t, "localize-unselected", 1, translationArgs("localize", "--output", output, source)...)
+		translate := layout.run(t, "translate-unselected", 1, translationArgs("translate", "--backend", "cpu", source)...)
+		localize := layout.run(t, "localize-unselected", 1, translationArgs("localize", "--backend", "cpu", "--output", output, source)...)
 		state := layout.snapshot(t)
+		sourceAfter, sourceErr := os.ReadFile(source)
+		_, tmErr := os.Lstat(layout.storage.TMFile)
+		_, outputErr := os.Lstat(output)
 
 		checks := []map[string]any{
 			{"name": "doctor_reports_without_a_model", "pass": doctor.TargetExit == 0 && doctor.Stdout != ""},
@@ -50,11 +55,15 @@ func TestOfflineCLIMatrix(t *testing.T) {
 			{"name": "translate_rejects_unselected_model", "pass": translate.TargetExit == 1 && translate.Stdout == "" && strings.Contains(translate.Stderr, "localize model failed")},
 			{"name": "localize_rejects_unselected_model", "pass": localize.TargetExit == 1 && localize.Stdout == "" && strings.Contains(localize.Stderr, "localize model failed")},
 			{"name": "no_registry_selection_or_stage_was_written", "pass": !state.RegistryExists && len(state.RegistryIDs) == 0 && len(state.Models) == 0 && len(state.Stages) == 0 && state.Selection == ""},
+			{"name": "model_admission_creates_no_tm_or_output", "pass": errors.Is(tmErr, os.ErrNotExist) && errors.Is(outputErr, os.ErrNotExist)},
+			{"name": "model_admission_preserves_source_bytes", "pass": sourceErr == nil && bytes.Equal(sourceAfter, sourceBody)},
 		}
 		recordOfflineSmokeEvidence(t, "matrix-model-free", map[string]any{
-			"case": "model-free", "task": "issue-19-model-pull-offline/task-6",
+			"case": "model-free", "task": "issue-19-cli-offline-completion/task-3",
 			"binary": offlineSmokeBinary(t), "layout": layout.describe(), "invalid_model": invalid,
 			"state_after": state, "checks": checks,
+			"translation_state": map[string]any{"source": source, "source_after": string(sourceAfter), "tm": layout.storage.TMFile,
+				"tm_absent": errors.Is(tmErr, os.ErrNotExist), "output": output, "output_absent": errors.Is(outputErr, os.ErrNotExist)},
 			"runs": []offlineSmokeRun{doctor, checkMissing, useMissing, importInvalid, translate, localize},
 		})
 		offlineSmokeChecks(t, checks)

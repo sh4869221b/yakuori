@@ -83,15 +83,6 @@ func (l *pullSmokeLayout) describe() map[string]string {
 	}
 }
 
-func (l *pullSmokeLayout) childEnv(caFile string) []string {
-	env := []string{"PATH=" + os.Getenv("PATH"), "SSL_CERT_FILE=" + caFile}
-	for key, value := range l.env {
-		env = append(env, key+"="+value)
-	}
-	sort.Strings(env)
-	return env
-}
-
 func (l *pullSmokeLayout) writeFile(t *testing.T, path string, data []byte) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {

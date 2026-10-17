@@ -117,10 +117,12 @@ func TestTranslationCLIPipeline(t *testing.T) {
 		}
 	})
 	t.Run("generation_failure", func(t *testing.T) {
-		for _, name := range []string{"error", "invalid_candidate", "max_tokens", "commit_conflict"} {
-			t.Run(name, func(t *testing.T) {
+		for _, tt := range []struct{ name, phase string }{
+			{"error", "generate"}, {"invalid_candidate", "restore"}, {"max_tokens", "generate"}, {"commit_conflict", "commit"},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
 				command, paths, engine := translationFixture(t, "private source")
-				switch name {
+				switch tt.name {
 				case "error":
 					engine.generateErr = errors.New("private backend prompt")
 				case "invalid_candidate":
@@ -139,9 +141,11 @@ func TestTranslationCLIPipeline(t *testing.T) {
 				}
 				var out, diag bytes.Buffer
 				result, err := command.execute(context.Background(), &out, paths, engine.open)
-				if reportPipeline(&diag, result, err) != 1 || result.TMCommitted || out.Len() != 0 || len(translationRows(t, paths)) != 0 || engine.closed != 1 || strings.Contains(diag.String(), "private") {
+				var failure *localize.Error
+				if !errors.As(err, &failure) || failure.Phase != tt.phase || reportPipeline(&diag, result, err) != 1 || result.TMCommitted || result.BytesWritten != 0 || out.Len() != 0 || len(translationRows(t, paths)) != 0 || engine.closed != 1 || strings.Contains(diag.String(), "private") {
 					t.Fatalf("result=%+v err=%v diag=%q", result, err, diag.String())
 				}
+				t.Logf("phase=%s tm_committed=%t bytes_written=%d stdout_bytes=%d", failure.Phase, result.TMCommitted, result.BytesWritten, out.Len())
 			})
 		}
 	})
@@ -150,10 +154,12 @@ func TestTranslationCLIPipeline(t *testing.T) {
 		engine.closeErr = errors.New("private close")
 		var out, diag bytes.Buffer
 		result, err := command.execute(context.Background(), &out, paths, engine.open)
-		if reportPipeline(&diag, result, err) != 1 || !result.TMCommitted || result.BytesWritten != len(engine.text) || out.String() != engine.text || !strings.Contains(diag.String(), "close failed") || strings.Contains(diag.String(), "private") {
+		var failure *localize.Error
+		if !errors.As(err, &failure) || failure.Phase != "close" || reportPipeline(&diag, result, err) != 1 || !result.TMCommitted || result.BytesWritten != len(engine.text) || out.String() != engine.text || strings.Contains(diag.String(), "private") {
 			t.Fatalf("result=%+v err=%v diag=%q", result, err, diag.String())
 		}
 		checkTranslationRow(t, command, paths, engine, engine.text)
+		t.Logf("phase=%s tm_committed=%t bytes_written=%d stdout_bytes=%d", failure.Phase, result.TMCommitted, result.BytesWritten, out.Len())
 	})
 	t.Run("stdout_failure_after_commit", func(t *testing.T) {
 		command, paths, engine := translationFixture(t, "Hello")
@@ -196,9 +202,11 @@ func TestTranslationCLIPipeline(t *testing.T) {
 					t.Fatal(err)
 				}
 				result, err := command.execute(context.Background(), io.Discard, paths, engine.open)
-				if err == nil || result.TMCommitted || engine.generated != 0 || engine.closed != 1 {
+				var failure *localize.Error
+				if !errors.As(err, &failure) || failure.Phase != "tm_open" || result.TMCommitted || result.BytesWritten != 0 || engine.generated != 0 || engine.closed != 1 {
 					t.Fatalf("result=%+v err=%v", result, err)
 				}
+				t.Logf("phase=%s tm_committed=%t generated=%d", failure.Phase, result.TMCommitted, engine.generated)
 				if suffix != ".lock" {
 					raw, err := os.ReadFile(path)
 					if err != nil || string(raw) != "private corrupt" {
