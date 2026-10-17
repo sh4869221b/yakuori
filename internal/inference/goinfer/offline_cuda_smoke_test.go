@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ebitengine/purego"
 	"github.com/townsendmerino/goinfer/decoder"
 
 	"github.com/sh4869221b/yakuori/internal/config"
@@ -120,6 +121,19 @@ func TestOfflineCUDAMatrix(t *testing.T) {
 			if cudaBackendPin == "" {
 				t.Fatal("the cuda tag did not compile a backend pin; a not-built-in refusal is not driver evidence")
 			}
+			// These are the Linux driver candidates in pinned gocudrv v0.3.2.
+			// A model/residency/OOM error cannot establish that the driver is absent.
+			for _, library := range []string{"libcuda.so.1", "/usr/lib/x86_64-linux-gnu/libcuda.so.1", "/usr/lib/wsl/lib/libcuda.so.1"} {
+				handle, err := purego.Dlopen(library, purego.RTLD_NOW|purego.RTLD_LOCAL)
+				if err != nil {
+					continue
+				}
+				if err := purego.Dlclose(handle); err != nil {
+					t.Fatal(err)
+				}
+				t.Fatalf("driver-free evidence requires an unavailable CUDA driver library, but %s is loadable", library)
+			}
+			t.Log("case=cuda_driver_library_unavailable kind=real reached=driver_probe libraries=3")
 			opened, err := OpenWithOptions(ctx, model, Options{Backend: "cuda", ComputeQuant: "int4", ContextTokens: limits.ContextTokens})
 			if opened != nil || err == nil {
 				t.Fatalf("a driver-free host served a CUDA engine: engine=%v err=%v", opened != nil, err)
