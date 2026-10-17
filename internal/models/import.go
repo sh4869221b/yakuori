@@ -44,18 +44,23 @@ func copyIdentity(ctx context.Context, dst io.Writer, src io.Reader) (Entry, err
 	return Entry{SHA256: hex.EncodeToString(hash.Sum(nil)), SizeBytes: size}, nil
 }
 
-func (r *Registry) Import(ctx context.Context, id, source string) (entry Entry, err error) {
-	if err := config.ValidateModelID(id); err != nil {
-		return Entry{}, err
-	}
-	if err := ctx.Err(); err != nil {
-		return Entry{}, err
-	}
-	for _, path := range []string{r.paths.Data, r.storage.ModelsDir, r.paths.Cache, r.storage.SnapshotDir} {
-		if err := privateDir(path, true); err != nil {
-			return Entry{}, err
+// publishStage registers a stage directory that already holds the verified model
+// bytes for id, then commits the registry document. It takes ownership of stage:
+// the stage is removed unless the model directory and the registry document are
+// both committed, so an error never leaves an unregistered copy behind. The
+// registry is re-read under the lock and the destination is re-checked right
+// before the non-replacing rename, so a concurrently committed entry or a
+// destination owned by anyone else is never replaced. The last cancellation check
+// runs just before the rename; once the rename is reached the commit runs to
+// completion, and a later failure removes the destination again rather than
+// leaving it without a registry entry.
+func (r *Registry) publishStage(ctx context.Context, id, stage string, entry Entry) (published Entry, err error) {
+	owned := stage
+	defer func() {
+		if owned != "" {
+			err = errors.Join(err, os.RemoveAll(owned))
 		}
-	}
+	}()
 	lock, err := r.lock()
 	if err != nil {
 		return Entry{}, err
@@ -76,6 +81,40 @@ func (r *Registry) Import(ctx context.Context, id, source string) (entry Entry, 
 			return Entry{}, err
 		}
 		return Entry{}, ErrCollision
+	}
+	if err := ctx.Err(); err != nil {
+		return Entry{}, err
+	}
+	if err := unix.Renameat2(unix.AT_FDCWD, stage, unix.AT_FDCWD, destination, unix.RENAME_NOREPLACE); err != nil {
+		if errors.Is(err, unix.EEXIST) {
+			return Entry{}, errors.Join(ErrCollision, err)
+		}
+		return Entry{}, err
+	}
+	owned = destination
+	entries[id] = entry
+	data, err := json.Marshal(document{Schema: 1, Models: entries})
+	if err != nil {
+		return Entry{}, err
+	}
+	if err := atomicSave(r.storage.RegistryFile, data); err != nil {
+		return Entry{}, err
+	}
+	owned = ""
+	return entry, nil
+}
+
+func (r *Registry) Import(ctx context.Context, id, source string) (entry Entry, err error) {
+	if err := config.ValidateModelID(id); err != nil {
+		return Entry{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return Entry{}, err
+	}
+	for _, path := range []string{r.paths.Data, r.storage.ModelsDir, r.paths.Cache, r.storage.SnapshotDir} {
+		if err := privateDir(path, true); err != nil {
+			return Entry{}, err
+		}
 	}
 	src, err := os.OpenFile(source, os.O_RDONLY|unix.O_NONBLOCK, 0)
 	if err != nil {
@@ -115,26 +154,9 @@ func (r *Registry) Import(ctx context.Context, id, source string) (entry Entry, 
 	if err := engine.Close(); err != nil {
 		return Entry{}, err
 	}
-	if err := ctx.Err(); err != nil {
-		return Entry{}, err
-	}
-	if err := unix.Renameat2(unix.AT_FDCWD, stage, unix.AT_FDCWD, destination, unix.RENAME_NOREPLACE); err != nil {
-		if errors.Is(err, unix.EEXIST) {
-			return Entry{}, errors.Join(ErrCollision, err)
-		}
-		return Entry{}, err
-	}
-	owned = destination
-	entries[id] = entry
-	data, err := json.Marshal(document{Schema: 1, Models: entries})
-	if err != nil {
-		return Entry{}, err
-	}
-	if err := atomicSave(r.storage.RegistryFile, data); err != nil {
-		return Entry{}, err
-	}
+	// publishStage takes ownership of the stage and commits it or removes it.
 	owned = ""
-	return entry, nil
+	return r.publishStage(ctx, id, stage, entry)
 }
 
 func (r *Registry) Use(ctx context.Context, id string) (err error) {

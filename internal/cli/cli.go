@@ -27,7 +27,7 @@ const usage = `Usage: yakuori <command>
 Commands:
   help       Show this help
   doctor     Diagnose storage; --check-model loads the selected model
-  models     Import, select, or verify a local GGUF model
+  models     Import, pull, select, or verify a local GGUF model
 
 Options:
   -h, --help Show this help
