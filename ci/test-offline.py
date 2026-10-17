@@ -122,6 +122,19 @@ FAKE_STRACE = textwrap.dedent(
     if os.path.basename(trace) == "preflight.trace":
         os.execv(real, [real, *args])
     code = subprocess.run([real, *args]).returncode
+    if mode == "truncate-after-exec":
+        # Reproduce a real trace cut at a syscall boundary right after the target's
+        # successful exec: complete records only, and no terminal record for that pid.
+        with open(trace) as source:
+            lines = source.readlines()
+        kept = []
+        for line in lines:
+            kept.append(line)
+            if "execve(" in line and line.rstrip().endswith("= 0"):
+                break
+        with open(trace, "w") as output:
+            output.writelines(kept)
+        sys.exit(code)
     with open(trace, "ab") as output, open(mode.split(":", 1)[1], "rb") as fixture:
         output.write(fixture.read())
     sys.exit(code)
@@ -509,6 +522,34 @@ class ObserverTests(unittest.TestCase):
                 self.assertEqual(evidence["invalid_reasons"], [])
                 self.assertEqual(evidence["trace"]["unparsed"], [])
                 self.assertTrue(any(entry["syscall"] == syscall for entry in evidence["allowed_local"]), evidence["allowed_local"])
+
+    def test_trace_cut_after_successful_exec_is_invalid_without_terminal_record(self):
+        # -q retains each process's terminal record, so a trace that ends at a complete
+        # syscall boundary right after the target's successful exec is provably truncated:
+        # no terminal record exists for that pid. Without that requirement the cut trace
+        # reported clean whenever the exit status matched --expect-exit, leaving every
+        # target syscall after the cut unverified.
+        path, env = self.fake_strace("truncate-after-exec")
+        prefix = self.prefix("truncate-after-exec")
+        run = self.run_observer(prefix, 0, [sys.executable, "-c", "pass"], path=path, env_extra=env)
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        evidence = self.evidence(prefix)
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertTrue(evidence["target_executed"])
+        self.assertEqual(evidence["trace"]["unparsed"], [])
+        self.assertEqual(evidence["attempts"], [])
+        self.assertTrue(any("terminal record" in reason for reason in evidence["invalid_reasons"]), evidence["invalid_reasons"])
+
+    def test_terminal_record_must_belong_to_the_executed_target_pid(self):
+        # A child's termination is not the target's: the terminal record has to belong to
+        # the pid the successful exec was actually performed by, so a trace whose only
+        # terminal record is a child's stays invalid and is never rounded to clean.
+        child_only = offline.analyze('4242 execve("/bin/true", ["/bin/true"], 0x0) = 0\n'
+                                     "4243 +++ exited with 0 +++\n")
+        self.assertTrue(any("terminal record" in reason for reason in child_only.reasons), child_only.reasons)
+        target = offline.analyze('4242 execve("/bin/true", ["/bin/true"], 0x0) = 0\n'
+                                 "4242 +++ exited with 0 +++\n")
+        self.assertEqual(target.reasons, [])
 
     def test_missing_trace_file_is_invalid(self):
         path, env = self.fake_strace("missing")
@@ -936,6 +977,76 @@ class ObserverTests(unittest.TestCase):
             finally:
                 stranger.kill()
                 stranger.wait(timeout=10)
+
+    def test_reused_group_member_start_time_is_never_reread(self):
+        # Each scan reports the start time it observed beside a pid, and the record that
+        # follows must keep that observed identity for the process group it read and for the
+        # ptrace link it read. Here each pid is reused before the record is written, so a
+        # fresh read returns the stranger's start time; storing it would adopt, and later
+        # signal, that unrelated process instead of leaving the reused pid alone.
+        owner = subprocess.Popen(["/bin/sleep", "600"], start_new_session=True)
+        member = subprocess.Popen(["/bin/sleep", "600"], start_new_session=True)
+        linked = subprocess.Popen(["/bin/sleep", "600"], start_new_session=True)
+        try:
+            owner_start = self.process_field(owner.pid, 19)
+            observed = {member.pid: self.process_field(member.pid, 19),
+                        linked.pid: self.process_field(linked.pid, 19)}
+            replacements = {pid: {"state": "S", "ppid": "1", "pgrp": "1", "starttime": str(int(start) + 1000)}
+                            for pid, start in observed.items()}
+            real_record = offline.process_record
+
+            def reread(pid):
+                return replacements.get(pid) or real_record(pid)
+
+            members = [{"pid": member.pid, "state": "S", "starttime": observed[member.pid]}]
+            link = {linked.pid: observed[linked.pid]}
+            with mock.patch.object(offline, "group_members", return_value=members), \
+                    mock.patch.object(offline, "traced_pids", return_value=link):
+                control = {}
+                offline.record_tree(control, owner.pid, owner_start, owner.pid)
+            self.assertEqual(control, observed, "each scan's live observed member must still be recorded")
+            with mock.patch.object(offline, "group_members", return_value=members), \
+                    mock.patch.object(offline, "traced_pids", return_value=link), \
+                    mock.patch.object(offline, "process_record", side_effect=reread):
+                identity = {}
+                offline.record_tree(identity, owner.pid, owner_start, owner.pid)
+            self.assertEqual(identity, {}, "a reused pid was adopted as the observed member")
+        finally:
+            for process in (owner, member, linked):
+                process.kill()
+                process.wait(timeout=10)
+
+    def test_ptrace_link_cannot_adopt_a_replacement_during_status_read(self):
+        for replace in (False, True):
+            with self.subTest(replace=replace):
+                replaced = False
+
+                def record(_pid):
+                    return {"state": "S", "ppid": "1", "pgrp": "1",
+                            "starttime": "new" if replaced else "old"}
+
+                def status(_path):
+                    nonlocal replaced
+                    replaced = replace
+                    return "TracerPid:\t100\n"
+
+                with mock.patch.object(os, "listdir", return_value=["200"]), \
+                        mock.patch.object(offline, "process_record", side_effect=record), \
+                        mock.patch.object(Path, "read_text", autospec=True, side_effect=status):
+                    found = offline.traced_pids(100)
+                self.assertEqual(found, {} if replace else {200: "old"})
+
+    def test_tree_scan_keeps_its_seed_identity(self):
+        for replace in (False, True):
+            with self.subTest(replace=replace):
+                def record(pid):
+                    return {"state": "S", "ppid": "100" if pid == 200 else "1",
+                            "pgrp": "1", "starttime": "new" if replace and pid == 100 else "old"}
+
+                with mock.patch.object(os, "listdir", return_value=["100", "200"]), \
+                        mock.patch.object(offline, "process_record", side_effect=record):
+                    found = offline.live_tree({100: "old"})
+                self.assertEqual(found, {} if replace else {200: "old"})
 
     def test_failed_preflight_never_runs_target(self):
         for failure in ("exit", "timeout", "survivor", "unverified", "incomplete"):

@@ -2,7 +2,7 @@
 """Run one command under strace and fail closed on any observed network attempt.
 
 The whole process tree is traced with
-``strace --kill-on-exit -f -qq -xx -yy -s 4096 -e trace=%network,execve,execveat
+``strace --kill-on-exit -f -q -xx -yy -s 4096 -e trace=%network,execve,execveat
 -o TRACE -- COMMAND...``: INET and
 INET6 socket creation, connect and destination-addressed send, plus AF_UNIX
 connect and destination-addressed send that would bypass a resolver or proxy,
@@ -15,7 +15,12 @@ and the matching records it allowed are written to the result JSON and to
 ``allowed_local``. Unknown, blank or truncated trace lines are never rounded to
 zero: a record counts only once its argument list closes outside quotes and
 ``-yy`` annotations and its printed result is complete. Hex string rendering
-keeps descriptor path suffixes distinct from structural arrows and delimiters.
+keeps descriptor path suffixes distinct from structural arrows and delimiters. The
+single ``-q`` still keeps the tracer's own attach/detach noise out of the trace while
+retaining every process's terminal ``+++ exited with N +++`` / ``+++ killed by SIG...
++++`` record, and a successful exec only counts once that terminal record for the
+executed target pid is present: a trace cut at a syscall boundary after exec is invalid
+instead of clean.
 
 Evidence is written next to ``--evidence PREFIX``: PREFIX.trace (raw trace),
 PREFIX.stdout, PREFIX.stderr (the target's streams) and PREFIX.json (detector
@@ -40,7 +45,7 @@ from typing import Any
 UNFINISHED = " <unfinished ...>"
 MARKER = re.compile(
     r"^(?:\d+\s+)?(?:(?P<signal>--- SIG[A-Z0-9_]+ \{)"
-    r"|\+\+\+ (?:exited with \d+|killed by SIG[A-Z0-9_]+(?: \(core dumped\))?) \+\+\+$)"
+    r"|\+\+\+ (?P<terminal>exited with \d+|killed by SIG[A-Z0-9_]+(?: \(core dumped\))?) \+\+\+$)"
 )
 RESUMED = re.compile(r"^<\.\.\.\s+([a-z_][a-z0-9_]*)\s+resumed>")
 CALL = re.compile(r"^([a-z_][a-z0-9_]*)\((.*)$")
@@ -136,6 +141,8 @@ class Analysis:
     unfinished: int = 0
     resumed: int = 0
     executed: bool = False
+    target_pid: int | None = None
+    terminal: dict[int, str] = field(default_factory=dict)
     attempts: list[dict[str, Any]] = field(default_factory=list)
     allowed: list[dict[str, Any]] = field(default_factory=list)
     unparsed: list[dict[str, Any]] = field(default_factory=list)
@@ -147,6 +154,9 @@ class Analysis:
             reasons.append(f"{len(self.unparsed)} trace line(s) could not be classified")
         if self.unfinished != self.resumed:
             reasons.append(f"{self.unfinished} unfinished syscall line(s) do not pair with {self.resumed} resumed line(s)")
+        if self.target_pid is not None and self.target_pid not in self.terminal:
+            reasons.append(f"trace has no terminal record for the executed target pid {self.target_pid}; "
+                           "the trace is truncated or that process's end was not traced")
         return reasons
 
 
@@ -269,6 +279,10 @@ def analyze(text: str, allow_nvidia_mps: bool = False) -> Analysis:
                 if end is None or stripped[end + 1:] != " ---":
                     result.unparsed.append({"line": raw, "reason": "incomplete signal marker"})
                     continue
+            else:
+                head = stripped.split(None, 1)
+                if len(head) == 2 and head[0].isdigit():
+                    result.terminal[int(head[0])] = marker.group("terminal")
             result.markers += 1
             continue
         pid, body = None, stripped
@@ -316,6 +330,8 @@ def analyze(text: str, allow_nvidia_mps: bool = False) -> Analysis:
             end = closer(body, match.start(2), [")"])
             if body[end + 1:].strip() == "= 0":
                 result.executed = True
+                if result.target_pid is None:
+                    result.target_pid = pid
             continue
         kind, detail = classify(name, args, allow_nvidia_mps)
         entry["detail"] = detail
@@ -362,38 +378,49 @@ def process_record(pid: int) -> dict[str, str] | None:
     return {"state": fields[0], "ppid": fields[1], "pgrp": fields[2], "starttime": fields[19]}
 
 
-def live_tree(roots: list[int]) -> list[int]:
-    """Live processes reachable by parent chain from any root, setsid escapees included."""
-    children: dict[str, list[int]] = {}
+def live_tree(roots: dict[int, str]) -> dict[int, str]:
+    """Live processes reachable by parent chain from any root, setsid escapees included.
+
+    Each descendant carries the start time read in the same, single /proc scan that placed
+    its parent link, so a pid reused after that scan is never read as the process that link
+    belonged to.
+    """
+    children: dict[str, list[tuple[int, str]]] = {}
     for entry in os.listdir("/proc"):
         if not entry.isdigit():
             continue
         record = process_record(int(entry))
         if record is None:
             continue
-        children.setdefault(record["ppid"], []).append(int(entry))
-    found: list[int] = []
-    queue = [str(root) for root in roots]
-    seen = set(queue)
+        children.setdefault(record["ppid"], []).append((int(entry), record["starttime"]))
+    found: dict[int, str] = {}
+    queue = list(roots.items())
+    seen = set(roots)
     while queue:
-        for child in children.get(queue.pop(), []):
-            if str(child) in seen:
+        parent, parent_start = queue.pop()
+        if not owned_alive(parent, parent_start):
+            continue
+        for child, starttime in children.get(str(parent), []):
+            if child in seen or not owned_alive(child, starttime):
                 continue
-            seen.add(str(child))
-            found.append(child)
-            queue.append(str(child))
+            seen.add(child)
+            found[child] = starttime
+            queue.append((child, starttime))
     return found
 
 
-def traced_pids(tracer: int) -> list[int]:
-    """Every process the tracer still follows, read from the existing ptrace relationship.
+def traced_pids(tracer: int) -> dict[int, str]:
+    """Every process the tracer still follows, with the start time observed beside the link.
 
     This is the link that survives a descendant double-forking, calling setsid and being
     reparented to pid 1: such a daemon is still traced, so it must still be stopped.
     """
-    found: list[int] = []
+    found: dict[int, str] = {}
     for entry in os.listdir("/proc"):
         if not entry.isdigit():
+            continue
+        record = process_record(int(entry))
+        if record is None:
             continue
         try:
             status = Path(f"/proc/{entry}/status").read_text()
@@ -401,42 +428,52 @@ def traced_pids(tracer: int) -> list[int]:
             continue
         for line in status.splitlines():
             if line.startswith("TracerPid:"):
-                if line.split()[1] == str(tracer):
-                    found.append(int(entry))
+                if line.split()[1] == str(tracer) and owned_alive(int(entry), record["starttime"]):
+                    found[int(entry)] = record["starttime"]
                 break
     return found
 
 
-def owned_roots(root: int, tracer: str, identity: dict[int, str]) -> list[int]:
+def owned_roots(root: int, tracer: str, identity: dict[int, str]) -> dict[int, str]:
     """Only pids that still hold the process we recorded may seed a tree walk.
 
     A pid we killed can be reused by an unrelated process; walking from the number alone
     would adopt that stranger, so the recorded start time has to still match.
     """
-    roots = [pid for pid in sorted(identity) if owned_alive(pid, identity[pid])]
+    roots = {pid: identity[pid] for pid in sorted(identity) if owned_alive(pid, identity[pid])}
     if owned_alive(root, tracer):
-        roots.append(root)
+        roots[root] = tracer
     return roots
 
 
 def record_tree(identity: dict[int, str], root: int, tracer: str, group: int) -> None:
     """Record every live traced process: parent chain, process group and ptrace link.
 
-    Ownership stays exact: tree walks start only from pids that still hold the recorded
-    process, the ptrace link is read only while our own tracer is still that process, and
-    group membership is admitted only while the verified session owner is still alive.
+    Ownership stays exact: each scan reports the start time it observed beside the link it
+    found, and only that observed identity - never a fresh read taken later - is stored, and
+    only while it still holds. A pid a scan saw can be reused by an unrelated process before
+    the record is written; reading it again and storing that result would adopt the stranger
+    and later signal it, so a pid whose start time no longer matches is dropped and never
+    seeds a walk. Tree walks start only from pids that still hold the recorded process, the
+    ptrace link is read only while our own tracer is still that process, and group
+    membership is admitted only while the verified session owner is still alive.
     """
-    members, linked = [], []
+    observed: dict[int, str] = {}
     if owned_alive(root, tracer):
-        members = [member["pid"] for member in group_members(group)]
-        linked = traced_pids(root)
-        # A start time recorded after the owner disappeared cannot establish ownership.
+        observed.update({member["pid"]: member["starttime"] for member in group_members(group)})
+        observed.update(traced_pids(root))
+        # A start time observed after the owner disappeared cannot establish ownership.
         if not owned_alive(root, tracer):
-            members, linked = [], []
-    for pid in [*live_tree([*owned_roots(root, tracer, identity), *members, *linked]), *members, *linked]:
-        record = process_record(pid)
-        if record is not None:
-            identity.setdefault(pid, record["starttime"])
+            observed = {}
+    seeds = owned_roots(root, tracer, identity)
+    for pid, starttime in sorted(observed.items()):
+        if owned_alive(pid, starttime):
+            seeds.setdefault(pid, starttime)
+    for pid, starttime in live_tree(seeds).items():
+        observed.setdefault(pid, starttime)
+    for pid, starttime in observed.items():
+        if owned_alive(pid, starttime):
+            identity.setdefault(pid, starttime)
 
 
 def group_members(group: int) -> list[dict[str, Any]]:
@@ -522,7 +559,7 @@ def interrupt_reason(signal_number: int) -> str:
 
 def run_strace(strace: str, trace: Path, command: list[str], stdout: Path, stderr: Path, timeout: int) -> tuple[int, bool, int]:
     global STARTING
-    argv = [strace, "--kill-on-exit", "-f", "-qq", "-xx", "-yy", "-s", "4096", "-e", "trace=%network,execve,execveat", "-o", str(trace), "--", *command]
+    argv = [strace, "--kill-on-exit", "-f", "-q", "-xx", "-yy", "-s", "4096", "-e", "trace=%network,execve,execveat", "-o", str(trace), "--", *command]
     TEARDOWN.update({"descendants_stopped": [], "descendants_after_exit": None, "verified": False})
     with stdout.open("wb") as out, stderr.open("wb") as err:
         child = None
@@ -634,7 +671,7 @@ def main() -> int:
         "descendants_stopped": [],
         "descendants_after_exit": None,
         "preflight": None,
-        "note": "PREFIX.stdout/PREFIX.stderr retain target streams and any tracer diagnostics; successful exec is verified from the trace",
+        "note": "PREFIX.stdout/PREFIX.stderr retain target streams and any tracer diagnostics; successful exec and the executed target's terminal trace record are verified from the trace",
         "exit_code": None,
     }
 
