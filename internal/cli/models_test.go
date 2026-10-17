@@ -2,14 +2,24 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
+	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	textadapter "github.com/sh4869221b/yakuori/internal/adapter/text"
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/identity"
+	"github.com/sh4869221b/yakuori/internal/inference"
+	"github.com/sh4869221b/yakuori/internal/localize"
+	"github.com/sh4869221b/yakuori/internal/models"
+	"github.com/sh4869221b/yakuori/internal/prompt"
+	"github.com/sh4869221b/yakuori/internal/unit"
 )
 
 func modelFixture(t *testing.T) config.Paths {
@@ -110,4 +120,142 @@ func TestModelsCLIImportFailure(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(paths.Config, "config.json")); !os.IsNotExist(err) {
 		t.Fatalf("import selected model: %v", err)
 	}
+}
+
+func testTranslationAdmission(t *testing.T) {
+	for _, name := range []string{"missing", "corrupt", "capability", "request", "info", "profile", "cuda"} {
+		t.Run(name, func(t *testing.T) {
+			command, paths, engine := translationFixture(t, "Hello")
+			open := selectedEngineOpener(engine.open)
+			switch name {
+			case "missing", "corrupt":
+				paths = modelFixture(t)
+				if err := models.New(paths).Use(context.Background(), "test-model"); err != nil {
+					t.Fatal(err)
+				}
+				modelPath := filepath.Join(paths.Data, "models", "test-model", "model.gguf")
+				if name == "missing" {
+					if err := os.Remove(modelPath); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					writeFixture(t, modelPath, "private corrupt model")
+				}
+				open = models.New(paths).OpenSelected
+			case "capability":
+				open = func(context.Context, string) (string, inference.Engine, error) {
+					return "selected-model", struct{ inference.Engine }{engine}, nil
+				}
+			case "request":
+				engine.requestErr = errors.New("private request")
+			case "info":
+				engine.infoErr = errors.New("private info")
+			case "profile":
+				engine.info.Tokenizer.ModelSHA256 = [32]byte{2}
+			case "cuda":
+				command.backend = "cuda"
+			}
+			var out, diag bytes.Buffer
+			result, err := command.execute(context.Background(), &out, paths, open)
+			if name == "cuda" {
+				if err != nil || engine.info.Backend != "cuda" || !result.TMCommitted {
+					t.Fatalf("result=%+v err=%v", result, err)
+				}
+				return
+			}
+			if reportPipeline(&diag, result, err) != 1 || out.Len() != 0 || engine.generated != 0 || strings.Contains(diag.String(), "private") {
+				t.Fatalf("result=%+v err=%v diag=%q", result, err, diag.String())
+			}
+			if _, err := os.Lstat(config.ResolveStoragePaths(paths).TMFile); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("TM was created: %v", err)
+			}
+			if name != "missing" && name != "corrupt" && engine.closed != 1 {
+				t.Fatalf("engine closed=%d", engine.closed)
+			}
+		})
+	}
+}
+
+func checkTranslationRow(t *testing.T, command translationCommand, paths config.Paths, engine inference.Engine, want string) {
+	t.Helper()
+	ctx := context.Background()
+	info, err := engine.Info(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits := config.DefaultLimits()
+	policy, err := inference.NewGenerationPolicy(1, limits.MaxOutputTokens, limits.RequestTimeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := engine.(requestFactory).NewRequest(ctx, prompt.Input{SourceLanguage: command.sourceLanguage, TargetLanguage: command.targetLanguage}, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := localize.NewCanonicalInferenceProfile(info, request, localize.InferenceProfileInput{ModelID: "selected-model", Glossary: identity.GlossaryInput{Mode: "none"}, Limits: limits})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(command.options.Source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := textadapter.New(command.sourceLanguage, command.targetLanguage).Import(raw, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := unit.NewSourceIdentity(session, session.Units()[0].ID(), command.scope.GameNamespace, command.scope.ArtifactNamespace, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := profile.ExactKey(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", "file:"+config.ResolveStoragePaths(paths).TMFile+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	var got string
+	if err := db.QueryRow("SELECT translated_text FROM tm WHERE key_schema=? AND source_identity=? AND translation_profile=?", key.Schema(), key.SourceBytes(), key.ProfileBytes()).Scan(&got); err != nil || got != want {
+		t.Fatalf("canonical row=%q err=%v want=%q", got, err, want)
+	}
+}
+
+func TestTranslationRealTMReadback(t *testing.T) {
+	root := os.Getenv("YAKUORI_TASK2_QA_ROOT")
+	if root == "" {
+		t.Skip("explicit Task2 real CPU readback only")
+	}
+	paths, err := config.Resolve(os.Getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, engine, err := models.New(paths).OpenSelected(context.Background(), "cpu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := engine.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	command, _, err := parseTranslation("translate", translationArgs("translate", filepath.Join(root, "source.txt"))[1:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(os.Getenv("YAKUORI_TASK2_QA_STDOUT"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) == 0 || bytes.Equal(raw, []byte("Hello.\n")) || !strings.ContainsAny(string(raw), "こんにちは今日は日本訳私世界") {
+		t.Fatalf("not Japanese non-echo: %q", raw)
+	}
+	checkTranslationRow(t, command, paths, engine, string(raw))
+	t.Logf("canonical exact source/profile TM row matches %d stdout bytes: %q", len(raw), raw)
 }

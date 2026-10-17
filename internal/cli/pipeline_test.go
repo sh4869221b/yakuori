@@ -12,7 +12,9 @@ import (
 	"testing"
 
 	textadapter "github.com/sh4869221b/yakuori/internal/adapter/text"
+	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/localize"
+	"github.com/sh4869221b/yakuori/internal/prompt"
 	"github.com/sh4869221b/yakuori/internal/publication"
 	"github.com/sh4869221b/yakuori/internal/unit"
 	"github.com/sh4869221b/yakuori/internal/validate"
@@ -22,6 +24,62 @@ type cliEngine func(context.Context, unit.UnitID, string) (localize.Generation, 
 
 func (f cliEngine) Generate(ctx context.Context, id unit.UnitID, text string) (localize.Generation, error) {
 	return f(ctx, id, text)
+}
+
+func translationArgs(action string, rest ...string) []string {
+	args := []string{action, "--source-language", "en", "--target-language", "ja", "--game", "qa", "--artifact", "sample"}
+	if action == "localize" {
+		args = append(args, "--format", "text")
+	}
+	return append(args, rest...)
+}
+
+type translationEngine struct {
+	info                                       inference.ModelInfo
+	inputs                                     []prompt.Input
+	text                                       string
+	finish                                     inference.Finish
+	generated, closed                          int
+	generateErr, closeErr, requestErr, infoErr error
+	duringGenerate                             func(context.Context) error
+}
+
+func (e *translationEngine) Info(context.Context) (inference.ModelInfo, error) {
+	return e.info, e.infoErr
+}
+func (e *translationEngine) Close() error { e.closed++; return e.closeErr }
+func (e *translationEngine) CountTokens(_ context.Context, request inference.GenerationRequest) (int, error) {
+	return len(request.TokenIDs()), nil
+}
+func (e *translationEngine) NewRequest(ctx context.Context, input prompt.Input, policy inference.GenerationPolicy) (inference.GenerationRequest, error) {
+	e.inputs = append(e.inputs, input)
+	if err := errors.Join(ctx.Err(), e.requestErr); err != nil {
+		return inference.GenerationRequest{}, err
+	}
+	return inference.NewGenerationRequest(inference.PreparedRequest{
+		RenderedPrompt: input.Text, TokenIDs: []int{1}, StopIDs: []int{42}, Terms: input.Terms,
+		Identity: inference.RequestIdentity{ModelSHA256: e.info.ModelSHA256, Tokenizer: e.info.Tokenizer, Template: e.info.Template,
+			PromptSchema: e.info.Prompt.Schema, Prompt: e.info.Prompt, Thinking: e.info.Thinking},
+	}, policy)
+}
+func (e *translationEngine) Generate(ctx context.Context, request inference.GenerationRequest) (inference.GenerationResult, error) {
+	e.generated++
+	if e.duringGenerate != nil {
+		if err := e.duringGenerate(ctx); err != nil {
+			return inference.GenerationResult{}, err
+		}
+	}
+	return inference.GenerationResult{Text: e.text, Finish: e.finish, PromptTokens: len(request.TokenIDs())}, e.generateErr
+}
+func (e *translationEngine) open(ctx context.Context, backend string) (string, inference.Engine, error) {
+	if err := ctx.Err(); err != nil {
+		return "", nil, err
+	}
+	e.info.Backend, e.info.Prefill.Path = backend, backend
+	if backend == "cuda" {
+		e.info.KVPrecision, e.info.CUDABackendPin = "fp16", "cuda-test-v1"
+	}
+	return "selected-model", e, nil
 }
 
 type cliTM struct {
@@ -53,6 +111,37 @@ func (w *partialWriter) Write(raw []byte) (int, error) {
 }
 
 func TestPipelineResults(t *testing.T) {
+	t.Run("publication failure after real TM commit", func(t *testing.T) {
+		command, paths, engine := translationFixture(t, "Hello.\n")
+		output := filepath.Join(filepath.Dir(command.options.Source), "output")
+		command.action, command.options.Output, command.options.Mode = "localize", output, publication.Create
+		supported := translationPublicationSupported(t, filepath.Dir(output))
+		engine.duringGenerate = func(context.Context) error { return os.WriteFile(output, []byte("external"), 0600) }
+		result, err := command.execute(context.Background(), io.Discard, paths, engine.open)
+		if !supported {
+			checkTranslationFilesystemRefusal(t, result, err)
+			if engine.generated != 0 || engine.closed != 1 || len(translationRows(t, paths)) != 0 {
+				t.Fatalf("generated=%d closed=%d", engine.generated, engine.closed)
+			}
+			if raw, err := os.ReadFile(command.options.Source); err != nil || string(raw) != "Hello.\n" {
+				t.Fatalf("source=%q err=%v", raw, err)
+			}
+			if _, err := os.Lstat(output); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("output stat=%v", err)
+			}
+			return
+		}
+		if err == nil || !result.TMCommitted || result.Publication.State != publication.NotPublished || len(translationRows(t, paths)) != 1 {
+			t.Fatalf("result=%+v err=%v", result, err)
+		}
+		if raw, err := os.ReadFile(output); err != nil || string(raw) != "external" {
+			t.Fatalf("output=%q err=%v", raw, err)
+		}
+		if engine.generated != 1 || engine.closed != 1 {
+			t.Fatalf("generated=%d closed=%d", engine.generated, engine.closed)
+		}
+		t.Log("generated=1 tm_rows=1 publication=not-published external_output=preserved closed=1")
+	})
 	t.Run("Core text success", func(t *testing.T) {
 		core, tm, profile := cliPipeline(t, "訳\n文")
 		var out, diag bytes.Buffer
@@ -63,18 +152,29 @@ func TestPipelineResults(t *testing.T) {
 		}
 	})
 	t.Run("file runner receives parsed options and context", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		type callerKey struct{}
+		ctx, cancel := context.WithCancel(context.WithValue(context.Background(), callerKey{}, "caller"))
 		defer cancel()
 		var out, diag bytes.Buffer
 		calls := 0
 		runner := func(gotCtx context.Context, options publication.Options) (localize.Result, error) {
 			calls++
-			if gotCtx != ctx || options != (publication.Options{Source: "source", Output: "out", Mode: publication.Replace}) {
+			if gotCtx.Value(callerKey{}) != "caller" || options != (publication.Options{Source: "source", Output: "out", Mode: publication.Replace}) {
 				t.Fatalf("context=%v options=%+v", gotCtx, options)
+			}
+			done := gotCtx.Done()
+			cancel()
+			select {
+			case <-done:
+			default:
+				t.Fatal("parent cancellation was not propagated")
+			}
+			if !errors.Is(gotCtx.Err(), context.Canceled) {
+				t.Fatalf("parent cancellation = %v", gotCtx.Err())
 			}
 			return localize.Result{TMCommitted: true, Publication: publication.Result{State: publication.Published}}, nil
 		}
-		code := runWithPipeline(ctx, []string{"localize", "--output", "out", "--replace-output", "source"}, &out, &diag, nil, runner)
+		code := runWithPipeline(ctx, translationArgs("localize", "--output", "out", "--replace-output", "source"), &out, &diag, nil, runner)
 		if code != ExitOK || calls != 1 || out.Len() != 0 || diag.Len() != 0 {
 			t.Fatalf("code=%d calls=%d stdout=%q stderr=%q", code, calls, out.String(), diag.String())
 		}
@@ -146,7 +246,7 @@ func TestPipelineDiagnostics(t *testing.T) {
 				if name == "file stderr failure" {
 					stderr, wantDiagnostic = brokenWriter{}, ""
 				}
-				code = runWithPipeline(context.Background(), []string{"localize", "--output", path, "source"}, &out, stderr, nil, runner)
+				code = runWithPipeline(context.Background(), translationArgs("localize", "--output", path, "source"), &out, stderr, nil, runner)
 				if raw, err := os.ReadFile(path); err != nil || string(raw) != "published file" {
 					t.Fatalf("retained output=%q error=%v", raw, err)
 				}
@@ -155,5 +255,13 @@ func TestPipelineDiagnostics(t *testing.T) {
 				t.Fatalf("code=%d stdout=%q stderr=%q rows=%v", code, out.String(), diag.String(), tm.rows)
 			}
 		})
+	}
+}
+
+func TestRunLocalizeRejectsSamePathWithoutEchoingPaths(t *testing.T) {
+	var out, diag bytes.Buffer
+	code := run(translationArgs("localize", "--output", "./private-source", "private-source"), &out, &diag, nil)
+	if code != ExitUsage || out.Len() != 0 || !strings.Contains(diag.String(), "--in-place") || strings.Contains(diag.String(), "private-source") {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, out.String(), diag.String())
 	}
 }

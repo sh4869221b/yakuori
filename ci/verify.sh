@@ -27,8 +27,16 @@ YAKUORI_PULL_BINARY="$PWD/yakuori" go test -count=1 -tags modelsmoke ./internal/
 # Model-free CLI/error matrix under the same offline observer.
 offline_evidence=$(mktemp -d)
 trap 'rm -rf "$fixture" "$offline_evidence"' EXIT
+# Keep only the observed Go command on one CPU for the existing tracer.
+# Unit/concurrency tests below retain the caller's normal affinity.
 YAKUORI_PULL_BINARY="$PWD/yakuori" YAKUORI_PULL_EVIDENCE="$offline_evidence" \
-  go test -count=1 -timeout 15m -tags offlinesmoke ./internal/cli -run '^TestOfflineCLIMatrix$/^model-free$' -v
+  python3 -c '
+import os
+import sys
+os.sched_setaffinity(0, {min(os.sched_getaffinity(0))})
+print("offline model-free affinity:", sorted(os.sched_getaffinity(0)), flush=True)
+os.execvp(sys.argv[1], sys.argv[1:])
+' go test -count=1 -timeout 15m -tags offlinesmoke ./internal/cli -run '^TestOfflineCLIMatrix$/^model-free$' -v
 go test -count=1 ./...
 go vet ./...
 mkdir -p bin

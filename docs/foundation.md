@@ -135,7 +135,7 @@ it is not a real-GPU success result. The exception changes only observer
 classification for the two control connects. It does not itself establish that
 the GPU matrix passed; report the run's actual traces and status separately.
 
-## Initial CLI / error contract
+## Current CLI / error contract
 
 - `help`, `-h`, `--help`: exit 0, help on stdout, empty stderr; no config access.
 - `doctor`: prints the four resolved directories and concrete config, registry,
@@ -180,27 +180,113 @@ the GPU matrix passed; report the run's actual traces and status separately.
   already exist; this command does not create it. Explicit CUDA failure is
   reported without CPU fallback. CUDA requires a Linux/amd64 `-tags cuda` build
   and an NVIDIA runtime driver providing `libcuda.so.1`.
+- `translate --source-language LANG --target-language LANG --game GAME
+  --artifact ARTIFACT [--backend cpu|cuda] SOURCE` translates a regular UTF-8
+  file to stdout. `localize --format text --source-language LANG
+  --target-language LANG --game GAME --artifact ARTIFACT [--backend cpu|cuda]
+  --output OUT SOURCE` publishes the same supported text format to a file.
+  Flags precede `SOURCE`; language, game and artifact values are required and
+  non-empty. The CLI does not normalize them or infer namespaces from paths.
+  `translate` is text-only and has no `--format`; `localize` requires the
+  explicit `--format text`. `SOURCE` is a path, not `-`; stdin is unsupported.
+  There is no command-level model override. `models use ID` selects the local
+  GGUF used by both commands. CPU is the default backend; CUDA is opt-in and
+  requires a Linux/amd64 `-tags cuda` build and NVIDIA driver. Neither command
+  downloads a model or falls back from CUDA to CPU.
+- Both commands use the selected registry model's real Engine, `Info` and
+  request factory, `DefaultLimits`, `PolicySchemaV1`, canonical inference
+  profile, SQLite `tm.Store`, text adapter and production Core. The profile
+  binds the selected model and effective Engine/request values. Text format
+  uses the whole file as one `text-v1` document unit with no keys and an empty
+  glossary. It does not discover or automatically protect apparent tags or
+  placeholders. Current limits are 1495 artifact bytes, 76 units, 980 bytes
+  per unit, 1036 total text bytes, 76 segments, a 4096-token context
+  candidate, 2048 maximum output tokens, 30-second request timeout and
+  300-second generation timeout. For `text-v1`, the single unit makes 980
+  UTF-8 bytes the effective source text limit.
+- Translation syntax and help are handled before config, model, TM or source
+  I/O. Once execution starts, the selected model is opened and its profile is
+  built before the TM. The CLI uses `Create` only when `<Data>/tm.sqlite` is
+  absent; an existing database is opened with `Open`. It does not recover,
+  replace, or recreate a database after an error. Corrupt databases, SQLite
+  sidecars, lock conflicts and other open failures stop the command.
+- `localize` runs the existing publication recovery/preflight before it
+  snapshots the source. Core prepares and validates every unit and the final
+  artifact before its one TM commit, then publishes. A failure before commit
+  does not accept TM rows or publish a new artifact; a retained private run,
+  stage or record remains evidence and is not automatically deleted. After
+  commit, a publication or Close error does not undo committed rows or a
+  completed publication. In-place mode retains the original as a backup.
+  `translate` commits accepted rows before writing the translated bytes to
+  stdout; a writer failure cannot retract bytes already written or committed
+  TM rows. `TMCommitted`, publication state and bytes-written state therefore
+  remain part of operational error reporting.
+- SIGINT and SIGTERM cancel the translation context. Native generation is
+  drained before the Engine is closed. A failed `Close` returns a failure
+  without erasing already committed TM or publication state. TM and publisher
+  `Close` release their owned resources; neither is a general cleanup or
+  recovery command.
+- Normal translation diagnostics redact source, target and prompt text. The
+  measured CUDA driver-initialization refusal is sanitized before the pinned
+  upstream loader can print its raw error, while preserving `ErrCUDAResidency`.
+  This is a measured refusal-path guarantee only. Later pinned-upstream
+  resident, device, allocation, self-test or generation failures may still
+  write to stderr. `doctor --check-model --backend cuda` retains its existing
+  detailed diagnostic consumer.
 - Missing/unknown command, unknown option or extra arguments: exit 2, empty
   stdout, diagnostic on stderr. Raw user arguments are not echoed.
 - Operational error: exit 1, diagnostic on stderr. A stdout write failure also
   returns 1; previously written stdout bytes cannot be retracted.
 - Diagnostic write failure retains a non-zero status.
 - Only `cmd/yakuori/main.go` calls `os.Exit`. `internal/cli.Run` returns a status.
-  The unexported resolver/file-runner seams and fake writers make failures
-  testable without a model. CLI tests call the real Core and text adapter through
-  an internal test path, then use the shared result reporter; there is no public
-  fake flag or text translation syntax. Diagnostics retain unit/phase,
-  TMCommitted, publication state and RecoveryError reason/paths. Partial stdout
-  failures report the sent byte count without rolling back committed rows.
+  The unexported resolver, selected-engine and file-runner seams make failures
+  testable without public test flags. Controlled Engine failures and fake
+  writers are unit controls, not native inference evidence. Real CLI acceptance
+  separately checks stdout/output bytes and complete SQLite keys. Diagnostics
+  retain unit/phase, TMCommitted, publication state and RecoveryError
+  reason/paths. Partial stdout failures report the sent byte count without
+  rolling back committed rows.
 
-There is no connected `translate` or `localize` pipeline and no placeholder
-translation output, no retry, and no legacy Kotoba reads/migration. Model
-import and explicit `models pull` are the only acquisition paths, and `pull`
-is the only network path in the product. `models verify` and Engine loading
-cannot read the provenance sidecar: it is traceable storage, never a trust
-input, and the `digest_source` it records is the caller's own statement of
-where the digest came from — it is not independently verified and must not be
-presented as a distribution guarantee.
+Model import and explicit `models pull` are the only acquisition paths, and
+`pull` is the only network path in the product. `models verify` and Engine
+loading cannot read the provenance sidecar: it is traceable storage, never a
+trust input, and `digest_source` is the caller's statement of where the digest
+came from, not an independently verified distribution guarantee. The
+text-v1 CLI does not implement the Witcher 3 production adapter, MOD read/write
+or human translation-quality acceptance.
+
+## Issue #19 acceptance evidence, observed 2026-10-17
+
+This dated evidence map records the implementation and measurements available
+at Task7. It is not a claim that Issue #19 or its final gate is complete.
+Receipts and raw artifacts are under
+`.omo/evidence/issue-19-cli-offline/execution-20261017/`.
+
+| Acceptance condition | Observed proof | Scope and limits |
+| --- | --- | --- |
+| AC1, acquisition source and digest declaration | `verify-3-pull.txt` records six actual CLI failure invocations and 43 checks. `task-5-report.md` records three pull tests RUN/PASS, 43 state checks and 10 CLI invocations, including real pinned-model registration and provenance readback. | The expected SHA-256 and size identify bytes and the declared `digest_source` is stored as provenance. The declaration is not independently authenticated and is not a distribution trust guarantee. |
+| AC2, interruption and corrupt/mismatched model state | `task-5-report.md` records event-triggered SIGINT/SIGTERM, unchanged prior model/selection and no stage; SIGKILL leaves an unregistered stage that a later run preserves until explicit QA cleanup. `verify-3-pull.txt` records mismatch, short/long body, status, invalid GGUF and argument failures. | Pull transfer fixtures are synthetic bytes, not substitute inference models. SIGKILL residue is intentionally not auto-recovered or deleted. |
+| AC3, real CLI, Engine, TM, CPU/CUDA and driver refusal | `task-5-report.md` records 18 clean-head CPU targets and native token cancellation. `task-6-d1-report.md` and `task-6-d1-readback.json` record CUDA, the CUDA-build CPU control, native cancellation, driver-free refusal and complete SQLite/output readback. | Task6 readback has 56 verified observer targets total, not 56 CUDA targets. Its 18 MPS `connect` records name only the two existing exact paths; other allowed local IPC records are separate. CPU and driver-free observations are strict. No unrestricted-multicore claim: accepted traces use direct strace 7.2 serialized on CPU 0 for CPU and CPU 4 for CUDA. |
+| AC4, deterministic pull regression and model-free gate | `verify-4-model-free.txt` records six strict-clean model-free targets and 10/10 state checks. `task-5-report.md` records three pull tests RUN/PASS, 43 state checks and 10 CLI invocations. | These task-level runs passed. Task8's final clean Docker gate and remote final-head CI were not yet run or accepted at this evidence date; their results belong in the root-owned final summary. |
+| AC5, reproducibility, pin, results and limitations | `task-7-help.txt` records actual current-source `translate --help` and `localize --help` output and exit 0. Task5/6 reports record Go 1.27.1, CGO=0, model pin, environment, commands and raw evidence. This document records the format and claim limits. | The actual inference runs predate the final clean `897c01a` source metadata: CPU proof is bound to clean `4b5c8e4`; Task6 runtime binaries were built from `4b5c8e4` with the exact D1 source change and report `vcs.modified=true`. The final error-wrapping correction changed only the initialization-refusal return and was rerun for that refusal. The clean `897c01a` metadata build is not another inference run. |
+
+Do not count dispatch-only CLI results, fake-TM Core fixtures or controlled
+Engine failures as real translation. Archived invalid tracer runs, including
+strace 6.8 parser failures and seccomp-mediated strace 7.2 runs, remain failed
+evidence. A tmpfs publication failure is not a successful publication result.
+The accepted CPU and CUDA trace conditions are the direct, serialized strace
+7.2 runs listed above; no multicore tracing guarantee is made. A skipped GPU
+run, an arm64 cross-build, and absent Witcher 3 MOD or human quality review are
+not runtime or product-quality proof. Failed and invalid runs remain preserved
+in the evidence directory rather than being rewritten as successes.
+
+The Task6 owner decision was to limit the diagnostic guarantee to the measured
+CUDA initialization refusal and keep dependency pins. The original 500-byte
+unsolicited upstream diagnostic RED is preserved. The repaired refusal emits
+the measured 50-byte normal translation diagnostic, exits 1, writes no
+stdout, and creates no TM or output; `ErrCUDAResidency` remains classifiable.
+This does not promise silence from later pinned-upstream resident or device
+failure paths. Explicit doctor diagnostics remain separate.
 
 ## Configuration boundary
 

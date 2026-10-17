@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -22,23 +23,28 @@ import (
 //
 //	YAKUORI_PULL_BINARY=... YAKUORI_PULL_EVIDENCE=... go test -tags offlinesmoke ./internal/cli -run '^TestOfflineCLIMatrix$/^model-free$'
 //
-// translate and localize are dispatch-only: neither implements translation, so
-// their cases assert the current dispatch exit codes and are never reported as a
-// real translation path.
+// The model-free translation cases stop at selected-model admission.
 func TestOfflineCLIMatrix(t *testing.T) {
 	t.Run("model-free", func(t *testing.T) {
 		layout := newOfflineSmokeLayout(t)
 		invalid := layout.invalidModel(t)
-		source := filepath.Join(layout.root, "unused-source.txt")
+		source := filepath.Join(layout.root, "source.txt")
 		output := filepath.Join(layout.root, "unused-output.txt")
+		sourceBody := []byte("Hello.\n")
+		if err := os.WriteFile(source, sourceBody, 0600); err != nil {
+			t.Fatal(err)
+		}
 
 		doctor := layout.run(t, "doctor-empty", 0, "doctor")
 		checkMissing := layout.run(t, "doctor-check-model-missing", 1, "doctor", "--check-model", "--backend", "cpu")
 		useMissing := layout.run(t, "models-use-missing", 1, "models", "use", "absent")
 		importInvalid := layout.run(t, "models-import-invalid", 1, "models", "import", "--id", "bad", invalid)
-		translate := layout.run(t, "translate-dispatch", 2, "translate")
-		localize := layout.run(t, "localize-dispatch", 1, "localize", "--output", output, source)
+		translate := layout.run(t, "translate-unselected", 1, translationArgs("translate", "--backend", "cpu", source)...)
+		localize := layout.run(t, "localize-unselected", 1, translationArgs("localize", "--backend", "cpu", "--output", output, source)...)
 		state := layout.snapshot(t)
+		sourceAfter, sourceErr := os.ReadFile(source)
+		_, tmErr := os.Lstat(layout.storage.TMFile)
+		_, outputErr := os.Lstat(output)
 
 		checks := []map[string]any{
 			{"name": "doctor_reports_without_a_model", "pass": doctor.TargetExit == 0 && doctor.Stdout != ""},
@@ -46,16 +52,19 @@ func TestOfflineCLIMatrix(t *testing.T) {
 			{"name": "unregistered_use_is_a_command_failure", "pass": useMissing.TargetExit == 1 && useMissing.Stderr != ""},
 			{"name": "invalid_gguf_import_is_rejected_without_leaking_the_path", "pass": importInvalid.TargetExit == 1 && importInvalid.Stdout == "" && importInvalid.Stderr != "" && !strings.Contains(importInvalid.Stderr, invalid)},
 			{"name": "instruction_shaped_model_bytes_are_not_echoed", "pass": !strings.Contains(importInvalid.Stderr, offlineSmokeInjectedInstruction)},
-			{"name": "translate_dispatch_is_usage_only", "pass": translate.TargetExit == 2},
-			{"name": "localize_dispatch_reports_unimplemented", "pass": localize.TargetExit == 1 && localize.Stdout == "" && localize.Stderr != ""},
+			{"name": "translate_rejects_unselected_model", "pass": translate.TargetExit == 1 && translate.Stdout == "" && strings.Contains(translate.Stderr, "localize model failed")},
+			{"name": "localize_rejects_unselected_model", "pass": localize.TargetExit == 1 && localize.Stdout == "" && strings.Contains(localize.Stderr, "localize model failed")},
 			{"name": "no_registry_selection_or_stage_was_written", "pass": !state.RegistryExists && len(state.RegistryIDs) == 0 && len(state.Models) == 0 && len(state.Stages) == 0 && state.Selection == ""},
+			{"name": "model_admission_creates_no_tm_or_output", "pass": errors.Is(tmErr, os.ErrNotExist) && errors.Is(outputErr, os.ErrNotExist)},
+			{"name": "model_admission_preserves_source_bytes", "pass": sourceErr == nil && bytes.Equal(sourceAfter, sourceBody)},
 		}
 		recordOfflineSmokeEvidence(t, "matrix-model-free", map[string]any{
-			"case": "model-free", "task": "issue-19-model-pull-offline/task-6",
+			"case": "model-free", "task": "issue-19-cli-offline-completion/task-3",
 			"binary": offlineSmokeBinary(t), "layout": layout.describe(), "invalid_model": invalid,
 			"state_after": state, "checks": checks,
-			"runs":          []offlineSmokeRun{doctor, checkMissing, useMissing, importInvalid, translate, localize},
-			"dispatch_only": []string{"translate: unknown command, exit 2", "localize: pipeline is not implemented, exit 1"},
+			"translation_state": map[string]any{"source": source, "source_after": string(sourceAfter), "tm": layout.storage.TMFile,
+				"tm_absent": errors.Is(tmErr, os.ErrNotExist), "output": output, "output_absent": errors.Is(outputErr, os.ErrNotExist)},
+			"runs": []offlineSmokeRun{doctor, checkMissing, useMissing, importInvalid, translate, localize},
 		})
 		offlineSmokeChecks(t, checks)
 	})
@@ -72,10 +81,17 @@ func TestOfflineCLIMatrix(t *testing.T) {
 		useCopy := layout.run(t, "real-models-use-copy", 0, "models", "use", "copy")
 		checkSelected := layout.run(t, "real-doctor-check-model-copy", 0, "doctor", "--check-model", "--backend", backend)
 		afterUse := layout.snapshot(t)
+		t.Run("translation", func(t *testing.T) { offlineTranslationMatrix(t, layout) })
+		t.Run("controlled_failures", testOfflineTranslationFailures)
 		layout.corruptManaged(t, "copy")
 		verifyCorrupt := layout.run(t, "real-models-verify-corrupt", 1, "models", "verify", "copy")
 		checkCorrupt := layout.run(t, "real-doctor-check-model-corrupt", 1, "doctor", "--check-model", "--backend", backend)
 		afterCorrupt := layout.snapshot(t)
+		t.Run("corrupt_translation", func(t *testing.T) { offlineTranslationModelFailure(t, layout, "corrupt") })
+		if err := os.Remove(filepath.Join(layout.storage.ModelsDir, "copy", "model.gguf")); err != nil {
+			t.Fatal(err)
+		}
+		t.Run("missing_translation", func(t *testing.T) { offlineTranslationModelFailure(t, layout, "missing") })
 
 		selected := func(state offlineSmokeState) bool {
 			return state.RegistryEntry && state.RegistrySHA == offlineSmokeSHA256 && state.RegistrySize == offlineSmokeSizeBytes &&
@@ -94,7 +110,7 @@ func TestOfflineCLIMatrix(t *testing.T) {
 			{"name": "old_state_survives_the_corrupted_copy", "pass": afterCorrupt.ManagedSHA != offlineSmokeSHA256 && selected(afterCorrupt)},
 		}
 		recordOfflineSmokeEvidence(t, "matrix-real-model", map[string]any{
-			"case": "real-model", "task": "issue-19-model-pull-offline/task-6",
+			"case": "real-model", "task": "issue-19-cli-offline-completion/task-4",
 			"binary": offlineSmokeBinary(t), "model": model, "layout": layout.describe(),
 			"fixture":            map[string]any{"sha256": offlineSmokeSHA256, "size_bytes": offlineSmokeSizeBytes, "origin": "owned copy of the preexisting local image fixture, no acquisition"},
 			"state_after_import": afterImport, "state_after_use": afterUse, "state_after_corruption": afterCorrupt, "checks": checks,

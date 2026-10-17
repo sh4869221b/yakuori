@@ -8,12 +8,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/localize"
+	"github.com/sh4869221b/yakuori/internal/models"
 	"github.com/sh4869221b/yakuori/internal/publication"
+	"github.com/sh4869221b/yakuori/internal/tm"
 )
 
 const (
@@ -28,11 +32,13 @@ Commands:
   help       Show this help
   doctor     Diagnose storage; --check-model loads the selected model
   models     Import, pull, select, or verify a local GGUF model
+  translate  Translate a UTF-8 text file to stdout
+  localize   Translate a UTF-8 text file to a published file
 
 Options:
   -h, --help Show this help
 
-Translation CLI is not implemented yet. Use <command> --help for options.
+Use <command> --help for options.
 `
 
 var errInvalidLocalizeArguments = errors.New("invalid localize arguments")
@@ -61,19 +67,26 @@ func runWithPipeline(ctx context.Context, args []string, stdout, stderr io.Write
 	if args[0] == "models" || args[0] == "doctor" {
 		return runStorage(ctx, args, stdout, stderr, resolve)
 	}
-	if args[0] == "localize" {
-		options, help, err := parseLocalize(args[1:])
+	if args[0] == "localize" || args[0] == "translate" {
+		command, help, err := parseTranslation(args[0], args[1:])
 		if err != nil {
 			if errors.Is(err, errSameLocalizePath) {
 				return fail(ExitUsage, "source and output are the same path; use --in-place")
 			}
-			return fail(ExitUsage, "invalid localize arguments; use --help")
+			return fail(ExitUsage, "invalid "+args[0]+" arguments; use --help")
 		}
 		if help == "" {
-			if runner == nil {
-				return fail(ExitFailure, "localize pipeline is not implemented")
+			ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			if runner != nil && command.action == "localize" {
+				result, err := runner(ctx, command.options)
+				return reportPipeline(stderr, result, err)
 			}
-			result, err := runner(ctx, options)
+			paths, err := resolve()
+			if err != nil {
+				return reportPipeline(stderr, localize.Result{}, &localize.Error{Phase: "config", Err: err})
+			}
+			result, err := command.execute(ctx, stdout, paths, models.New(paths).OpenSelected)
 			return reportPipeline(stderr, result, err)
 		}
 		n, err := io.WriteString(stdout, help)
@@ -128,26 +141,53 @@ func reportPipeline(stderr io.Writer, result localize.Result, err error) int {
 	return ExitFailure
 }
 
-func parseLocalize(args []string) (publication.Options, string, error) {
+type translationCommand struct {
+	action, sourceLanguage, targetLanguage, backend string
+	scope                                           tm.Scope
+	options                                         publication.Options
+}
+
+func parseTranslation(action string, args []string) (translationCommand, string, error) {
+	command := translationCommand{action: action}
 	var output string
+	var format string
 	var replaceOutput, inPlace bool
 	var outputSpecified, replaceSpecified, inPlaceSpecified bool
 	var help strings.Builder
-	flags := flag.NewFlagSet("localize", flag.ContinueOnError)
+	flags := flag.NewFlagSet(action, flag.ContinueOnError)
 	flags.SetOutput(&help)
-	flags.StringVar(&output, "output", "", "write the result to OUT")
-	flags.BoolVar(&replaceOutput, "replace-output", false, "replace OUT atomically when it exists")
-	flags.BoolVar(&inPlace, "in-place", false, "replace SOURCE while retaining an original backup")
+	flags.StringVar(&command.sourceLanguage, "source-language", "", "required source language")
+	flags.StringVar(&command.targetLanguage, "target-language", "", "required target language")
+	flags.StringVar(&command.scope.GameNamespace, "game", "", "required game namespace")
+	flags.StringVar(&command.scope.ArtifactNamespace, "artifact", "", "required artifact namespace")
+	flags.StringVar(&command.backend, "backend", "cpu", "cpu or cuda")
+	if action == "localize" {
+		flags.StringVar(&format, "format", "", "required format: text")
+		flags.StringVar(&output, "output", "", "write the result to OUT")
+		flags.BoolVar(&replaceOutput, "replace-output", false, "replace OUT atomically when it exists")
+		flags.BoolVar(&inPlace, "in-place", false, "replace SOURCE while retaining an original backup")
+	}
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: yakuori localize [options] SOURCE")
+		fmt.Fprintf(flags.Output(), "Usage: yakuori %s [options] SOURCE\n", action)
+		fmt.Fprintln(flags.Output(), "Flags precede SOURCE. SOURCE must be a regular UTF-8 text file; stdin is unsupported.")
 		fmt.Fprintln(flags.Output(), "\nOptions:")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
 		if err == flag.ErrHelp {
-			return publication.Options{}, help.String(), nil
+			return command, help.String(), nil
 		}
-		return publication.Options{}, "", errInvalidLocalizeArguments
+		return command, "", errInvalidLocalizeArguments
+	}
+	if flags.NArg() != 1 || flags.Arg(0) == "" || flags.Arg(0) == "-" ||
+		command.sourceLanguage == "" || command.targetLanguage == "" ||
+		command.scope.GameNamespace == "" || command.scope.ArtifactNamespace == "" ||
+		command.backend != "cpu" && command.backend != "cuda" || action == "localize" && format != "text" {
+		return command, "", errInvalidLocalizeArguments
+	}
+	command.options.Source = flags.Arg(0)
+	if action == "translate" {
+		return command, "", nil
 	}
 	flags.Visit(func(f *flag.Flag) {
 		switch f.Name {
@@ -160,36 +200,35 @@ func parseLocalize(args []string) (publication.Options, string, error) {
 		}
 	})
 	if inPlaceSpecified && (outputSpecified || replaceSpecified) {
-		return publication.Options{}, "", errInvalidLocalizeArguments
+		return command, "", errInvalidLocalizeArguments
 	}
 	if replaceSpecified && !outputSpecified {
-		return publication.Options{}, "", errInvalidLocalizeArguments
+		return command, "", errInvalidLocalizeArguments
 	}
 	if inPlace {
-		if len(flags.Args()) != 1 || flags.Arg(0) == "" {
-			return publication.Options{}, "", errInvalidLocalizeArguments
-		}
 		source := flags.Arg(0)
-		return publication.Options{Source: source, Output: source, Mode: publication.InPlace}, "", nil
+		command.options = publication.Options{Source: source, Output: source, Mode: publication.InPlace}
+		return command, "", nil
 	}
 	if !outputSpecified || output == "" || len(flags.Args()) != 1 || flags.Arg(0) == "" {
-		return publication.Options{}, "", errInvalidLocalizeArguments
+		return command, "", errInvalidLocalizeArguments
 	}
 	source := flags.Arg(0)
 	sourceAbs, err := filepath.Abs(source)
 	if err != nil {
-		return publication.Options{}, "", errInvalidLocalizeArguments
+		return command, "", errInvalidLocalizeArguments
 	}
 	outputAbs, err := filepath.Abs(output)
 	if err != nil {
-		return publication.Options{}, "", errInvalidLocalizeArguments
+		return command, "", errInvalidLocalizeArguments
 	}
 	if sourceAbs == outputAbs {
-		return publication.Options{}, "", errSameLocalizePath
+		return command, "", errSameLocalizePath
 	}
 	mode := publication.Create
 	if replaceOutput {
 		mode = publication.Replace
 	}
-	return publication.Options{Source: source, Output: output, Mode: mode}, "", nil
+	command.options = publication.Options{Source: source, Output: output, Mode: mode}
+	return command, "", nil
 }

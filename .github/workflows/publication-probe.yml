@@ -28,7 +28,7 @@ jobs:
               test "$(stat -f -c %t /evidence)" = ef53
               TMPDIR=/evidence go test -count=1 -v ./research/publication
               TMPDIR=/tmp go test -count=1 -v ./research/publication
-              TMPDIR=/evidence go test -count=1 -v ./internal/publication ./internal/artifact
+              TMPDIR=/evidence go test -count=1 -v ./internal/publication ./internal/artifact ./internal/cli
               TMPDIR=/tmp go test -count=1 -v ./internal/publication -run "^TestUnsupportedFilesystem$"
               test -z "$(gofmt -l research/publication)"
               go vet ./research/publication
