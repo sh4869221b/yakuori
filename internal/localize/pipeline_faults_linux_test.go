@@ -261,6 +261,7 @@ type pipelineFault struct {
 	committed   bool
 	rows        []pipelineTMRow
 	before      map[string]pipelineFaultAsset
+	wantStage   []byte
 	stageFD     *os.File
 	stageID     unix.Statx_t
 	recordFDs   []*os.File
@@ -308,6 +309,26 @@ func newPipelineFault(t *testing.T, kind string, mode pipelineFaultMode) *pipeli
 	t.Cleanup(func() { cancel(); <-done })
 	h.adapter = &pipelineFaultAdapter{Adapter: f.adapter}
 	h.run = &pipelineFaultRun{}
+	// Encode authored translations before any Core fault or physical stage exists.
+	// Never derive retained bytes from the rejected or potentially missing stage.
+	session, err := f.adapter.Import(f.raw, f.profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var accepted []validate.AcceptedTranslation
+	for _, u := range session.Units() {
+		translation, err := validate.Validate(session, u.ID(), f.profile, f.texts[u.ID().StableID()])
+		if err != nil {
+			t.Fatal(err)
+		}
+		accepted = append(accepted, translation)
+	}
+	var expected bytes.Buffer
+	if _, err := f.adapter.Export(&expected, session, f.profile, accepted); err != nil {
+		t.Fatal(err)
+	}
+	h.wantStage = bytes.Clone(expected.Bytes())
+	pipelineSave(t, "expected-stage.bin", h.wantStage)
 	return h
 }
 
@@ -338,6 +359,9 @@ func (h *pipelineFault) exercise(t *testing.T) {
 			h.reached["prepare"]++
 			if h.scenario.name == "stage-collision" {
 				writeFile(t, h.f.paths.Stage, []byte("owned stage collision\n"))
+				if err := unix.Statx(unix.AT_FDCWD, h.f.paths.Stage, unix.AT_SYMLINK_NOFOLLOW, unix.STATX_BASIC_STATS|unix.STATX_MNT_ID, &h.stageID); err != nil {
+					t.Fatal(err)
+				}
 				h.reached["stage-collision-created"]++
 			}
 			return h.run, nil
@@ -1029,6 +1053,38 @@ func (h *pipelineFault) assertResult(t *testing.T, result Result, err error) {
 		}
 	}
 	h.assertReached(t)
+	wantStage := h.state != publication.Published &&
+		(h.reached["stage-close-entry"] != 0 || h.scenario.name == "stage-collision")
+	if after["stage"].Exists != wantStage {
+		t.Fatalf("retained stage existence: path=%s actual=%t expected=%t reached=%v",
+			after["stage"].Path, after["stage"].Exists, wantStage, h.reached)
+	}
+	if wantStage {
+		expected := bytes.Clone(h.wantStage)
+		switch h.scenario.name {
+		case "stage-collision":
+			expected = []byte("owned stage collision\n")
+		case "export-prefix-error":
+			expected = expected[:4]
+		case "stage-write-EFBIG":
+			expected = expected[:8]
+		case "closed-stage-tamper":
+			switch h.f.scope.ArtifactNamespace {
+			case "text":
+				expected = bytes.Replace(expected, []byte("訳文"), []byte("異文"), 1)
+			case "w3":
+				entry := bytes.Clone(expected[11:23])
+				copy(expected[11:23], expected[23:35])
+				copy(expected[23:35], entry)
+			}
+		}
+		pipelineSave(t, "expected-retained-stage.bin", expected)
+		pipelineEqual(t, after["stage"].Bytes, expected)
+		pipelineEqual(t, after["stage"].Inode, h.stageID.Ino)
+		pipelineEqual(t, after["stage"].MountID, h.stageID.Mnt_id)
+		pipelineEqual(t, after["stage"].Mode, h.stageID.Mode)
+		pipelineEqual(t, after["stage"].Nlink, h.stageID.Nlink)
+	}
 	if h.scenario.row == "M01" {
 		pipelineEqual(t, h.adapter.exports, 0)
 		pipelineEqual(t, after["stage"].Exists, false)
