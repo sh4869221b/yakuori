@@ -454,6 +454,7 @@ func testPipelinePhysicalErrno(t *testing.T) {
 					var expectedRecord pipelineOperationRecord
 					var expectedRecordBytes []byte
 					var retainedRecord pipelineFileImage
+					phase, operation := "prepared", "none"
 					hooks := publication.PipelineFaultHooks{Rename: func(a int, from string, b int, to string, flags uint) error {
 						if to == "record.json" {
 							err := unix.Renameat2(a, from, b, to, flags)
@@ -498,7 +499,19 @@ func testPipelinePhysicalErrno(t *testing.T) {
 						if restore {
 							reached["restore-allowed"]++
 						}
-						return unix.Renameat2(a, from, b, to, flags)
+						err := unix.Renameat2(a, from, b, to, flags)
+						if backup || restore {
+							physical = append(physical, fmt.Sprintf("from=%s to=%s flags=%d errno=%v uid=%d", from, to, flags, err, os.Geteuid()))
+						}
+						if err == nil {
+							switch {
+							case backup:
+								phase, operation = "source-backed-up", "backup-rename"
+							case restore:
+								phase, operation = "restored", "restore-rename"
+							}
+						}
+						return err
 					}}
 					hooks.RecordWrite = func(file *os.File, raw []byte) (int, error) {
 						// Build all expected fields from authored S/O, observed validated T
@@ -509,7 +522,7 @@ func testPipelinePhysicalErrno(t *testing.T) {
 							Output:       pipelineRecordPath{options.Output, filepath.Base(options.Output)},
 							Stage:        pipelineRecordedFile(pipelineImage(t, f.paths.Stage)),
 							SourceParent: pipelineRecordedID(parentBefore), OutputParent: pipelineRecordedID(parentBefore),
-							Phase: "prepared", LastCompletedOperation: "none",
+							Phase: phase, LastCompletedOperation: operation,
 						}
 						expectedRecord.ExistingOutput.Absent = !oldOutput.Present
 						if oldOutput.Present {
@@ -519,19 +532,24 @@ func testPipelinePhysicalErrno(t *testing.T) {
 						if options.Mode == publication.InPlace {
 							expectedRecord.Backup = &pipelineRecordPath{f.paths.Backup, filepath.Base(f.paths.Backup)}
 						}
-						switch {
-						case file.Name() == ".record-source-backed-up":
-							expectedRecord.Phase, expectedRecord.LastCompletedOperation = "source-backed-up", "backup-rename"
-						case strings.HasPrefix(file.Name(), ".record-recovery-"):
-							expectedRecord.Phase, expectedRecord.LastCompletedOperation = "restored", "restore-rename"
-						}
 						var err error
 						expectedRecordBytes, err = json.Marshal(expectedRecord)
 						if err != nil {
 							t.Fatal(err)
 						}
-						pipelineEqual(t, raw, expectedRecordBytes)
 						pipelineJSON(t, "expected-record-fields.json", expectedRecord)
+						pipelineSave(t, "supplied-record.json", raw)
+						switch phase {
+						case "restored":
+							if !strings.HasPrefix(file.Name(), ".record-recovery-") {
+								t.Errorf("record filename=%q expected recovery snapshot after successful restore", file.Name())
+							}
+						default:
+							if file.Name() != ".record-"+phase {
+								t.Errorf("record filename=%q expected=%q after successful operations", file.Name(), ".record-"+phase)
+							}
+						}
+						pipelineEqual(t, raw, expectedRecordBytes)
 						return file.Write(raw)
 					}
 					// When: actual renameat2 encounters chmod EACCES or redirected EXDEV.
