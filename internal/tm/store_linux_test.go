@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -418,6 +419,16 @@ func crashStore(t *testing.T, path string) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStoreCrashProcess$")
 	cmd.Env = append(os.Environ(), "YAKUORI_TM_CRASH_PATH="+path)
+	release, resume, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := errors.Join(release.Close(), resume.Close()); err != nil {
+			t.Error(err)
+		}
+	}()
+	cmd.Stdin = release
 	output, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -458,8 +469,9 @@ func TestStoreCrashProcess(t *testing.T) {
 	if _, err := os.Stdout.WriteString("ready\n"); err != nil {
 		t.Fatal(err)
 	}
-	for {
-		time.Sleep(time.Hour)
+	var release [1]byte
+	if _, err := io.ReadFull(os.Stdin, release[:]); err != nil {
+		t.Fatal(err)
 	}
 }
 
