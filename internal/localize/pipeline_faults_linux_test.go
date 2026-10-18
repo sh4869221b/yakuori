@@ -523,6 +523,10 @@ func (h *pipelineFault) configureStage(t *testing.T) {
 		return manifest, nil
 	}
 	h.adapter.export = func(w io.Writer) io.Writer {
+		// Freeze the just-created writer identity before any write or cancellation.
+		if err := unix.Statx(unix.AT_FDCWD, h.f.paths.Stage, unix.AT_SYMLINK_NOFOLLOW, unix.STATX_BASIC_STATS|unix.STATX_MNT_ID, &h.stageID); err != nil {
+			t.Fatal(err)
+		}
 		h.reached["export"]++
 		if name == "cancel-export-before" {
 			h.cancel()
@@ -782,9 +786,6 @@ func (h *pipelineFault) hooks(t *testing.T) publication.PipelineFaultHooks {
 		CloseStage: func(f *os.File) error {
 			h.reached["stage-close-entry"]++
 			h.stageFD = f
-			if err := unix.Statx(int(f.Fd()), "", unix.AT_EMPTY_PATH, unix.STATX_BASIC_STATS|unix.STATX_MNT_ID, &h.stageID); err != nil {
-				t.Fatal(err)
-			}
 			switch name {
 			case "stage-close-error":
 				return unix.EIO // The frozen bridge still executes the real Close.
@@ -1235,6 +1236,7 @@ func (h *pipelineFault) saveReport(t *testing.T, result Result, err error) {
 		Result                                  Result
 		Error                                   string
 		ErrorChain                              []string
+		StageIdentity                           unix.Statx_t
 		Before, After                           map[string]pipelineFaultAsset
 		ExpectedRows, ActualRows                []pipelineTMRow
 	}{
@@ -1243,7 +1245,8 @@ func (h *pipelineFault) saveReport(t *testing.T, result Result, err error) {
 		Stimulus: "delegating boundary injection or direct context cancellation; EIO is injected, not physical media errno",
 		Reached:  h.reached, CancelObserved: errors.Is(h.ctx.Err(), context.Canceled), Result: result,
 		Before: h.before, After: assets, ExpectedRows: h.rows, ActualRows: pipelineReadRows(t, h.f.db),
-		ErrorChain: pipelineFaultErrorChain(err),
+		ErrorChain:    pipelineFaultErrorChain(err),
+		StageIdentity: h.stageID,
 	}
 	if err != nil {
 		report.Error = fmt.Sprintf("%+v", err)

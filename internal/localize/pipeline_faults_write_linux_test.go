@@ -247,6 +247,9 @@ func pipelinePhysicalWrite(t *testing.T, request pipelineTask2Request, ready fun
 	var original, lowered, restored unix.Rlimit
 	writes := 0
 	h.adapter.export = func(w io.Writer) io.Writer {
+		if err := unix.Statx(unix.AT_FDCWD, h.f.paths.Stage, unix.AT_SYMLINK_NOFOLLOW, unix.STATX_BASIC_STATS|unix.STATX_MNT_ID, &h.stageID); err != nil {
+			t.Fatal(err)
+		}
 		return pipelineFaultWriter(func(b []byte) (n int, err error) {
 			writes++
 			if writes != 1 || len(b) <= 8 {
