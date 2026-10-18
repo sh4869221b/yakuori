@@ -155,14 +155,18 @@ func TestPipelineFixture(t *testing.T) {
 						} else {
 							reached := make(map[string]int)
 							var descriptors []*os.File
-							closeHook := func(file *os.File) error {
-								reached["close"]++
-								descriptors = append(descriptors, file)
-								return nil // Bridge owns the mandatory real Close.
-							}
 							result, err = f.execute(t.Context(), options, publication.PipelineFaultHooks{
-								SyncStage:  func(file *os.File) error { reached["sync"]++; return file.Sync() },
-								CloseStage: closeHook, RecordClose: closeHook,
+								SyncStage: func(file *os.File) error { reached["sync"]++; return file.Sync() },
+								CloseStage: func(file *os.File) error {
+									reached["stage-close"]++
+									descriptors = append(descriptors, file)
+									return nil // Bridge owns the mandatory real Close.
+								},
+								RecordClose: func(file *os.File) error {
+									reached["record-close"]++
+									descriptors = append(descriptors, file)
+									return nil
+								},
 								RecordWrite: func(file *os.File, b []byte) (int, error) { reached["write"]++; return file.Write(b) },
 								RecordSync:  func(file *os.File) error { reached["record-sync"]++; return file.Sync() },
 								Rename: func(a int, b string, c int, d string, flags uint) error {
@@ -170,11 +174,12 @@ func TestPipelineFixture(t *testing.T) {
 									return unix.Renameat2(a, b, c, d, flags)
 								},
 							})
-							for _, operation := range []string{"sync", "close", "write", "record-sync", "rename"} {
+							for _, operation := range []string{"sync", "stage-close", "write", "record-sync", "record-close", "rename"} {
 								if reached[operation] == 0 {
 									t.Fatalf("bridge operation not reached: %s", operation)
 								}
 							}
+							t.Logf("bridge reachability=%v closed descriptors=%d", reached, len(descriptors))
 							for _, file := range descriptors {
 								if _, closeErr := file.Stat(); !errors.Is(closeErr, os.ErrClosed) {
 									t.Fatalf("bridge did not close descriptor: %v", closeErr)
@@ -215,6 +220,64 @@ func TestPipelineFixture(t *testing.T) {
 				})
 			}
 		}
+	}
+	for _, operation := range []string{"stage-close", "record-close"} {
+		t.Run("close-errors/"+operation, func(t *testing.T) {
+			// Given: real source, existing output and complete SQLite D0.
+			f := newPipelineFixture(t, "text")
+			options := f.options(t, publication.Replace)
+			oldOutput := []byte("old separate output\n")
+			writeFile(t, options.Output, oldOutput)
+			wantRows, wantCommitted := f.initial, false
+			var descriptor *os.File
+			reached := 0
+			inject := func(file *os.File) error {
+				reached++
+				descriptor = file
+				t.Logf("inject operation=%s file=%s fd=%d", operation, file.Name(), file.Fd())
+				return unix.EIO // No Close here: teardown belongs to the bridge.
+			}
+			hooks := publication.PipelineFaultHooks{}
+			switch operation {
+			case "stage-close":
+				hooks.CloseStage = inject
+			case "record-close":
+				hooks.RecordClose = inject
+				wantRows, wantCommitted = f.expectedRows(t), true
+			}
+			expected, err := json.MarshalIndent(wantRows, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			pipelineSave(t, "expected-rows.json", expected)
+			f.capture(t, "before", pipelineState{Options: options})
+			// When: the prepared bridge injects a close error before or after TM commit.
+			result, err := f.execute(t.Context(), options, hooks)
+			if descriptor != nil {
+				t.Cleanup(func() {
+					// Release a mutant's leak only after observing its actual FD state.
+					if err := descriptor.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+						t.Error(err)
+					}
+				})
+			}
+			f.capture(t, "after", pipelineState{Options: options, Result: result})
+			// Then: exact file/SQLite state, preserved injection and a genuinely closed FD.
+			if reached != 1 || descriptor == nil {
+				t.Fatalf("close hook not reached: %s reached=%d", operation, reached)
+			}
+			pipelineEqual(t, fileBytes(t, options.Source), f.raw)
+			pipelineEqual(t, fileBytes(t, options.Output), oldOutput)
+			pipelineEqual(t, pipelineReadRows(t, f.db), wantRows)
+			if !errors.Is(err, unix.EIO) || result.TMCommitted != wantCommitted || result.Publication.State != publication.NotPublished {
+				t.Fatalf("operation=%s result=%+v error=%v", operation, result, err)
+			}
+			_, closeErr := descriptor.Stat()
+			t.Logf("operation=%s reached=%d error=%v descriptor.Stat=%v TMCommitted=%v full SQLite rows=%d", operation, reached, err, closeErr, result.TMCommitted, len(wantRows))
+			if !errors.Is(closeErr, os.ErrClosed) {
+				t.Fatalf("bridge did not close descriptor on injected error: %s: %v", operation, closeErr)
+			}
+		})
 	}
 }
 
