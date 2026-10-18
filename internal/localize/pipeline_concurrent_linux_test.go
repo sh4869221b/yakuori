@@ -33,6 +33,9 @@ type pipelineConcurrentNotice struct {
 	Checkpoint, Error, Class string
 	PID, Generated           int
 	Canceled                 bool
+	Recovery                 bool
+	Phase                    string
+	Rows                     []pipelineTMRow
 	Paths                    publication.PipelineFaultPaths
 	Result                   *Result
 }
@@ -44,6 +47,8 @@ type pipelineConcurrentChild struct {
 	wait    <-chan error
 	output  *bytes.Buffer
 	done    bool
+	trace   string
+	target  int
 }
 
 func startPipelineConcurrent(t *testing.T, input pipelineConcurrentInput) *pipelineConcurrentChild {
@@ -65,7 +70,22 @@ func startPipelineConcurrent(t *testing.T, input pipelineConcurrentInput) *pipel
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestPipelineConcurrentHelper$", "-test.v")
+	command := os.Args[0]
+	args := []string{"-test.run=^TestPipelineConcurrentHelper$", "-test.v"}
+	trace := ""
+	if input.Boundary == "ordered-contender" {
+		command, err = exec.LookPath("strace")
+		if err != nil {
+			t.Fatal("qualified Task5 tests require strace on PATH and child tracing permission:", err)
+		}
+		trace = filepath.Join(t.TempDir(), "flock.log")
+		args = append([]string{"-f", "-qq", "-yy", "-e", "trace=flock", "-o", trace, os.Args[0]}, args...)
+	}
+	cmd := exec.CommandContext(ctx, command, args...)
+	if trace != "" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		cmd.Cancel = func() error { return unix.Kill(-cmd.Process.Pid, unix.SIGKILL) }
+	}
 	cmd.WaitDelay = time.Second
 	cmd.Env = append(os.Environ(), "YAKUORI_TASK5_PROCESS="+string(raw))
 	cmd.ExtraFiles = []*os.File{noticeWrite, releaseRead}
@@ -80,7 +100,7 @@ func startPipelineConcurrent(t *testing.T, input pipelineConcurrentInput) *pipel
 	}
 	wait := make(chan error, 1)
 	go func() { wait <- cmd.Wait() }()
-	child := &pipelineConcurrentChild{cmd: cmd, decoder: json.NewDecoder(noticeRead), release: releaseWrite, wait: wait, output: output}
+	child := &pipelineConcurrentChild{cmd: cmd, decoder: json.NewDecoder(noticeRead), release: releaseWrite, wait: wait, output: output, trace: trace}
 	t.Cleanup(func() {
 		cancel()
 		if !child.done {
@@ -109,7 +129,14 @@ func (c *pipelineConcurrentChild) notice(t *testing.T, checkpoint string) pipeli
 	if err := c.decoder.Decode(&notice); err != nil {
 		t.Fatalf("child pid=%d checkpoint=%s read=%v", c.cmd.Process.Pid, checkpoint, err)
 	}
-	if notice.Checkpoint != checkpoint || notice.PID != c.cmd.Process.Pid {
+	wantPID := c.cmd.Process.Pid
+	if c.trace != "" {
+		if c.target == 0 {
+			c.target = notice.PID
+		}
+		wantPID = c.target
+	}
+	if notice.Checkpoint != checkpoint || notice.PID != wantPID {
 		t.Fatalf("child notice=%+v expected=%s pid=%d", notice, checkpoint, c.cmd.Process.Pid)
 	}
 	pipelineJSON(t, fmt.Sprintf("process-%d-%s.json", notice.PID, checkpoint), notice)
@@ -142,11 +169,16 @@ func (c *pipelineConcurrentChild) waitExit(t *testing.T, wantSignal syscall.Sign
 		t.Fatalf("pid=%d exit=%v status=%v output=%s", c.cmd.Process.Pid, err, status, c.output.String())
 	}
 	pipelineEqual(t, pipelineImage(t, fmt.Sprintf("/proc/%d", c.cmd.Process.Pid)).Present, false)
+	if c.trace != "" {
+		pipelineEqual(t, pipelineImage(t, fmt.Sprintf("/proc/%d", c.target)).Present, false)
+		pipelineSave(t, fmt.Sprintf("ordered-%d-flock.log", c.target), fileBytes(t, c.trace))
+	}
 	pipelineJSON(t, fmt.Sprintf("process-%d-wait.json", c.cmd.Process.Pid), struct {
 		PID, RawStatus, ExitCode int
 		Signaled                 bool
 		Signal                   syscall.Signal
-	}{c.cmd.Process.Pid, int(status), status.ExitStatus(), status.Signaled(), status.Signal()})
+		TracedTargetPID          int
+	}{c.cmd.Process.Pid, int(status), status.ExitStatus(), status.Signaled(), status.Signal(), c.target})
 	t.Logf("reaped pid=%d actual wait_status=%d signal=%v exit=%d", c.cmd.Process.Pid, status, status.Signal(), status.ExitStatus())
 }
 
@@ -248,23 +280,45 @@ func TestPipelineConcurrentHelper(t *testing.T) {
 			return
 		}
 	}
-	result, err := f.core.fileWithTM(signalCtx, input.Options, f.adapter, f.profile, nil,
-		&tmExecution{store: f.store, scope: f.scope}, func(ctx context.Context, options publication.Options) (publicationRun, error) {
-			run, err := publication.PrepareWithLimits(ctx, options, f.limits)
-			if err != nil {
-				return nil, err
-			}
-			f.paths = run.SetPipelineFaultHooks(publication.PipelineFaultHooks{})
-			if input.Boundary == "parents-owned" {
-				if err := pause(f.paths); err != nil {
-					return nil, errors.Join(err, run.Close())
+	var result Result
+	var prepared *publication.Run
+	runFD := -1
+	if input.Boundary == "public-rerun" {
+		result, err = f.core.FileWithTM(signalCtx, input.Options, f.adapter, f.profile, f.store, f.scope)
+		if result.Publication.RecordPath != "" {
+			f.paths.Record, f.paths.Backup = result.Publication.RecordPath, result.Publication.BackupPath
+			f.paths.Stage = filepath.Join(filepath.Dir(f.paths.Record), "stage")
+		}
+	} else {
+		result, err = f.core.fileWithTM(signalCtx, input.Options, f.adapter, f.profile, nil,
+			&tmExecution{store: f.store, scope: f.scope}, func(ctx context.Context, options publication.Options) (publicationRun, error) {
+				run, err := publication.PrepareWithLimits(ctx, options, f.limits)
+				if err != nil {
+					return nil, err
 				}
-			}
-			return run, nil
-		})
-	final := pipelineConcurrentNotice{Checkpoint: "final", Result: &result, Paths: f.paths, Generated: len(f.backend.calls)}
+				prepared = run
+				f.paths = run.SetPipelineFaultHooks(publication.PipelineFaultHooks{})
+				runFD = pipelineRunFD(t, filepath.Dir(f.paths.Stage))
+				if input.Boundary == "parents-owned" {
+					if err := pause(f.paths); err != nil {
+						return nil, errors.Join(err, run.Close())
+					}
+				}
+				return run, nil
+			})
+	}
+	if prepared != nil {
+		pipelineRunClosed(t, prepared, runFD)
+	}
+	final := pipelineConcurrentNotice{Checkpoint: "final", Result: &result, Paths: f.paths, Generated: len(f.backend.calls), Rows: pipelineReadRows(t, f.db)}
 	if err != nil {
 		final.Error = err.Error()
+		var phase *Error
+		if errors.As(err, &phase) {
+			final.Phase = phase.Phase
+		}
+		var recovery *publication.RecoveryError
+		final.Recovery = errors.As(err, &recovery)
 		switch {
 		case errors.Is(err, publication.ErrBusy):
 			final.Class = "ErrBusy"
@@ -272,9 +326,35 @@ func TestPipelineConcurrentHelper(t *testing.T) {
 			final.Class, final.Canceled = "context.Canceled", true
 		case errors.Is(err, unix.EIO):
 			final.Class = "injected-EIO"
+		case errors.Is(err, publication.ErrInvalidRecord):
+			final.Class = "ErrInvalidRecord"
+		case errors.Is(err, publication.ErrRecoveryConflict):
+			final.Class = "ErrRecoveryConflict"
 		}
 	}
 	send(final)
+	if input.Boundary == "ordered-contender" {
+		// The parent probes partial release while this actual Core caller is alive.
+		var token [1]byte
+		if _, err := io.ReadFull(release, token[:]); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func pipelinePublicRerun(t *testing.T, f *pipelineFixture, options publication.Options) pipelineConcurrentNotice {
+	t.Helper()
+	pipelineStoreFree(t, f)
+	child := startPipelineConcurrent(t, pipelineConcurrentInput{
+		Kind: f.scope.ArtifactNamespace, DB: pipelineDBPath(t, f), Options: options, Boundary: "public-rerun",
+	})
+	final := child.notice(t, "final")
+	child.waitExit(t, 0)
+	if final.PID == os.Getpid() {
+		t.Fatal("public Core rerun did not use a new PID")
+	}
+	pipelineEqual(t, final.Rows, f.expectedRows(t))
+	return final
 }
 
 func pipelineRunNames(t *testing.T, parent string) []string {
@@ -458,15 +538,33 @@ func testPipelinePartialAcquisition(t *testing.T) {
 					source, output = filepath.Join(b, "source"), filepath.Join(a, "output")
 				}
 				// When: each opposite-order full Core request hits the held high lock.
-				child := startPipelineConcurrent(t, pipelineConcurrentInput{Kind: kind, DB: db,
+				child := startPipelineConcurrent(t, pipelineConcurrentInput{Kind: kind, DB: db, Boundary: "ordered-contender",
 					Options: publication.Options{Source: source, Output: output, Mode: publication.Create}})
 				final := child.notice(t, "final")
+				pipelineEqual(t, pipelineImage(t, fmt.Sprintf("/proc/%d", final.PID)).Present, true)
+				pipelineLocksFree(t, a) // Before the contender's process exit can release anything.
+				if _, err := child.release.Write([]byte{1}); err != nil {
+					t.Fatal(err)
+				}
 				child.waitExit(t, 0)
 				// Then: no deadlock/new run/generation and the partial low lock is free.
 				if final.Class != "ErrBusy" || final.Generated != 0 || final.Result == nil || final.Result.TMCommitted {
 					t.Fatalf("partial-acquire failure=%+v", final)
 				}
 				pipelineLocksFree(t, a)
+				low, high := -1, -1
+				raw := fileBytes(t, child.trace)
+				for index, line := range strings.Split(string(raw), "\n") {
+					if strings.Contains(line, "<"+a+">, LOCK_EX|LOCK_NB) = 0") {
+						low = index
+					}
+					if strings.Contains(line, "<"+b+">, LOCK_EX|LOCK_NB) = -1 EAGAIN") {
+						high = index
+					}
+				}
+				if low < 0 || high <= low {
+					t.Errorf("ordered whole-Core contender did not acquire low before high EAGAIN: pid=%d low=%d high=%d trace=%s", final.PID, low, high, raw)
+				}
 				pipelineEqual(t, len(pipelineRunNames(t, a)), 0)
 				pipelineEqual(t, len(pipelineRunNames(t, b)), 0)
 				pipelineEqual(t, pipelineReadRows(t, f.db), f.initial)

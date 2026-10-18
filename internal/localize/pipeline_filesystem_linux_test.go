@@ -5,12 +5,15 @@ package localize
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -43,6 +46,118 @@ type pipelineFileImage struct {
 	Bytes   []byte
 	Link    string
 	ID      pipelineFileIdentity
+}
+
+// Mirrors the existing record contract solely to build independent expectations.
+type pipelineRecordID struct {
+	Dev     uint64 `json:"dev"`
+	Ino     uint64 `json:"ino"`
+	MountID uint64 `json:"mount_id"`
+	Size    int64  `json:"size"`
+	Mode    uint32 `json:"mode"`
+	Nlink   uint64 `json:"nlink"`
+}
+
+type pipelineRecordPath struct {
+	Path     string `json:"path"`
+	Basename string `json:"basename"`
+}
+
+type pipelineRecordFile struct {
+	Path     string           `json:"path"`
+	Basename string           `json:"basename"`
+	Identity pipelineRecordID `json:"identity"`
+	SHA256   string           `json:"sha256"`
+	Size     int64            `json:"size"`
+}
+
+type pipelineOperationRecord struct {
+	SchemaVersion  int                 `json:"schema_version"`
+	RunID          string              `json:"run_id"`
+	Mode           publication.Mode    `json:"mode"`
+	Source         pipelineRecordFile  `json:"source"`
+	Output         pipelineRecordPath  `json:"output"`
+	Stage          pipelineRecordFile  `json:"stage"`
+	Backup         *pipelineRecordPath `json:"backup"`
+	SourceParent   pipelineRecordID    `json:"source_parent"`
+	OutputParent   pipelineRecordID    `json:"output_parent"`
+	ExistingOutput struct {
+		Absent bool                `json:"absent"`
+		File   *pipelineRecordFile `json:"file"`
+	} `json:"existing_output"`
+	Phase                  string `json:"phase"`
+	LastCompletedOperation string `json:"last_completed_operation"`
+}
+
+func pipelineRecordedID(image pipelineFileImage) pipelineRecordID {
+	id := image.ID
+	return pipelineRecordID{unix.Mkdev(id.Major, id.Minor), id.Inode, id.Mount, int64(id.Size), uint32(id.Mode), uint64(id.Links)}
+}
+
+func pipelineRecordedFile(image pipelineFileImage) pipelineRecordFile {
+	// SHA256 is the existing publication-record integrity contract, not a new receipt.
+	return pipelineRecordFile{image.Path, filepath.Base(image.Path), pipelineRecordedID(image),
+		fmt.Sprintf("%x", sha256.Sum256(image.Bytes)), int64(len(image.Bytes))}
+}
+
+func pipelineRunFD(t *testing.T, path string) int {
+	t.Helper()
+	entries, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		target, err := os.Readlink("/proc/self/fd/" + entry.Name())
+		if errors.Is(err, os.ErrNotExist) {
+			continue // ReadDir's own descriptor has already closed.
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if target != path {
+			continue
+		}
+		fd, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var st unix.Stat_t
+		if err := unix.Fstat(fd, &st); err != nil {
+			t.Fatal(err)
+		}
+		image := pipelineImage(t, path)
+		pipelineEqual(t, uint64(st.Ino), image.ID.Inode)
+		pipelineEqual(t, uint64(st.Dev), unix.Mkdev(image.ID.Major, image.ID.Minor))
+		pipelineJSON(t, fmt.Sprintf("run-fd-%d-before.json", os.Getpid()), struct {
+			PID, FD int
+			File    pipelineFileImage
+		}{os.Getpid(), fd, image})
+		return fd
+	}
+	t.Fatalf("prepared Run directory descriptor not observed: %s", path)
+	return -1
+}
+
+func pipelineRunClosed(t *testing.T, run *publication.Run, fd int) {
+	t.Helper()
+	_, err := unix.FcntlInt(uintptr(fd), unix.F_GETFD, 0)
+	runtime.KeepAlive(run) // An os.File finalizer must not conceal missing Close.
+	target := ""
+	if err == nil {
+		var linkErr error
+		target, linkErr = os.Readlink(fmt.Sprintf("/proc/self/fd/%d", fd))
+		if linkErr != nil {
+			t.Fatal(linkErr)
+		}
+	}
+	pipelineJSON(t, fmt.Sprintf("run-fd-%d-after.json", os.Getpid()), struct {
+		PID, FD int
+		Error   string
+		Target  string
+	}{os.Getpid(), fd, fmt.Sprint(err), target})
+	if !errors.Is(err, unix.EBADF) {
+		t.Errorf("prepared Run directory FD remained open at Core return: fd=%d target=%s error=%v", fd, target, err)
+	}
 }
 
 func pipelineImage(t *testing.T, path string) pipelineFileImage {
@@ -308,8 +423,9 @@ func testPipelinePhysicalErrno(t *testing.T) {
 					original := pipelineImage(t, options.Source)
 					oldOutput := pipelineImage(t, options.Output)
 					parent := filepath.Dir(options.Output)
-					parentMode := pipelineImage(t, parent).ID.Mode & 07777
-					pipelineJSON(t, "parent-before.json", pipelineImage(t, parent))
+					parentBefore := pipelineImage(t, parent)
+					parentMode := parentBefore.ID.Mode & 07777
+					pipelineJSON(t, "parent-before.json", parentBefore)
 					t.Cleanup(func() {
 						if err := os.Chmod(parent, os.FileMode(parentMode)); err != nil {
 							t.Error(err)
@@ -335,7 +451,22 @@ func testPipelinePhysicalErrno(t *testing.T) {
 					}
 					reached := make(map[string]int)
 					var physical []string
+					var expectedRecord pipelineOperationRecord
+					var expectedRecordBytes []byte
+					var retainedRecord pipelineFileImage
 					hooks := publication.PipelineFaultHooks{Rename: func(a int, from string, b int, to string, flags uint) error {
+						if to == "record.json" {
+							err := unix.Renameat2(a, from, b, to, flags)
+							if err == nil {
+								retainedRecord = pipelineImage(t, f.paths.Record)
+								if !retainedRecord.Present {
+									t.Fatal("successful record install did not retain the operation record")
+								}
+								pipelineEqual(t, retainedRecord.Bytes, expectedRecordBytes)
+								pipelineJSON(t, "expected-retained-record.json", retainedRecord)
+							}
+							return err
+						}
 						publish := from == "stage"
 						backup := f.paths.Backup != "" && to == filepath.Base(f.paths.Backup)
 						restore := f.paths.Backup != "" && from == filepath.Base(f.paths.Backup)
@@ -369,8 +500,64 @@ func testPipelinePhysicalErrno(t *testing.T) {
 						}
 						return unix.Renameat2(a, from, b, to, flags)
 					}}
+					hooks.RecordWrite = func(file *os.File, raw []byte) (int, error) {
+						// Build all expected fields from authored S/O, observed validated T
+						// and the independently reached operation, never the saved record.
+						expectedRecord = pipelineOperationRecord{
+							SchemaVersion: 1, RunID: strings.TrimPrefix(filepath.Base(filepath.Dir(f.paths.Record)), ".yakuori-run-"),
+							Mode: options.Mode, Source: pipelineRecordedFile(original),
+							Output:       pipelineRecordPath{options.Output, filepath.Base(options.Output)},
+							Stage:        pipelineRecordedFile(pipelineImage(t, f.paths.Stage)),
+							SourceParent: pipelineRecordedID(parentBefore), OutputParent: pipelineRecordedID(parentBefore),
+							Phase: "prepared", LastCompletedOperation: "none",
+						}
+						expectedRecord.ExistingOutput.Absent = !oldOutput.Present
+						if oldOutput.Present {
+							output := pipelineRecordedFile(oldOutput)
+							expectedRecord.ExistingOutput.File = &output
+						}
+						if options.Mode == publication.InPlace {
+							expectedRecord.Backup = &pipelineRecordPath{f.paths.Backup, filepath.Base(f.paths.Backup)}
+						}
+						switch {
+						case file.Name() == ".record-source-backed-up":
+							expectedRecord.Phase, expectedRecord.LastCompletedOperation = "source-backed-up", "backup-rename"
+						case strings.HasPrefix(file.Name(), ".record-recovery-"):
+							expectedRecord.Phase, expectedRecord.LastCompletedOperation = "restored", "restore-rename"
+						}
+						var err error
+						expectedRecordBytes, err = json.Marshal(expectedRecord)
+						if err != nil {
+							t.Fatal(err)
+						}
+						pipelineEqual(t, raw, expectedRecordBytes)
+						pipelineJSON(t, "expected-record-fields.json", expectedRecord)
+						return file.Write(raw)
+					}
 					// When: actual renameat2 encounters chmod EACCES or redirected EXDEV.
-					result, err := f.execute(t.Context(), options, hooks)
+					var prepared *publication.Run
+					runFD := -1
+					result, err := f.core.fileWithTM(t.Context(), options, f.adapter, f.profile, nil,
+						&tmExecution{store: f.store, scope: f.scope}, func(ctx context.Context, options publication.Options) (publicationRun, error) {
+							run, err := publication.PrepareWithLimits(ctx, options, f.limits)
+							if err != nil {
+								return nil, err
+							}
+							prepared = run
+							f.paths = run.SetPipelineFaultHooks(hooks)
+							runFD = pipelineRunFD(t, filepath.Dir(f.paths.Stage))
+							return run, nil
+						})
+					if prepared == nil {
+						t.Fatalf("physical-error Run was not prepared: %v", err)
+					}
+					pipelineRunClosed(t, prepared, runFD) // Before capture, child exit or manual teardown.
+					if !retainedRecord.Present {
+						t.Fatal("required operation record was never observed installed")
+					}
+					if actual := pipelineImage(t, f.paths.Record); !bytes.Equal(actual.Bytes, expectedRecordBytes) || actual.ID != retainedRecord.ID || !actual.Present {
+						t.Fatalf("retained operation record lost or changed at Core return: actual=%+v expected=%+v", actual, retainedRecord)
+					}
 					pipelineBoundaryState(t, f, options, result, err)
 					pipelineJSON(t, "operations.json", physical)
 					if external.Path != "" {
@@ -422,8 +609,50 @@ func testPipelinePhysicalErrno(t *testing.T) {
 					pipelineEqual(t, pipelineReadRows(t, f.db), f.expectedRows(t))
 					pipelineJSON(t, "expected-rows.json", f.expectedRows(t))
 					pipelineLocksFree(t, parent)
-					pipelineStoreFree(t, f)
 					t.Logf("physical, not injected errno: %v; result=%s; EXDEV uses redirected destination FD, not natural stage placement", physical, wantState)
+					oldStage := pipelineImage(t, f.paths.Stage)
+					rerun := pipelinePublicRerun(t, f, options)
+					if rerun.Error != "" || rerun.Result == nil || !rerun.Result.TMCommitted ||
+						rerun.Result.Publication.State != publication.Published || rerun.Generated != 0 {
+						t.Fatalf("valid retained record did not recover and publish from TM in new PID: %+v", rerun)
+					}
+					if rerun.Result.Publication.RunID == result.Publication.RunID {
+						t.Fatal("public rerun reused the old publication run")
+					}
+					pipelineWantTranslated(t, f, options.Output)
+					pipelineEqual(t, pipelineImage(t, f.paths.Stage), oldStage)
+					if pipelineImage(t, options.Output).ID.Inode == oldStage.ID.Inode {
+						t.Fatal("public rerun published the old retained stage")
+					}
+					if options.Mode == publication.InPlace {
+						backup := pipelineImage(t, rerun.Result.Publication.BackupPath)
+						pipelineEqual(t, backup.ID, original.ID)
+						pipelineEqual(t, backup.Bytes, original.Bytes)
+						pipelineEqual(t, pipelineImage(t, f.paths.Backup).Present, false)
+					} else {
+						pipelineEqual(t, pipelineImage(t, options.Source), original)
+					}
+					if external.Path != "" {
+						pipelineEqual(t, pipelineImage(t, external.Path), external)
+					}
+					switch wantState {
+					case publication.NotPublished:
+						expectedRecord.Phase, expectedRecord.LastCompletedOperation = "abandoned", "reconcile-unpublished"
+					case publication.SourceBackedUp:
+						expectedRecord.Phase, expectedRecord.LastCompletedOperation = "restored", "restore-rename"
+					case publication.Restored:
+						pipelineEqual(t, pipelineImage(t, f.paths.Record), retainedRecord)
+					}
+					expectedAfterRecovery, marshalErr := json.Marshal(expectedRecord)
+					if marshalErr != nil {
+						t.Fatal(marshalErr)
+					}
+					pipelineEqual(t, fileBytes(t, f.paths.Record), expectedAfterRecovery)
+					pipelineJSON(t, "rerun-old-assets.json", pipelineImages(t, []string{f.paths.Record, f.paths.Stage, f.paths.Backup}))
+					pipelineJSON(t, "rerun-new-assets.json", pipelineImages(t, []string{options.Source, options.Output, rerun.Paths.Record, rerun.Paths.Backup}))
+					pipelineEqual(t, pipelineReadRows(t, f.db), f.expectedRows(t))
+					pipelineLocksFree(t, parent)
+					pipelineStoreFree(t, f)
 				})
 			}
 		}
@@ -563,6 +792,21 @@ func TestPipelineNoClobber(t *testing.T) {
 				pipelineLocksFree(t, filepath.Dir(options.Source))
 				pipelineStoreFree(t, f)
 				t.Logf("checkpoints=%v physical rename errno=%v; stimulus=%s result=%s", reached, nativeErr, name, wantState)
+				preservedPaths := []string{options.Source, options.Output, f.paths.Stage, f.paths.Record, f.paths.Backup, external.Path}
+				beforeRerun := pipelineImages(t, preservedPaths)
+				rerun := pipelinePublicRerun(t, f, options)
+				wantClass := "ErrRecoveryConflict"
+				if name == "backup-existing" {
+					wantClass = "ErrInvalidRecord" // Collision occurred before any record was written.
+				}
+				if !rerun.Recovery || rerun.Phase != "prepare" || rerun.Class != wantClass ||
+					rerun.Result == nil || rerun.Result.TMCommitted || rerun.Result.Publication.State != publication.NotPublished || rerun.Generated != 0 {
+					t.Fatalf("public rerun did not refuse retained conflict without generation: %+v expected=%s", rerun, wantClass)
+				}
+				pipelineEqual(t, pipelineImages(t, preservedPaths), beforeRerun)
+				pipelineJSON(t, "rerun-preserved-assets.json", beforeRerun)
+				pipelineLocksFree(t, filepath.Dir(options.Source))
+				pipelineStoreFree(t, f)
 			})
 		}
 	}
