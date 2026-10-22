@@ -26,6 +26,7 @@ import (
 // ready/release contract.
 const (
 	pipelineBarrierChildEnv           = "YAKUORI_PIPELINE_TASK4_CHILD"
+	pipelineBarrierGuardCaseEnv       = "YAKUORI_PIPELINE_TASK4_GUARD_CASE"
 	pipelineBarrierNoticeFD           = 3
 	pipelineBarrierReleaseFD          = 4
 	pipelineBarrierWatchdog           = 30 * time.Second
@@ -39,6 +40,9 @@ const (
 	pipelineBarrierModeEarlyExit      = "early-exit"
 	pipelineBarrierModeHang           = "hang"
 	pipelineBarrierModeMalformed      = "malformed"
+	// pipelineBarrierModeRescue schedules a case whose owning test stops after
+	// ready and never releases: only the registered cleanup can end the child.
+	pipelineBarrierModeRescue = "cleanup-rescue"
 )
 
 // Typed outcomes. Every class except the empty value is a FAIL for a scheduled
@@ -79,6 +83,31 @@ type pipelineBarrierChildRequest struct {
 	Mode          string
 	WrongBoundary string
 	Occurrence    int
+}
+
+// pipelineBarrierGuardCase is one scheduled case: the wire plan, the child
+// behaviour, and whether the unreaped control judges the pre-Wait lifecycle
+// input instead of the reaped record.
+type pipelineBarrierGuardCase struct {
+	Plan    pipelineBarrierPlan
+	Mode    string
+	PreWait bool
+}
+
+// pipelineBarrierScheduledResult is the on-disk hand-off from the scheduled
+// case runner (a real child process) to the guard test that watches it.
+type pipelineBarrierScheduledResult struct {
+	Spec    pipelineBarrierGuardCase
+	Cleanup pipelineBarrierCleanup
+	Record  pipelineBarrierRecord
+	Outcome string
+}
+
+// pipelineBarrierRescueResult is written by the registered cleanup when it had
+// to end a child the scheduled case did not reap.
+type pipelineBarrierRescueResult struct {
+	Case    string
+	Cleanup pipelineBarrierCleanup
 }
 
 type pipelineBarrierFailure struct {
@@ -548,14 +577,18 @@ func (p *pipelineBarrier) finish(t *testing.T, want pipelineBarrierExit) pipelin
 func (p *pipelineBarrier) cleanup() {
 	if !p.waited {
 		p.cancel()
+		p.waited = true
 		if p.cmd != nil && p.cmd.Process != nil {
 			if err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
 				p.t.Errorf("barrier cleanup kill pid=%d: %v", p.cmd.Process.Pid, err)
 			}
 			<-p.done
 			p.rescues++
+			// A scheduled case must reap its own child. Reaching this path means
+			// the case leaked its lifecycle, so the owning test must fail even
+			// though the cleanup did perform the real Wait.
+			p.failCleanupRescue()
 		}
-		p.waited = true
 	}
 	p.cancel()
 	for _, file := range []*os.File{p.noticeFile, p.releaseFile, p.childNotice, p.childRelease} {
@@ -567,6 +600,31 @@ func (p *pipelineBarrier) cleanup() {
 		}
 	}
 	p.saveChildLog()
+}
+
+// failCleanupRescue reports the facts of the real Wait the cleanup had to
+// perform and fails the owning scheduled test with the typed rescue class.
+func (p *pipelineBarrier) failCleanupRescue() {
+	pid := p.cmd.Process.Pid
+	<-p.readDone
+	cleanup := pipelineBarrierCleanup{
+		PID: pid, WaitCalls: p.waits.Load(), CleanupRescueKills: p.rescues, Waited: true,
+		ReadEOF: errors.Is(p.readErr, io.EOF), ResidualNotices: len(p.notices),
+	}
+	if status, ok := p.cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
+		cleanup.ExitStatus = status.ExitStatus()
+		cleanup.Signaled = status.Signaled()
+		cleanup.Signal = status.Signal()
+	}
+	cleanup.PIDAbsent = errors.Is(syscall.Kill(pid, 0), syscall.ESRCH)
+	cleanup.GroupAbsent = errors.Is(syscall.Kill(-pid, 0), syscall.ESRCH)
+	_, procErr := os.Stat(fmt.Sprintf("/proc/%d", pid))
+	cleanup.ProcAbsent = errors.Is(procErr, os.ErrNotExist)
+	pipelineBarrierSaveJSON(p.t, "cleanup-rescue.json", pipelineBarrierRescueResult{Case: p.plan.Case, Cleanup: cleanup})
+	p.t.Errorf("%s: scheduled case %s relied on registered cleanup: pid=%d wait_calls=%d rescues=%d signaled=%t signal=%s eof=%t residual=%d pid_absent=%t group_absent=%t proc_absent=%t",
+		pipelineBarrierCleanupRescue, p.plan.Case, pid, cleanup.WaitCalls, cleanup.CleanupRescueKills,
+		cleanup.Signaled, cleanup.Signal, cleanup.ReadEOF, cleanup.ResidualNotices,
+		cleanup.PIDAbsent, cleanup.GroupAbsent, cleanup.ProcAbsent)
 }
 
 func (p *pipelineBarrier) saveChildLog() {
@@ -708,4 +766,114 @@ func TestPipelineHarnessBarrier(t *testing.T) {
 	})
 	pipelineBarrierSaveJSON(t, "cleanup.json", cleanup)
 	t.Logf("barrier happy: real ready/release/returned, one Wait, EOF, PID/group/proc absent (pid=%d)", cleanup.PID)
+}
+
+// pipelineBarrierRunScheduled drives one scheduled case through the real
+// control wire and returns the typed lifecycle failure, if any. Every case
+// performs its own single real Wait except the rescue control, which by design
+// leaves the child to the registered cleanup.
+func pipelineBarrierRunScheduled(t *testing.T, spec pipelineBarrierGuardCase) (pipelineBarrierRecord, error) {
+	t.Helper()
+	plan, mode := spec.Plan, spec.Mode
+	if mode == pipelineBarrierModeRescue {
+		p := startPipelineBarrier(t, plan, pipelineBarrierModeHappy)
+		if _, err := p.awaitReady(p.ctx); err != nil {
+			return p.record(), err
+		}
+		p.observeAlive(t)
+		return p.record(), nil
+	}
+	p := startPipelineBarrierRaw(t, plan, mode, mode != pipelineBarrierModeMalformed)
+	var outcome error
+	switch mode {
+	case pipelineBarrierModeHappy:
+		if _, err := p.awaitReady(p.ctx); err != nil {
+			outcome = err
+			break
+		}
+		p.observeAlive(t)
+		p.release(t)
+		for _, event := range []string{"injected", "returned"} {
+			if _, err := p.awaitEvent(p.ctx, event); err != nil {
+				outcome = err
+				break
+			}
+		}
+		if outcome == nil && spec.PreWait {
+			// The unreaped judgment must come from the lifecycle input alone:
+			// no Wait has happened at this point.
+			if failure := p.record().failure(); failure != nil {
+				outcome = failure
+			}
+		}
+	case pipelineBarrierModeWrong:
+		if _, err := p.awaitReady(p.ctx); err != nil {
+			outcome = err
+		}
+		p.release(t)
+		p.drain(t)
+	case pipelineBarrierModeNoReady, pipelineBarrierModeEarlyExit, pipelineBarrierModeMalformed:
+		_, err := p.awaitReady(p.ctx)
+		outcome = err
+	case pipelineBarrierModeNoInject:
+		if _, err := p.awaitReady(p.ctx); err != nil {
+			outcome = err
+			break
+		}
+		p.observeAlive(t)
+		p.release(t)
+		_, err := p.awaitEvent(p.ctx, "injected")
+		outcome = err
+	case pipelineBarrierModeHang:
+		p.observeAlive(t)
+		p.stop()
+		_, err := p.awaitReady(p.ctx)
+		outcome = err
+	default:
+		t.Fatalf("unknown scheduled case mode %q", mode)
+	}
+	exit := pipelineBarrierExitZero
+	switch mode {
+	case pipelineBarrierModeHang:
+		exit = pipelineBarrierExitKilled
+	case pipelineBarrierModeMalformed:
+		exit = pipelineBarrierExitNonzero
+	}
+	cleanup := p.finish(t, exit)
+	record := p.record()
+	if outcome == nil {
+		if failure := record.failure(); failure != nil {
+			outcome = failure
+		}
+	}
+	pipelineBarrierSaveJSON(t, "case-result.json", pipelineBarrierScheduledResult{Spec: spec, Cleanup: cleanup, Record: record, Outcome: fmt.Sprint(outcome)})
+	return record, outcome
+}
+
+// TestPipelineHarnessScheduledCase executes one scheduled case in a real child
+// process. It applies the same acceptance decision a product case uses: a typed
+// lifecycle guard failure fails the scheduled test. The guard test that spawns
+// it treats the nonzero exit plus the printed class as detection evidence.
+func TestPipelineHarnessScheduledCase(t *testing.T) {
+	raw := os.Getenv(pipelineBarrierGuardCaseEnv)
+	if raw == "" {
+		return
+	}
+	var spec pipelineBarrierGuardCase
+	if err := json.Unmarshal([]byte(raw), &spec); err != nil {
+		t.Fatalf("scheduled case spec: %v", err)
+	}
+	if spec.Plan.Case == "" || spec.Plan.Boundary == "" || spec.Plan.Occurrence < 1 {
+		t.Fatalf("incomplete scheduled case: %+v", spec)
+	}
+	record, failure := pipelineBarrierRunScheduled(t, spec)
+	if failure != nil {
+		t.Fatalf("scheduled case %s rejected: %v", spec.Plan.Case, failure)
+	}
+	if !record.WaitConfirmed {
+		// This case left its child to the registered cleanup, which fails this
+		// test itself; no acceptance is reported here.
+		return
+	}
+	t.Logf("scheduled case %s accepted; single real Wait confirmed", spec.Plan.Case)
 }
