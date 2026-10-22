@@ -12,9 +12,14 @@ import (
 	"maps"
 	"path/filepath"
 	"testing"
+	"time"
 
 	textadapter "github.com/sh4869221b/yakuori/internal/adapter/text"
 	"github.com/sh4869221b/yakuori/internal/artifact"
+	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/identity"
+	"github.com/sh4869221b/yakuori/internal/inference"
+	"github.com/sh4869221b/yakuori/internal/prompt"
 	"github.com/sh4869221b/yakuori/internal/publication"
 	"github.com/sh4869221b/yakuori/internal/tm"
 	"github.com/sh4869221b/yakuori/internal/unit"
@@ -60,15 +65,21 @@ func (a *keyRelationAdapter) KeyRelations(session unit.Session) ([]artifact.KeyR
 	return relations, nil
 }
 
-type keyFixture struct {
-	core        Core
-	adapter     *keyRelationAdapter
-	profile     validate.Profile
-	input       []byte
-	engineCalls int
+type keyGenerationState struct {
+	calls   int
+	planned bool
+	onPlan  func()
 }
 
-func newKeyFixture(t *testing.T, rawKeys []string) keyFixture {
+type keyFixture struct {
+	core    Core
+	adapter *keyRelationAdapter
+	profile validate.Profile
+	input   []byte
+	state   *keyGenerationState
+}
+
+func keyInput(t *testing.T, rawKeys []string) []byte {
 	t.Helper()
 	input, err := json.Marshal(fakeImage{
 		Adapter: "fixture", Schema: "v1", Language: "en",
@@ -78,18 +89,80 @@ func newKeyFixture(t *testing.T, rawKeys []string) keyFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return input
+}
+
+func newKeyFixture(t *testing.T, rawKeys []string) keyFixture {
+	t.Helper()
 	var unused int
 	_, profile := canonicalCoreFixture(t, false, "", &unused)
+	state := &keyGenerationState{}
 	fixture := keyFixture{
 		adapter: &keyRelationAdapter{fakeAdapter: &fakeAdapter{t: t, tm: &fakeTM{}}, rawKeys: rawKeys},
 		profile: profile,
-		input:   input,
+		input:   keyInput(t, rawKeys),
+		state:   state,
 	}
 	fixture.core = NewCore(fakeEngine(func(_ context.Context, _ unit.UnitID, text string) (Generation, error) {
-		fixture.engineCalls++
+		state.calls++
 		return Generation{Text: "訳" + text, Finish: Stop}, nil
 	}))
 	return fixture
+}
+
+func newKeyPipelineFixture(t *testing.T, rawKeys []string) (keyFixture, *keyGenerationState) {
+	t.Helper()
+	info := inference.ModelInfo{
+		ModelSHA256: [32]byte{1}, Backend: "cpu", BackendPin: "goinfer-v1", ComputeQuant: "int4", ContextTokens: 7,
+		Tokenizer:    inference.TokenizerIdentity{ModelSHA256: [32]byte{1}, BackendPin: "goinfer-v1"},
+		Template:     inference.TemplateIdentity{Family: "chatml", Source: "embedded", RendererVersion: "v1"},
+		PolicySchema: inference.PolicySchemaV1, Prompt: prompt.PlainIdentity(), Thinking: inference.ThinkingDisabled,
+		Prefill: inference.PrefillPolicy{Path: "cpu", Fast: "off"},
+	}
+	request := func(text string) (inference.GenerationRequest, error) {
+		policy, err := inference.NewGenerationPolicy(1, 2, time.Second)
+		if err != nil {
+			return inference.GenerationRequest{}, err
+		}
+		return inference.NewGenerationRequest(inference.PreparedRequest{RenderedPrompt: text, TokenIDs: make([]int, len(text)), StopIDs: []int{42}, Identity: inference.RequestIdentity{
+			ModelSHA256: info.ModelSHA256, Tokenizer: info.Tokenizer, Template: info.Template,
+			PromptSchema: info.Prompt.Schema, Prompt: info.Prompt, Thinking: info.Thinking,
+		}}, policy)
+	}
+	base, err := request("one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := NewCanonicalInferenceProfile(info, base, InferenceProfileInput{ModelID: "model", Glossary: identity.GlossaryInput{Mode: "none"}, Limits: config.DefaultLimits()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := &keyGenerationState{}
+	backend := segmentedBackend{info: info}
+	backend.commonEngine = commonEngine{
+		count: func(_ context.Context, r inference.GenerationRequest) (int, error) { return len(r.TokenIDs()), nil },
+		generate: func(_ context.Context, r inference.GenerationRequest) (inference.GenerationResult, error) {
+			state.calls++
+			return inference.GenerationResult{Text: "訳" + r.RenderedPrompt(), Finish: inference.Stop, PromptTokens: len(r.TokenIDs())}, nil
+		},
+	}
+	build := func(_ context.Context, _ unit.UnitID, text string) (inference.GenerationRequest, error) {
+		if !state.planned {
+			state.planned = true
+			if state.onPlan != nil {
+				state.onPlan()
+			}
+		}
+		return request(text)
+	}
+	fixture := keyFixture{
+		adapter: &keyRelationAdapter{fakeAdapter: &fakeAdapter{t: t, tm: &fakeTM{}}, rawKeys: rawKeys},
+		profile: profile,
+		input:   keyInput(t, rawKeys),
+		state:   state,
+	}
+	fixture.core = NewCore(NewInferenceEngine(backend, build))
+	return fixture, state
 }
 
 func keyUnitID(t *testing.T, stableID string) unit.UnitID {
@@ -233,8 +306,8 @@ func assertKeyFailure(t *testing.T, f keyFixture, store *tm.Store, db *sql.DB, s
 	if !errors.As(err, &localizeErr) || localizeErr.Phase != "tm_begin" || !errors.Is(err, cause) {
 		t.Fatalf("error=%v", err)
 	}
-	if result.TMCommitted || output.Len() != 0 || f.engineCalls != 0 || f.adapter.keyCalls != 1 || f.adapter.imports != 1 {
-		t.Fatalf("result=%+v output=%q generate=%d key calls=%d imports=%d", result, output.String(), f.engineCalls, f.adapter.keyCalls, f.adapter.imports)
+	if result.TMCommitted || output.Len() != 0 || f.state.calls != 0 || f.adapter.keyCalls != 1 || f.adapter.imports != 1 {
+		t.Fatalf("result=%+v output=%q generate=%d key calls=%d imports=%d", result, output.String(), f.state.calls, f.adapter.keyCalls, f.adapter.imports)
 	}
 	if after := readTMColumns(t, db); !maps.Equal(after, before) {
 		t.Fatalf("failure wrote rows: before=%v after=%v", before, after)
@@ -252,6 +325,10 @@ func TestTMImportKeys(t *testing.T) {
 		if err != nil || !result.TMCommitted {
 			t.Fatalf("error=%v result=%+v output=%q", err, result, output.String())
 		}
+		if f.state.calls != 2 {
+			t.Fatalf("generation calls=%d, want 2", f.state.calls)
+		}
+		t.Logf("generation calls=%d observed through shared fixture state", f.state.calls)
 		assertImageTexts(t, output.Bytes())
 		if f.adapter.imports != 1 || f.adapter.keyCalls != 1 || !f.adapter.sameImport {
 			t.Fatalf("imports=%d key calls=%d same import=%v", f.adapter.imports, f.adapter.keyCalls, f.adapter.sameImport)
@@ -351,53 +428,65 @@ func TestTMImportKeys(t *testing.T) {
 	})
 
 	t.Run("snapshot", func(t *testing.T) {
-		opaque := []string{string([]byte{0xef, 0xcd, 0xab, 0x89}), string([]byte{0, 0, 0, 0}), string([]byte{0xef, 0xcd, 0xab, 0x89})}
+		opaque := []string{string([]byte{0, 0, 0, 0}), string([]byte{1, 2, 3, 4}), string([]byte{1, 2, 3, 4})}
+		idA, idB := keyUnitID(t, "a"), keyUnitID(t, "b")
+		original := func() []artifact.KeyRelation {
+			return []artifact.KeyRelation{{UnitID: idA, Key: opaque[0]}, {UnitID: idA, Key: opaque[1]}, {UnitID: idA, Key: opaque[2]}}
+		}
 		t.Run("returned", func(t *testing.T) {
 			store, db := tmStoreFixture(t)
-			f := newKeyFixture(t, opaque)
-			session, err := f.adapter.Import(f.input, f.profile)
-			if err != nil {
-				t.Fatal(err)
+			f, state := newKeyPipelineFixture(t, opaque)
+			mutated := false
+			f.state.onPlan = func() {
+				mutated = true
+				f.adapter.returned[0] = artifact.KeyRelation{UnitID: idB, Key: "mutated"}
 			}
 			scope := tmScope()
-			memory := &tmExecution{store: store, scope: scope}
-			if err := memory.bindKeys(session, f.adapter); err != nil {
-				t.Fatal(err)
+			var output bytes.Buffer
+			result, err := f.core.TextWithTM(context.Background(), f.input, f.adapter, f.profile, store, scope, &output)
+			if err != nil || !result.TMCommitted {
+				t.Fatalf("error=%v result=%+v output=%q", err, result, output.String())
 			}
-			f.adapter.returned[0] = artifact.KeyRelation{UnitID: keyUnitID(t, "b"), Key: "mutated"}
-			seedImportRow(t, db, session, f.profile, scope, 0, opaque, "cached")
-			if err := memory.begin(session, f.profile); err != nil {
-				t.Fatal(err)
+			if !mutated || !state.planned || state.calls != 2 || f.adapter.returned[0].Key != "mutated" {
+				t.Fatalf("plan mutation=%v planned=%v calls=%d returned=%v", mutated, state.planned, state.calls, f.adapter.returned)
 			}
-			text, found, err := memory.run.Lookup(context.Background(), session.Units()[0].ID())
-			if err != nil || !found || text != "cached" {
-				t.Fatalf("frozen lookup found=%v text=%q error=%v", found, text, err)
+			if f.adapter.imports != 1 || f.adapter.keyCalls != 1 || !f.adapter.sameImport {
+				t.Fatalf("imports=%d key calls=%d same import=%v", f.adapter.imports, f.adapter.keyCalls, f.adapter.sameImport)
 			}
-			t.Logf("opaque/hash0/duplicate relations survived provider-slice mutation: lookup=%q", text)
+			assertImageTexts(t, output.Bytes())
+			bound := scope
+			bound.Keys = original()
+			assertRows(t, db, expectedTMRows(t, f.adapter.session, f.profile, bound, map[string]string{"a": "訳Hello", "b": "訳World"}))
+			t.Logf("planning-callback provider mutation left original opaque/hash0/duplicate relations; calls=%d", state.calls)
 		})
 		t.Run("caller", func(t *testing.T) {
 			store, db := tmStoreFixture(t)
-			f := newKeyFixture(t, opaque)
-			session, err := f.adapter.Import(f.input, f.profile)
-			if err != nil {
-				t.Fatal(err)
+			f, state := newKeyPipelineFixture(t, opaque)
+			caller := original()
+			mutated := false
+			f.state.onPlan = func() {
+				mutated = true
+				caller[0].Key = "mutated"
+				f.adapter.returned[0].Key = "mutated"
 			}
-			id := session.Units()[0].ID()
-			caller := []artifact.KeyRelation{{UnitID: id, Key: opaque[0]}, {UnitID: id, Key: opaque[1]}, {UnitID: id, Key: opaque[2]}}
-			memory := &tmExecution{store: store, scope: tm.Scope{GameNamespace: "fixture-game", ArtifactNamespace: "fixture-artifact", Keys: caller}}
-			if err := memory.bindKeys(session, f.adapter); err != nil {
-				t.Fatal(err)
+			scope := tmScope()
+			scope.Keys = caller
+			var output bytes.Buffer
+			result, err := f.core.TextWithTM(context.Background(), f.input, f.adapter, f.profile, store, scope, &output)
+			if err != nil || !result.TMCommitted {
+				t.Fatalf("error=%v result=%+v output=%q", err, result, output.String())
 			}
-			caller[0].Key, f.adapter.returned[0].Key = "mutated", "mutated"
-			seedImportRow(t, db, session, f.profile, memory.scope, 0, opaque, "cached")
-			if err := memory.begin(session, f.profile); err != nil {
-				t.Fatal(err)
+			if !mutated || !state.planned || state.calls != 2 || caller[0].Key != "mutated" || f.adapter.returned[0].Key != "mutated" {
+				t.Fatalf("plan mutation=%v planned=%v calls=%d caller=%v returned=%v", mutated, state.planned, state.calls, caller, f.adapter.returned)
 			}
-			text, found, err := memory.run.Lookup(context.Background(), id)
-			if err != nil || !found || text != "cached" {
-				t.Fatalf("frozen lookup found=%v text=%q error=%v", found, text, err)
+			if f.adapter.imports != 1 || f.adapter.keyCalls != 1 || !f.adapter.sameImport {
+				t.Fatalf("imports=%d key calls=%d same import=%v", f.adapter.imports, f.adapter.keyCalls, f.adapter.sameImport)
 			}
-			t.Logf("caller-slice mutation left frozen relations: lookup=%q", text)
+			assertImageTexts(t, output.Bytes())
+			bound := tmScope()
+			bound.Keys = original()
+			assertRows(t, db, expectedTMRows(t, f.adapter.session, f.profile, bound, map[string]string{"a": "訳Hello", "b": "訳World"}))
+			t.Logf("planning-callback caller/provider mutation left original relations; calls=%d", state.calls)
 		})
 	})
 
