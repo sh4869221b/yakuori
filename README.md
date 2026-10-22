@@ -1,10 +1,10 @@
 # Yakuori（訳織り）
 
-ゲームのID・tag・placeholder・binary構造を保持するPure Goローカライズ基盤を目指します。現在、翻訳CLIが扱う形式は全文 `text-v1` です。[Witcher 3 `.w3strings` Adapter](docs/w3strings-adapter.md)はversion162 en/jp入力・日本語出力のGo APIで、CLIには未接続です。
+ゲームのID・tag・placeholder・binary構造を保持するPure Goローカライズ基盤を目指します。翻訳CLIは全文 `text-v1` と、[Witcher 3 `.w3strings` Adapter](docs/w3strings-adapter.md)によるversion162 en/jp入力・日本語出力のbinary形式を扱います。
 
 ## 状態
 
-#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDAを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。Witcher 3形式のCLI接続、人手による訳質確認、releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
+#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDAを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。`localize --format w3strings` も同じ選択済みmodel・canonical profile・SQLite TM・Core・公開処理へ接続され、同一原文の再実行では検証済みTM候補を再利用します。CLI接続の訳文は制御用Engine（test seam）のQAで、特定の実model・実GPUによる推論品質は未確認です。人手による訳質確認、releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 
@@ -36,7 +36,23 @@ CLI・XDG namespaceは`yakuori`。旧Kotobaのコード・設定・TM・registry
 
 言語、game namespace、artifact namespaceは空でない値を明示します。CLIは値を正規化したり、file pathからnamespaceを推定したりしません。`translate` は全文をstdoutへ返します。`localize` は形式 `text` を必須とし、`--output OUT` で新規公開、`--output OUT --replace-output` で既存出力の置換、または `--in-place` で原文をbackupとして残す置換をします。`--replace-output` には `--output` が必要で、公開モードは同時指定できません。
 
-対応形式は全文を一つのunitとして扱う `text-v1` です。tagやplaceholderらしい箇所を自動検出して保護する機能はありません。現在の `DefaultLimits` はartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76、context候補4096 tokens、最大出力2048 tokensです。text-v1は一つのunitなのでsource textは最大980 UTF-8 bytesです。Witcher 3形式のCLI接続と人手による翻訳品質の受入れは未実施です。
+対応形式は全文を一つのunitとして扱う `text-v1` です。tagやplaceholderらしい箇所を自動検出して保護する機能はありません。現在の `DefaultLimits` はartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76、context候補4096 tokens、最大出力2048 tokensです。text-v1は一つのunitなのでsource textは最大980 UTF-8 bytesです。人手による翻訳品質の受入れは未実施です。
+
+## Witcher 3 w3strings翻訳
+
+`localize --format w3strings` はversion162 en/jp入力のbinary `.w3strings` 表を扱い、言語はprefixと最終suffixから判定します。`--source-language` は `en` または `ja`（binaryの `jp` は `ja` として扱います）、`--target-language` は `ja` のみです。対応していない言語・形式や別backendの指定はusage エラー（exit 2）として、model読込み前に拒否します。宣言言語が実際のheaderと一致しない場合（空表を含む）はimport段階で失敗し、TM行も出力も作られません。
+
+```sh
+./yakuori localize --format w3strings --source-language en --target-language ja --game witcher3 --artifact better-keybinds --backend cpu --output ./ja.w3strings ./en.w3strings
+./yakuori localize --format w3strings --source-language en --target-language ja --game witcher3 --artifact better-keybinds --backend cpu --output ./ja.w3strings --replace-output ./en.w3strings
+./yakuori localize --format w3strings --source-language en --target-language ja --game witcher3 --artifact better-keybinds --backend cpu --in-place ./en.w3strings
+```
+
+言語とgame・artifact namespaceの契約はtextと同じです。1つ目は新規公開、2つ目は既存outputの置換（原文は保持）、3つ目は原文をbackupとして保持した置換で、backupは原文と同じdirectoryに残ります。
+
+importされた原文のkey関係（LE4 byteのopaque keyをIDへ結び付ける多対多関係）は、その同一import sessionとしてTM scopeへ束縛されます。明示的なscope Keysを指定した場合はUnitIDとraw keyの対の多重度込み完全一致が要求され、一致しなければlookup・生成に進まず `tm_begin` で拒否します。同じ原入力・namespace・canonical profileでの再実行は、現在の検証を通したTM完全一致候補だけで再利用し、生成0を返せます。source・decoded ID・key表・profile・game・artifactが変われば誤hitしません。
+
+入力の既定上限はtextと同じartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76のままです。日本語文字が翻訳に必須ではなく、そのままのproper nameや数値も共通検証の下で有効です。実ゲームでの動作確認、訳質・GPU性能の評価、他言語・他version対応は含みません。[Adapter契約](docs/w3strings-adapter.md)を参照してください。
 
 ## Build / test / run
 

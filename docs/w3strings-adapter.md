@@ -2,9 +2,10 @@
 
 `internal/adapter/w3strings` implements the existing `localize.Adapter`
 interface. It imports the adopted version-162 en/jp subset and exports Japanese
-files from complete, validated translations. This is a Go integration contract,
-not CLI format dispatch: `translate` and `localize --format text` still handle
-whole-file text only.
+files from complete, validated translations. `localize --format w3strings`
+routes literal argv through the same selected Engine, canonical profile,
+SQLite TM, Core and publication path as text. `translate` and
+`localize --format text` remain whole-file text only.
 
 ## Supported input and identity
 
@@ -72,13 +73,24 @@ if err != nil {
 ```
 
 Use an ID from this `session.Units()`. For research fixtures, construct the
-Adapter with the explicit limits below instead of `New`. The caller must
-collect keys per unit and supply its own scope; the accessor does not populate
-`scope.Keys` automatically. `Core.FileWithTM` imports internally, so the example
-is not an automatic FileWithTM integration. The real-file test uses
-`Core.File` with a deterministic Engine and a commit observer, proving final
-file observation precedes TM commit and publication. It does not establish
-automatic SQLite candidate lookup for this format.
+Adapter with the explicit limits below instead of `New`. This manual sequence
+requires the caller to collect keys per unit and supply its own scope; the
+accessor does not populate `scope.Keys` automatically, and the example is a
+manual identity construction, not an automatic FileWithTM integration.
+
+`localize.Core.FileWithTM` binds key relations automatically instead. It
+recognizes the Adapter's `KeyRelations` capability and, immediately after the
+single Import and before planning and `TM.BeginRun`, freezes the exact
+current import's complete relations into the TM scope. A nil `scope.Keys`
+accepts the imported relations as-is. A nonnil `scope.Keys`, including an
+empty one, is an explicit multiset assertion over full UnitID/raw-key pairs
+with multiplicity: a mismatch returns `tm.ErrInvalidScope` at phase `tm_begin`
+before lookup or generation, and an equal set keeps a frozen copy of the
+imported relations. The W3 CLI and real-file tests drive `FileWithTM` with a
+controlled deterministic Engine and real SQLite, proving candidate lookup and
+revalidation, final observation before TM commit and publication, and exact
+repeat generation-zero reuse. They do not establish native GGUF inference for
+this format.
 
 ## Japanese export and final observation
 
@@ -237,4 +249,7 @@ GPL research-only boundary, historical results and current validation results
 are in the [round-trip report](research/w3strings-roundtrip.md).
 No game launch, current Next-Gen/version164, other language, largest MOD,
 model/GPU translation or human quality acceptance is claimed. Broader failure
-matrices (#21) and game/quality acceptance (#22) remain separate.
+matrices (#21) and game/quality acceptance (#22) remain separate. The W3 CLI
+and TM evidence cited above is controlled-Engine QA on owned qualified
+filesystems; a real native GGUF model running this same path is a separate,
+unrun claim.
