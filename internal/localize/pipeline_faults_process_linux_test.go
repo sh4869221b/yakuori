@@ -40,6 +40,11 @@ const (
 	pipelineBarrierModeEarlyExit      = "early-exit"
 	pipelineBarrierModeHang           = "hang"
 	pipelineBarrierModeMalformed      = "malformed"
+	// Task5 connects the same ready/release wire to the real stage-close fault.
+	// Selection remains inside the tagged test binary; there is no product flag.
+	pipelineBarrierModePipelineError  = "pipeline-error"
+	pipelineBarrierModePipelineCancel = "pipeline-cancel"
+	pipelineBarrierModePipelineRerun  = "pipeline-rerun"
 	// pipelineBarrierModeRescue schedules a case whose owning test stops after
 	// ready and never releases: only the registered cleanup can end the child.
 	pipelineBarrierModeRescue = "cleanup-rescue"
@@ -727,6 +732,8 @@ func TestPipelineHarnessChild(t *testing.T) {
 	case pipelineBarrierModeEarlyExit:
 	case pipelineBarrierModeHang:
 		awaitRelease()
+	case pipelineBarrierModePipelineError, pipelineBarrierModePipelineCancel, pipelineBarrierModePipelineRerun:
+		pipelineFaultChild(t, request, send, awaitRelease)
 	default:
 		t.Fatalf("unknown child mode %q", request.Mode)
 	}

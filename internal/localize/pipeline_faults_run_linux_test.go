@@ -88,8 +88,14 @@ func (t *pipelineHarnessTrace) mark(name string) {
 type pipelineHarnessAdapter struct {
 	Adapter
 	trace    *pipelineHarnessTrace
+	imports  int
 	exports  int
 	observes int
+}
+
+func (a *pipelineHarnessAdapter) Import(raw []byte, profile validate.Profile) (unit.Session, error) {
+	a.imports++
+	return a.Adapter.Import(raw, profile)
 }
 
 func (a *pipelineHarnessAdapter) Export(w io.Writer, session unit.Session, profile validate.Profile, accepted []validate.AcceptedTranslation) (artifact.Manifest, error) {
@@ -112,8 +118,14 @@ func (a *pipelineHarnessAdapter) Observe(reader io.Reader) (artifact.FinalObserv
 type pipelineHarnessW3Adapter struct {
 	*w3strings.Adapter
 	trace    *pipelineHarnessTrace
+	imports  int
 	exports  int
 	observes int
+}
+
+func (a *pipelineHarnessW3Adapter) Import(raw []byte, profile validate.Profile) (unit.Session, error) {
+	a.imports++
+	return a.Adapter.Import(raw, profile)
 }
 
 func (a *pipelineHarnessW3Adapter) Export(w io.Writer, session unit.Session, profile validate.Profile, accepted []validate.AcceptedTranslation) (artifact.Manifest, error) {
@@ -592,6 +604,16 @@ func (h *pipelineHarness) adapterExports() int {
 		return adapter.exports
 	case *pipelineHarnessW3Adapter:
 		return adapter.exports
+	}
+	return 0
+}
+
+func (h *pipelineHarness) adapterImports() int {
+	switch adapter := h.adapter.(type) {
+	case *pipelineHarnessAdapter:
+		return adapter.imports
+	case *pipelineHarnessW3Adapter:
+		return adapter.imports
 	}
 	return 0
 }

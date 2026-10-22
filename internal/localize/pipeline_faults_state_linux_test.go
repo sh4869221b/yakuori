@@ -83,6 +83,9 @@ type pipelineHarnessExpectation struct {
 	D0          []pipelineFixtureRow `json:"d0"`
 	D1          []pipelineFixtureRow `json:"d1"`
 	FinalRows   []pipelineFixtureRow `json:"final_rows"`
+	// StageRows are the rows already present at tm-commit.before. A first run
+	// sees D0; a repeat or a revalidation sees the pre-run rows.
+	StageRows []pipelineFixtureRow `json:"stage_rows,omitempty"`
 
 	StageRetained   bool   `json:"stage_retained"`
 	StageBytes      []byte `json:"stage_bytes,omitempty"`
@@ -127,10 +130,17 @@ func pipelineHarnessExpectationForFixture(t *testing.T, spec pipelineHarnessCase
 		expectation.RecordInstalled = true
 		expectation.RecordPhase = "published"
 		expectation.RecordOperation = "publish-rename"
-		expectation.RequiredBoundaries = pipelineHarnessPublishedBoundaries(input)
+		expectation.RequiredBoundaries = pipelineHarnessPublishedBoundaries(input, spec.mode)
 	} else {
 		expectation.StdoutBytes = slices.Clone(input.target)
 		expectation.RequiredBoundaries = pipelineHarnessStdoutBoundaries(input)
+	}
+	if spec.mode == publication.InPlace {
+		// The backup rename retains the original source bytes; the published
+		// output path itself now carries the translated artifact.
+		expectation.BackupPresent = true
+		expectation.RequiredBoundaries[pipelineBoundaryBackupRenameBefore] = 1
+		expectation.RequiredBoundaries[pipelineBoundaryBackupRenameAfter] = 1
 	}
 	return expectation
 }
@@ -169,8 +179,13 @@ func pipelineHarnessGenerateCount(input pipelineFixtureInput) int {
 	return count
 }
 
-func pipelineHarnessPublishedBoundaries(input pipelineFixtureInput) map[string]int {
+func pipelineHarnessPublishedBoundaries(input pipelineFixtureInput, mode publication.Mode) map[string]int {
 	generate := pipelineHarnessGenerateCount(input)
+	records := 2
+	if mode == publication.InPlace {
+		// prepared, source-backed-up and published records are all installed.
+		records = 3
+	}
 	return map[string]int{
 		pipelineBoundaryGenerateBefore: generate, pipelineBoundaryGenerateAfter: generate,
 		pipelineBoundaryStageWriteBefore: 1, pipelineBoundaryStageWriteAfter: 1,
@@ -179,10 +194,10 @@ func pipelineHarnessPublishedBoundaries(input pipelineFixtureInput) map[string]i
 		pipelineBoundaryObserveBefore: 1, pipelineBoundaryObserveAfter: 1,
 		pipelineBoundaryCompareFinalAfter: 1,
 		pipelineBoundaryTMCommitBefore:    1, pipelineBoundaryTMCommitAfter: 1,
-		pipelineBoundaryRecordWriteBefore: 2, pipelineBoundaryRecordWriteAfter: 2,
-		pipelineBoundaryRecordSyncBefore: 4, pipelineBoundaryRecordSyncAfter: 4,
-		pipelineBoundaryRecordCloseBefore: 2, pipelineBoundaryRecordCloseAfter: 2,
-		pipelineBoundaryRecordInstallBefore: 2, pipelineBoundaryRecordInstallAfter: 2,
+		pipelineBoundaryRecordWriteBefore: records, pipelineBoundaryRecordWriteAfter: records,
+		pipelineBoundaryRecordSyncBefore: 2 * records, pipelineBoundaryRecordSyncAfter: 2 * records,
+		pipelineBoundaryRecordCloseBefore: records, pipelineBoundaryRecordCloseAfter: records,
+		pipelineBoundaryRecordInstallBefore: records, pipelineBoundaryRecordInstallAfter: records,
 		pipelineBoundaryPublishRenameBefore: 1, pipelineBoundaryPublishRenameAfter: 1,
 		pipelineBoundaryRunCloseAfter: 1,
 	}
@@ -1170,7 +1185,13 @@ func pipelineHarnessCheckFiles(expectation pipelineHarnessExpectation, snapshot 
 	if snapshot.RecordFDClosed != expectation.RecordFDClosed {
 		problems = append(problems, fmt.Sprintf("record descriptor actually closed = %t, want %t", snapshot.RecordFDClosed, expectation.RecordFDClosed))
 	}
-	problems = append(problems, pipelineHarnessCheckLeaf("source", snapshot.Files["source"], expectation.SourceBytes)...)
+	if expectation.Mode == string(publication.InPlace) {
+		// InPlace renames the original source to the backup, so the physical
+		// counterpart of S is the backup; the source path holds the target.
+		problems = append(problems, pipelineHarnessCheckLeaf("backup(source)", snapshot.Files["backup"], expectation.SourceBytes)...)
+	} else {
+		problems = append(problems, pipelineHarnessCheckLeaf("source", snapshot.Files["source"], expectation.SourceBytes)...)
+	}
 	if expectation.Surface == "stdout" {
 		problems = append(problems, pipelineHarnessCheckLeaf("stdout", snapshot.Files["stdout"], expectation.StdoutBytes)...)
 		for _, label := range []string{"output", "stage", "record", "backup"} {
@@ -1336,8 +1357,12 @@ func pipelineHarnessDigest(raw []byte) string {
 func pipelineHarnessCheckRows(expectation pipelineHarnessExpectation, snapshot pipelineHarnessSnapshot) []string {
 	var problems []string
 	if expectation.StageCheckpoint {
-		if diff := pipelineFixtureDiff(expectation.D0, snapshot.RowsAfterStage); len(diff) != 0 {
-			problems = append(problems, "D0 rows at tm-commit.before differ: "+strings.Join(diff, ","))
+		stageRows := expectation.StageRows
+		if stageRows == nil {
+			stageRows = expectation.D0
+		}
+		if diff := pipelineFixtureDiff(stageRows, snapshot.RowsAfterStage); len(diff) != 0 {
+			problems = append(problems, "rows at tm-commit.before differ: "+strings.Join(diff, ","))
 		}
 	} else if snapshot.RowsAfterStage != nil {
 		problems = append(problems, "rows-at-stage were recorded on a surface without Stage")
