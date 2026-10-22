@@ -18,6 +18,8 @@ import (
 	"github.com/sh4869221b/yakuori/internal/validate"
 )
 
+const w3PrepareRefusal = "yakuori: localize prepare failed; TMCommitted=false; publication=not-published\n"
+
 func w3Count(n int) []byte {
 	if n < 64 {
 		return []byte{byte(n)}
@@ -166,21 +168,45 @@ func TestW3StringsCLIDispatch(t *testing.T) {
 				raw := w3Table(tt.header, []string{"Alpha.", "Beta."})
 				writeW3File(t, source, raw)
 				output := filepath.Join(dir, "output.w3strings")
+				var outputBefore []byte
 				args := []string{"localize", "--format", "w3strings", "--source-language", tt.sourceLanguage, "--target-language", "ja", "--game", "witcher3", "--artifact", "table", "--backend", tt.backend}
 				switch tt.mode {
 				case publication.Create:
 					args = append(args, "--output", output)
 				case publication.Replace:
-					writeW3File(t, output, w3Table(tt.header, []string{"Old."}))
+					outputBefore = w3Table(tt.header, []string{"Old."})
+					writeW3File(t, output, outputBefore)
 					args = append(args, "--output", output, "--replace-output")
 				case publication.InPlace:
 					output = source
 					args = append(args, "--in-place")
 				}
 				args = append(args, source)
+				supported := translationPublicationSupported(t, filepath.Dir(output))
 				var out, diag bytes.Buffer
 				code := runWithTranslationOpener(context.Background(), args, &out, &diag,
 					func() (config.Paths, error) { return paths, nil }, nil, engine.open)
+				if !supported {
+					if code != ExitFailure || out.Len() != 0 || diag.String() != w3PrepareRefusal || engine.generated != 0 || engine.closed != 1 ||
+						len(translationRows(t, paths)) != 0 {
+						t.Fatalf("code=%d stdout=%q stderr=%q generated=%d closed=%d", code, out.String(), diag.String(), engine.generated, engine.closed)
+					}
+					if current, err := os.ReadFile(source); err != nil || !bytes.Equal(current, raw) {
+						t.Fatalf("source changed: err=%v", err)
+					}
+					switch tt.mode {
+					case publication.Create:
+						if _, err := os.Lstat(output); !errors.Is(err, os.ErrNotExist) {
+							t.Fatalf("refusal produced output: %v", err)
+						}
+					case publication.Replace:
+						if current, err := os.ReadFile(output); err != nil || !bytes.Equal(current, outputBefore) {
+							t.Fatalf("existing output changed: err=%v", err)
+						}
+					}
+					t.Logf("unsupported filesystem: typed prepare refusal mode=%s backend=%s generated=0 closed=1 tm_rows=0 source/output unchanged", tt.mode, tt.backend)
+					return
+				}
 				if code != ExitOK || out.Len() != 0 || diag.Len() != 0 {
 					t.Fatalf("code=%d stdout=%q stderr=%q", code, out.String(), diag.String())
 				}
@@ -225,9 +251,24 @@ func TestW3StringsCLIDispatch(t *testing.T) {
 			}
 			output := filepath.Join(dir, "output.txt")
 			args := translationArgs("localize", "--output", output, source)
+			supported := translationPublicationSupported(t, filepath.Dir(output))
 			var out, diag bytes.Buffer
 			code := runWithTranslationOpener(context.Background(), args, &out, &diag,
 				func() (config.Paths, error) { return paths, nil }, nil, engine.open)
+			if !supported {
+				if code != ExitFailure || out.Len() != 0 || diag.String() != w3PrepareRefusal || engine.generated != 0 || engine.closed != 1 ||
+					len(translationRows(t, paths)) != 0 {
+					t.Fatalf("code=%d stdout=%q stderr=%q generated=%d closed=%d", code, out.String(), diag.String(), engine.generated, engine.closed)
+				}
+				if current, err := os.ReadFile(source); err != nil || string(current) != "Hello.\n" {
+					t.Fatalf("source changed: %q err=%v", current, err)
+				}
+				if _, err := os.Lstat(output); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("refusal produced output: %v", err)
+				}
+				t.Log("unsupported filesystem: typed prepare refusal generated=0 closed=1 tm_rows=0 source/output unchanged")
+				return
+			}
 			if code != ExitOK || out.Len() != 0 || diag.Len() != 0 || engine.generated != 1 {
 				t.Fatalf("code=%d stdout=%q stderr=%q generated=%d", code, out.String(), diag.String(), engine.generated)
 			}
@@ -291,9 +332,24 @@ func TestW3StringsCLIDispatch(t *testing.T) {
 				writeW3File(t, source, tt.raw)
 				output := filepath.Join(dir, "output.w3strings")
 				args := []string{"localize", "--format", "w3strings", "--source-language", "ja", "--target-language", "ja", "--game", "witcher3", "--artifact", "table", "--output", output, source}
+				supported := translationPublicationSupported(t, filepath.Dir(output))
 				var out, diag bytes.Buffer
 				code := runWithTranslationOpener(context.Background(), args, &out, &diag,
 					func() (config.Paths, error) { return paths, nil }, nil, engine.open)
+				if !supported {
+					if code != ExitFailure || out.Len() != 0 || diag.String() != w3PrepareRefusal || engine.generated != 0 || engine.closed != 1 ||
+						len(translationRows(t, paths)) != 0 {
+						t.Fatalf("code=%d stdout=%q stderr=%q generated=%d closed=%d", code, out.String(), diag.String(), engine.generated, engine.closed)
+					}
+					if current, err := os.ReadFile(source); err != nil || !bytes.Equal(current, tt.raw) {
+						t.Fatalf("source changed: err=%v", err)
+					}
+					if _, err := os.Lstat(output); !errors.Is(err, os.ErrNotExist) {
+						t.Fatalf("refusal produced output: %v", err)
+					}
+					t.Log("unsupported filesystem: typed prepare refusal overshadows the import rejection; generated=0 closed=1 tm_rows=0 source/output unchanged")
+					return
+				}
 				if code != ExitFailure || out.Len() != 0 || diag.String() != "yakuori: localize import failed; TMCommitted=false; publication=not-published\n" {
 					t.Fatalf("code=%d stdout=%q stderr=%q", code, out.String(), diag.String())
 				}

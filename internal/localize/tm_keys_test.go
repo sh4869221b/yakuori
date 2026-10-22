@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"github.com/sh4869221b/yakuori/internal/tm"
 	"github.com/sh4869221b/yakuori/internal/unit"
 	"github.com/sh4869221b/yakuori/internal/validate"
+	"golang.org/x/sys/unix"
 )
 
 type keyRelationAdapter struct {
@@ -363,7 +365,32 @@ func TestTMImportKeys(t *testing.T) {
 		dir := t.TempDir()
 		options := publication.Options{Source: filepath.Join(dir, "source"), Output: filepath.Join(dir, "output"), Mode: publication.Create}
 		writeFile(t, options.Source, f.input)
+		var st unix.Statfs_t
+		if err := unix.Statfs(filepath.Dir(options.Output), &st); err != nil {
+			t.Fatal(err)
+		}
+		supported := st.Type == unix.EXT4_SUPER_MAGIC || st.Type == unix.BTRFS_SUPER_MAGIC
+		before := readTMColumns(t, db)
 		result, err := f.core.FileWithTM(context.Background(), options, f.adapter, f.profile, store, scope)
+		if !supported {
+			var failure *Error
+			if !errors.Is(err, publication.ErrUnsupportedFilesystem) || !errors.As(err, &failure) || failure.Phase != "prepare" ||
+				result.TMCommitted || result.BytesWritten != 0 || result.Publication.State != publication.NotPublished ||
+				f.state.calls != 0 || f.adapter.imports != 0 || f.adapter.keyCalls != 0 {
+				t.Fatalf("unsupported filesystem: result=%+v err=%v Generate=%d imports=%d key calls=%d", result, err, f.state.calls, f.adapter.imports, f.adapter.keyCalls)
+			}
+			if current := fileBytes(t, options.Source); !bytes.Equal(current, f.input) {
+				t.Fatal("refusal changed source")
+			}
+			if _, err := os.Lstat(options.Output); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("refusal produced output: %v", err)
+			}
+			if after := readTMColumns(t, db); !maps.Equal(after, before) {
+				t.Fatalf("refusal changed rows: before=%v after=%v", before, after)
+			}
+			t.Logf("unsupported filesystem magic=0x%x: typed prepare refusal Generate=0 imports=0 key calls=0 NotPublished; source unchanged, output absent, %d rows unchanged; no publication run to close", st.Type, len(before))
+			return
+		}
 		if err != nil || !result.TMCommitted || result.Publication.State != publication.Published {
 			t.Fatalf("error=%v result=%+v", err, result)
 		}

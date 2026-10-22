@@ -34,6 +34,7 @@ import (
 	"github.com/sh4869221b/yakuori/internal/tm"
 	"github.com/sh4869221b/yakuori/internal/unit"
 	"github.com/sh4869221b/yakuori/internal/validate"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -321,16 +322,18 @@ type w3SQLiteBackend struct {
 func (b w3SQLiteBackend) Info(context.Context) (inference.ModelInfo, error) { return b.info, nil }
 
 type w3SQLiteHarness struct {
-	t       *testing.T
-	dbPath  string
-	session unit.Session
-	profile validate.Profile
-	gen     *w3SQLiteGeneration
-	core    Core
-	adapter *w3strings.Adapter
-	store   *tm.Store
-	db      *sql.DB
-	options publication.Options
+	t         *testing.T
+	dbPath    string
+	session   unit.Session
+	profile   validate.Profile
+	gen       *w3SQLiteGeneration
+	core      Core
+	adapter   *w3strings.Adapter
+	store     *tm.Store
+	db        *sql.DB
+	options   publication.Options
+	supported bool
+	magic     int64
 }
 
 func newW3SQLiteHarness(t *testing.T) *w3SQLiteHarness {
@@ -393,6 +396,11 @@ func newW3SQLiteHarness(t *testing.T) *w3SQLiteHarness {
 	if err := os.WriteFile(options.Source, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
+	var st unix.Statfs_t
+	if err := unix.Statfs(dir, &st); err != nil {
+		t.Fatal(err)
+	}
+	supported := st.Type == unix.EXT4_SUPER_MAGIC || st.Type == unix.BTRFS_SUPER_MAGIC
 	dbPath := filepath.Join(dir, "memory.db")
 	store, err := tm.Create(context.Background(), dbPath, limits)
 	if err != nil {
@@ -402,7 +410,7 @@ func newW3SQLiteHarness(t *testing.T) *w3SQLiteHarness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &w3SQLiteHarness{t: t, dbPath: dbPath, session: session, profile: profile, gen: gen, core: core, adapter: adapter, store: store, db: db, options: options}
+	f := &w3SQLiteHarness{t: t, dbPath: dbPath, session: session, profile: profile, gen: gen, core: core, adapter: adapter, store: store, db: db, options: options, supported: supported, magic: st.Type}
 	t.Cleanup(func() {
 		if err := store.Close(); err != nil {
 			t.Error(err)
@@ -430,10 +438,29 @@ func (r *w3SQLiteRun) Publish(ctx context.Context) (publication.Result, error) {
 	return r.publicationRun.Publish(ctx)
 }
 
+func (f *w3SQLiteHarness) checkUnsupported(result Result, err error, before []w3SQLiteRow, source []byte) {
+	f.t.Helper()
+	var failure *Error
+	if !errors.Is(err, publication.ErrUnsupportedFilesystem) || !errors.As(err, &failure) || failure.Phase != "prepare" ||
+		result.TMCommitted || result.BytesWritten != 0 || result.Publication.State != publication.NotPublished || len(f.gen.calls) != 0 {
+		f.t.Fatalf("unsupported filesystem: result=%+v error=%v Generate=%d", result, err, len(f.gen.calls))
+	}
+	if current := fileBytes(f.t, f.options.Source); !bytes.Equal(current, source) {
+		f.t.Fatal("refusal changed source")
+	}
+	w3SQLiteAssertNoOutput(f.t, f.options.Output)
+	if after := w3SQLiteRows(f.t, f.db); !maps.Equal(w3SQLiteRowSet(after), w3SQLiteRowSet(before)) {
+		f.t.Fatalf("refusal changed rows: before=%v after=%v", before, after)
+	}
+	f.t.Logf("unsupported filesystem magic=0x%x: typed prepare refusal Generate=0 NotPublished; source unchanged, output absent, %d rows unchanged; prepare returned no run, closure not applicable", f.magic, len(before))
+}
+
 // Same composition as FileWithTM; only the prepare seam is observed so resource
 // closure and publish counts are explicit without adding production hooks.
 func (f *w3SQLiteHarness) run(adapter Adapter) (Result, error, *w3SQLiteRun) {
 	f.t.Helper()
+	before := w3SQLiteRows(f.t, f.db)
+	source := fileBytes(f.t, f.options.Source)
 	var observed *w3SQLiteRun
 	result, err := f.core.fileWithTM(context.Background(), f.options, adapter, f.profile, nil,
 		&tmExecution{store: f.store, scope: tm.Scope{GameNamespace: w3SQLiteGame, ArtifactNamespace: w3SQLiteArtifact}},
@@ -445,6 +472,10 @@ func (f *w3SQLiteHarness) run(adapter Adapter) (Result, error, *w3SQLiteRun) {
 			observed = &w3SQLiteRun{publicationRun: real}
 			return observed, nil
 		})
+	if !f.supported {
+		f.checkUnsupported(result, err, before, source)
+		return result, err, nil
+	}
 	if observed == nil {
 		f.t.Fatalf("publication prepare seam not reached: %v", err)
 	}
@@ -609,6 +640,9 @@ func testW3SQLiteKeys(t *testing.T) {
 		baseline = append(baseline, w3SQLiteSeed(t, f.db, f.session, f.profile, stable, wrong[stable], "WRONG-"+stable))
 	}
 	result, err, run := f.run(f.adapter)
+	if !f.supported {
+		return
+	}
 	if err != nil || !result.TMCommitted || result.Publication.State != publication.Published || run.closed != 1 || run.published != 1 {
 		t.Fatalf("result=%+v error=%v run=%+v", result, err, run)
 	}
@@ -640,6 +674,9 @@ func testW3SQLiteCandidate(t *testing.T) {
 		w3SQLiteSeed(t, f.db, f.session, f.profile, stable, authoredKeys[stable], text)
 	}
 	result, err, run := f.run(f.adapter)
+	if !f.supported {
+		return
+	}
 	if err != nil || !result.TMCommitted || result.Publication.State != publication.Published || run.closed != 1 || run.published != 1 {
 		t.Fatalf("result=%+v error=%v run=%+v", result, err, run)
 	}
@@ -673,6 +710,9 @@ func testW3SQLiteCandidateThenFailure(t *testing.T) {
 	_, authoredKeys := w3SQLiteAuthored()
 	baseline := []w3SQLiteRow{w3SQLiteSeed(t, f.db, f.session, f.profile, "0", authoredKeys["0"], "")}
 	result, err, run := f.run(f.adapter)
+	if !f.supported {
+		return
+	}
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("failure cause lost: %v", err)
 	}
@@ -702,6 +742,9 @@ func testW3SQLiteCandidateOutputLimit(t *testing.T) {
 		baseline = append(baseline, w3SQLiteSeed(t, f.db, f.session, f.profile, stable, authoredKeys[stable], seeds[stable]))
 	}
 	result, err, run := f.run(f.adapter)
+	if !f.supported {
+		return
+	}
 	if err == nil {
 		t.Fatalf("common-valid oversized candidate exported: %+v", result)
 	}
@@ -728,6 +771,9 @@ func testW3SQLiteObservedBeforeCommit(t *testing.T) {
 		}
 	}}
 	result, err, run := f.run(wrapper)
+	if !f.supported {
+		return
+	}
 	if err != nil || !result.TMCommitted || result.Publication.State != publication.Published || !wrapper.observed || run.closed != 1 || run.published != 1 {
 		t.Fatalf("result=%+v error=%v run=%+v observed=%v", result, err, run, wrapper.observed)
 	}
@@ -745,6 +791,9 @@ func testW3SQLiteStageTamper(t *testing.T) {
 	baseline := []w3SQLiteRow{w3SQLiteSeed(t, f.db, f.session, f.profile, "2", [][]byte{{0xde, 0xad, 0xbe, 0xef}}, "WRONG-STAGE")}
 	wrapper := &w3SQLiteAdapter{Adapter: f.adapter, t: t, tamper: true}
 	result, err, run := f.run(wrapper)
+	if !f.supported {
+		return
+	}
 	if !errors.Is(err, artifact.ErrFinalMismatch) {
 		t.Fatalf("table-order tamper not rejected: %v", err)
 	}
@@ -767,6 +816,9 @@ func testW3SQLiteObserveError(t *testing.T) {
 	baseline := []w3SQLiteRow{w3SQLiteSeed(t, f.db, f.session, f.profile, "1", nil, "WRONG-OBSERVE")}
 	wrapper := &w3SQLiteAdapter{Adapter: f.adapter, t: t, observeErr: sentinel}
 	result, err, run := f.run(wrapper)
+	if !f.supported {
+		return
+	}
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("observe cause lost: %v", err)
 	}
@@ -796,6 +848,9 @@ func testW3SQLiteCommitError(t *testing.T) {
 	}
 	wrapper := &w3SQLiteAdapter{Adapter: f.adapter, t: t}
 	result, err, run := f.run(wrapper)
+	if !f.supported {
+		return
+	}
 	if err == nil || !strings.Contains(w3SQLitePhase(t, err, "commit", "").Err.Error(), "reject w3 sqlite insert") {
 		t.Fatalf("commit abort cause lost: %v", err)
 	}
