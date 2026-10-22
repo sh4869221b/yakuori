@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -249,6 +250,135 @@ func pipelineFaultChildStateAt(t *testing.T, root string) pipelineFaultChildStat
 	return state
 }
 
+// pipelineFaultReadRowsAfterWait preserves the raw SQLite database and every
+// sidecar before the first read-only open, then reads all four columns after
+// the child has been reaped. The child JSON never supplies these final rows.
+func pipelineFaultReadRowsAfterWait(t *testing.T, root, label string) []pipelineFixtureRow {
+	t.Helper()
+	dbPath := filepath.Join(root, "tm.db")
+	sidecars := map[string]string{}
+	for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
+		raw, err := os.ReadFile(dbPath + suffix)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			sidecars[suffix] = "ENOENT"
+		case err != nil:
+			t.Fatal(err)
+		default:
+			sidecars[suffix] = fmt.Sprintf("bytes=%d", len(raw))
+			pipelineHarnessSave(t, label+"-tm.db"+suffix, raw)
+		}
+	}
+	pipelineHarnessSaveJSON(t, label+"-sidecars.json", sidecars)
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	rows, err := db.Query("SELECT key_schema, source_identity, translation_profile, translated_text FROM tm ORDER BY source_identity, translation_profile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	var result []pipelineFixtureRow
+	for rows.Next() {
+		var schema int
+		var source, profile []byte
+		var text string
+		if err := rows.Scan(&schema, &source, &profile, &text); err != nil {
+			t.Fatal(err)
+		}
+		result = append(result, pipelineFixtureRow{schema, hex.EncodeToString(source), hex.EncodeToString(profile), text})
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	var integrity string
+	if err := db.QueryRow("PRAGMA integrity_check").Scan(&integrity); err != nil || integrity != "ok" {
+		t.Fatalf("post-Wait SQLite integrity=%q error=%v", integrity, err)
+	}
+	pipelineHarnessSaveJSON(t, label+"-rows-postwait.json", result)
+	return result
+}
+
+func pipelineFaultRunDirs(t *testing.T, root string) []string {
+	t.Helper()
+	dirs, err := filepath.Glob(filepath.Join(root, ".yakuori-run-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(dirs)
+	return dirs
+}
+
+// pipelineFaultCaptureAfterWait derives the final snapshot from actual files
+// and SQLite only. The child JSON contributes causal facts (reached boundary,
+// injection, while-alive Close/flock and Result/Error), never final files/rows.
+func pipelineFaultCaptureAfterWait(t *testing.T, root string, child pipelineFaultChildState, expectation pipelineHarnessExpectation, label string) pipelineHarnessSnapshot {
+	t.Helper()
+	snapshot := child.Snapshot
+	snapshot.Case, snapshot.Kind, snapshot.Mode, snapshot.Surface = expectation.Case, expectation.Kind, expectation.Mode, expectation.Surface
+	snapshot.AuthoredD0 = slices.Clone(expectation.D0)
+	snapshot.AuthoredD1 = slices.Clone(expectation.D1)
+	paths := publication.PipelineFaultPaths{Stage: child.Snapshot.Files["stage"].Path, Record: child.Snapshot.Files["record"].Path}
+	pipelineLocateRunPaths(&paths, root)
+	locations := map[string]string{"source": filepath.Join(root, "source"), "output": filepath.Join(root, "output")}
+	if paths.Stage != "" {
+		locations["stage"] = paths.Stage
+	}
+	if paths.Record != "" {
+		locations["record"] = paths.Record
+	}
+	if path := child.Snapshot.Files["backup"].Path; path != "" {
+		locations["backup"] = path
+	}
+	snapshot.Files = map[string]pipelineHarnessFile{}
+	manifest := map[string]any{}
+	for _, key := range []string{"source", "output", "stage", "record", "backup"} {
+		path := locations[key]
+		if path == "" {
+			snapshot.Files[key] = pipelineHarnessFile{}
+			manifest[key] = map[string]any{"path": "", "exists": false}
+			continue
+		}
+		file, err := pipelineHarnessReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot.Files[key] = file
+		manifest[key] = map[string]any{"path": path, "exists": file.Exists, "size": file.Size, "dev": file.Dev, "inode": file.Inode, "mount_id": file.MountID, "mode": file.Mode, "nlink": file.Nlink}
+		if file.Exists {
+			pipelineHarnessSave(t, label+"-"+key+".bin", file.Bytes)
+		}
+	}
+	pipelineHarnessSaveJSON(t, label+"-files.json", manifest)
+	snapshot.Record = nil
+	if record := snapshot.Files["record"]; record.Exists {
+		if err := json.Unmarshal(record.Bytes, &snapshot.Record); err != nil {
+			t.Fatalf("actual installed record: %v", err)
+		}
+	}
+	snapshot.RecordInstalled = snapshot.Files["record"].Exists && snapshot.Record != nil &&
+		snapshot.Record.Phase == "published" && snapshot.Result.Publication.State == publication.Published
+	if snapshot.RecordInstalled {
+		snapshot.InstallBasis = "postwait physical record and Published result; install callback unobserved"
+	}
+	snapshot.Rows = pipelineFaultReadRowsAfterWait(t, root, label)
+	snapshot.Filesystem = pipelineHarnessFilesystem(t, filepath.Join(root, "source"))
+	snapshot.Certainty, snapshot.CertaintyBasis = pipelineHarnessObserveCertainty(snapshot)
+	snapshot.Outcome = pipelineHarnessObserveOutcome(snapshot)
+	pipelineHarnessSaveJSON(t, label+"-postwait-state.json", snapshot)
+	return snapshot
+}
+
 func pipelineFaultExpectation(t *testing.T, spec pipelineHarnessCase, f *pipelineFixture) pipelineHarnessExpectation {
 	t.Helper()
 	expectation := pipelineHarnessExpectationForFixture(t, spec, f)
@@ -433,15 +563,7 @@ func testPipelineHarnessFaultProcess(t *testing.T, kind, stimulus string, rerun 
 		t.Fatalf("fault child lifecycle mismatch: %+v", cleanup)
 	}
 	state := pipelineFaultChildStateAt(t, root)
-	snapshot := state.Snapshot
-	snapshot.Case = expectation.Case
-	snapshot.Kind = kind
-	snapshot.Mode = string(publication.Replace)
-	snapshot.Surface = "file"
-	snapshot.AuthoredD0 = slices.Clone(expectation.D0)
-	snapshot.AuthoredD1 = slices.Clone(expectation.D1)
-	snapshot.Certainty, snapshot.CertaintyBasis = pipelineHarnessObserveCertainty(snapshot)
-	snapshot.Outcome = pipelineHarnessObserveOutcome(snapshot)
+	snapshot := pipelineFaultCaptureAfterWait(t, root, state, expectation, "process-"+kind+"-"+stimulus)
 	snapshot.Exit = fmt.Sprintf("exit=%d signaled=%t signal=%s", cleanup.ExitStatus, cleanup.Signaled, cleanup.Signal)
 	snapshot.Signal = fmt.Sprintf("%s", cleanup.Signal)
 	snapshot.Reaped = fmt.Sprintf("actual Wait confirmed: wait_calls=%d pid/group/proc absent", cleanup.WaitCalls)
@@ -477,7 +599,7 @@ func testPipelineHarnessFaultProcess(t *testing.T, kind, stimulus string, rerun 
 		return
 	}
 	beforeStage := snapshot.Files["stage"]
-	beforeRunDirs := state.RunDirs
+	beforeRunDirs := pipelineFaultRunDirs(t, root)
 	if len(beforeRunDirs) != 1 {
 		t.Fatalf("fault run dirs=%v, want one retained run", beforeRunDirs)
 	}
@@ -491,7 +613,10 @@ func testPipelineHarnessFaultProcess(t *testing.T, kind, stimulus string, rerun 
 		t.Fatalf("rerun lifecycle mismatch: %+v", rerunCleanup)
 	}
 	rerunState := pipelineFaultChildStateAt(t, root)
-	rerunSnapshot := rerunState.Snapshot
+	rerunSnapshot := pipelineFaultCaptureAfterWait(t, root, rerunState, expectation, "process-"+kind+"-rerun")
+	rerunSnapshot.Exit = fmt.Sprintf("exit=%d signaled=%t signal=%s", rerunCleanup.ExitStatus, rerunCleanup.Signaled, rerunCleanup.Signal)
+	rerunSnapshot.Reaped = fmt.Sprintf("actual Wait confirmed: wait_calls=%d pid/group/proc absent", rerunCleanup.WaitCalls)
+	rerunSnapshot.Rerun = "typed missing-record refusal; old stage not republished"
 	if rerunState.ErrorPhase != "prepare" || rerunState.RecoveryReason != "invalid or missing operation record" ||
 		!rerunState.InvalidRecord || !rerunState.NotExist {
 		t.Fatalf("rerun refusal phase=%q reason=%q invalid_record=%t not_exist=%t",
@@ -500,8 +625,8 @@ func testPipelineHarnessFaultProcess(t *testing.T, kind, stimulus string, rerun 
 	if rerunState.GenerateCalls != 0 {
 		t.Fatalf("rerun generated %d unit(s), want 0", rerunState.GenerateCalls)
 	}
-	if !slices.Equal(rerunState.RunDirs, beforeRunDirs) {
-		t.Fatalf("rerun changed retained run dirs: before=%v after=%v", beforeRunDirs, rerunState.RunDirs)
+	if afterRunDirs := pipelineFaultRunDirs(t, root); !slices.Equal(afterRunDirs, beforeRunDirs) {
+		t.Fatalf("rerun changed retained run dirs: before=%v after=%v", beforeRunDirs, afterRunDirs)
 	}
 	for _, label := range []string{"source", "output", "stage"} {
 		before, after := snapshot.Files[label], rerunSnapshot.Files[label]
@@ -526,7 +651,7 @@ func testPipelineHarnessFaultProcess(t *testing.T, kind, stimulus string, rerun 
 	pipelineHarnessSaveJSON(t, "process-"+kind+"-rerun-refusal.json", map[string]any{
 		"phase": rerunState.ErrorPhase, "recovery_reason": rerunState.RecoveryReason,
 		"invalid_record": rerunState.InvalidRecord, "not_exist": rerunState.NotExist,
-		"generate_calls": rerunState.GenerateCalls, "run_dirs": rerunState.RunDirs,
+		"generate_calls": rerunState.GenerateCalls, "run_dirs": pipelineFaultRunDirs(t, root),
 		"cleanup": rerunCleanup,
 	})
 	t.Logf("fresh child rerun typed refusal phase=%s reason=%q; D0/S/O/stage and the single run dir unchanged; no old-stage publish",

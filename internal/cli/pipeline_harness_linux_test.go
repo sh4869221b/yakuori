@@ -58,6 +58,9 @@ type cliPublishedRecord struct {
 	LastCompletedOperation string `json:"last_completed_operation"`
 }
 
+// Task5 shares the authored text fixture T, not the shorter legacy CLI text.
+const cliAuthoredTranslation = "訳文。\n"
+
 type cliHarnessResult struct {
 	code       int
 	command    translationCommand
@@ -76,6 +79,7 @@ func runCLITranslate(t *testing.T) cliHarnessResult {
 	t.Helper()
 	dir := t.TempDir()
 	command, paths, engine := translationFixtureAt(t, dir, "Hello.\n")
+	engine.text = cliAuthoredTranslation
 	var out bytes.Buffer
 	writer := &cliReachedWriter{}
 	code := runWithTranslationOpener(context.Background(), translationArgs("translate", command.options.Source),
@@ -90,6 +94,7 @@ func runCLILocalizeCloseFault(t *testing.T, writerErr error) cliHarnessResult {
 	t.Helper()
 	dir := t.TempDir()
 	command, paths, engine := translationFixtureAt(t, dir, "Hello.\n")
+	engine.text = cliAuthoredTranslation
 	output := filepath.Join(dir, "output")
 	wrapper := &cliCloseFaultEngine{translationEngine: engine, err: syscall.EIO}
 	writer := &cliReachedWriter{err: writerErr}
@@ -141,7 +146,7 @@ func TestPipelineHarnessCLI(t *testing.T) {
 	t.Run("translate-text-stdout", func(t *testing.T) {
 		// Given: the existing CLI fixture with the real common Engine/Core/SQLite.
 		result := runCLITranslate(t)
-		want := []byte("訳文")
+		want := []byte(cliAuthoredTranslation)
 		// Then: the public text stdout path delivers exactly the authored bytes.
 		if result.code != ExitOK || !bytes.Equal(result.stdout.Bytes(), want) || result.writer.target.Len() != 0 {
 			t.Fatalf("code=%d stdout=%q stderr=%q", result.code, result.stdout.String(), result.writer.target.String())
@@ -153,7 +158,7 @@ func TestPipelineHarnessCLI(t *testing.T) {
 		key := expectedTranslationKey(t, translationTMInput{
 			command: result.command, modelID: "selected-model", source: []byte("Hello.\n"),
 		}, result.engine)
-		if len(rows) != 1 || !rows[0].matches(key, "訳文") {
+		if len(rows) != 1 || !rows[0].matches(key, cliAuthoredTranslation) {
 			t.Fatalf("rows=%v, want the authored key with the translated bytes", rows)
 		}
 		pipelineCLISave(t, "stdout.bin", want)
@@ -205,11 +210,11 @@ func TestPipelineHarnessCLI(t *testing.T) {
 				t.Fatalf("source=%q error=%v", source, err)
 			}
 			output, err := os.ReadFile(result.output)
-			if err != nil || string(output) != "訳文" {
+			if err != nil || string(output) != cliAuthoredTranslation {
 				t.Fatalf("output=%q error=%v", output, err)
 			}
 			key := cliExpectedKey(t, result)
-			if len(result.rows) != 1 || !result.rows[0].matches(key, "訳文") {
+			if len(result.rows) != 1 || !result.rows[0].matches(key, cliAuthoredTranslation) {
 				t.Fatalf("rows=%v, want one committed row despite the close failure", result.rows)
 			}
 			if result.record.Phase != "published" || result.record.LastCompletedOperation != "publish-rename" {

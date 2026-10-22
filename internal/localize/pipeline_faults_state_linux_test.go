@@ -804,23 +804,27 @@ type pipelineHarnessSnapshot struct {
 	BoundKeys      []string                     `json:"bound_keys,omitempty"`
 	KeyProvider    bool                         `json:"key_provider"`
 
-	Record          *pipelineHarnessRecord        `json:"record,omitempty"`
-	RecordClosed    bool                          `json:"record_closed"`
-	RecordInstalled bool                          `json:"record_installed"`
-	StageClosed     bool                          `json:"stage_closed"`
-	TMCommitted     bool                          `json:"tm_committed"`
-	ResultPresent   bool                          `json:"result_present"`
-	Result          Result                        `json:"result"`
-	Error           string                        `json:"error,omitempty"`
-	Certainty       pipelineHarnessCertaintyValue `json:"certainty"`
-	CertaintyBasis  []string                      `json:"certainty_basis"`
-	StdoutBytes     int                           `json:"stdout_bytes"`
-	Exit            string                        `json:"exit"`
-	Signal          string                        `json:"signal"`
-	Rerun           string                        `json:"rerun"`
-	Reaped          string                        `json:"reaped"`
-	Outcome         string                        `json:"outcome"`
-	Filesystem      string                        `json:"filesystem"`
+	Record          *pipelineHarnessRecord `json:"record,omitempty"`
+	RecordClosed    bool                   `json:"record_closed"`
+	RecordInstalled bool                   `json:"record_installed"`
+	// InstallBasis is set only for a public capture where the install callback
+	// is unobserved: the physical installed record and Published result are the
+	// evidence. Wrapped captures leave it empty and keep the hook requirement.
+	InstallBasis   string                        `json:"install_basis,omitempty"`
+	StageClosed    bool                          `json:"stage_closed"`
+	TMCommitted    bool                          `json:"tm_committed"`
+	ResultPresent  bool                          `json:"result_present"`
+	Result         Result                        `json:"result"`
+	Error          string                        `json:"error,omitempty"`
+	Certainty      pipelineHarnessCertaintyValue `json:"certainty"`
+	CertaintyBasis []string                      `json:"certainty_basis"`
+	StdoutBytes    int                           `json:"stdout_bytes"`
+	Exit           string                        `json:"exit"`
+	Signal         string                        `json:"signal"`
+	Rerun          string                        `json:"rerun"`
+	Reaped         string                        `json:"reaped"`
+	Outcome        string                        `json:"outcome"`
+	Filesystem     string                        `json:"filesystem"`
 
 	AuthoredD0 []pipelineFixtureRow `json:"authored_d0"`
 	AuthoredD1 []pipelineFixtureRow `json:"authored_d1"`
@@ -938,7 +942,18 @@ func (h *pipelineHarness) snapshot(exp pipelineHarnessExpectation) (pipelineHarn
 		}
 		snapshot.Record = &record
 	}
-	snapshot.RecordInstalled = snapshot.Files["record"].Exists && snapshot.Reached[pipelineBoundaryRecordInstallAfter] > 0
+	if h.trace == nil {
+		// The public path installs no hooks, so a completed install callback is
+		// unobservable. Keep that distinction explicit: the physical record and
+		// the real Published result are the only install evidence here.
+		snapshot.RecordInstalled = snapshot.Files["record"].Exists && snapshot.Record != nil &&
+			snapshot.Record.Phase == "published" && snapshot.Result.Publication.State == publication.Published
+		if snapshot.RecordInstalled {
+			snapshot.InstallBasis = "physical published record and Published result; install callback unobserved on the public path"
+		}
+	} else {
+		snapshot.RecordInstalled = snapshot.Files["record"].Exists && snapshot.Reached[pipelineBoundaryRecordInstallAfter] > 0
+	}
 	snapshot.StdoutBytes = len(snapshot.Files["stdout"].Bytes)
 	snapshot.Outcome = pipelineHarnessObserveOutcome(snapshot)
 	snapshot.Certainty, snapshot.CertaintyBasis = pipelineHarnessObserveCertainty(snapshot)
@@ -1213,11 +1228,11 @@ func pipelineHarnessCheckFiles(expectation pipelineHarnessExpectation, snapshot 
 	if record.Exists != expectation.RecordInstalled {
 		problems = append(problems, fmt.Sprintf("record presence = %t, want installed=%t", record.Exists, expectation.RecordInstalled))
 	}
-	installed := record.Exists && snapshot.Reached[pipelineBoundaryRecordInstallAfter] > 0
+	installed := record.Exists && (snapshot.Reached[pipelineBoundaryRecordInstallAfter] > 0 || snapshot.InstallBasis != "")
 	if snapshot.RecordInstalled != installed {
 		problems = append(problems, fmt.Sprintf("record installed claim = %t, physical install evidence = %t", snapshot.RecordInstalled, installed))
 	}
-	if snapshot.RecordInstalled && !snapshot.RecordClosed {
+	if snapshot.RecordInstalled && snapshot.InstallBasis == "" && !snapshot.RecordClosed {
 		problems = append(problems, "record installation was claimed without a completed Close")
 	}
 	backup := snapshot.Files["backup"]

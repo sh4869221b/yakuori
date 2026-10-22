@@ -233,6 +233,13 @@ func testPipelineFixtureFile(t *testing.T, kind string, mode pipelineFixtureMode
 		publicSnapshot.Record.Phase != "published" || publicSnapshot.Record.LastCompletedOperation != "publish-rename" {
 		t.Fatalf("public record is not the installed published record: %+v", publicSnapshot.Record)
 	}
+	if !publicSnapshot.RecordInstalled || publicSnapshot.InstallBasis == "" {
+		t.Fatalf("public capture does not report the physical installed record: installed=%t basis=%q",
+			publicSnapshot.RecordInstalled, publicSnapshot.InstallBasis)
+	}
+	if publicSnapshot.Reached[pipelineBoundaryRecordInstallAfter] != 0 {
+		t.Fatal("public capture fabricated an install callback marker")
+	}
 	if problems := pipelineHarnessCheckRecord(publicExpectation, publicSnapshot); len(problems) != 0 {
 		t.Fatalf("public record identity/state differs: %v", problems)
 	}
@@ -499,6 +506,9 @@ func testPipelineFixtureTextInPlaceRerun(t *testing.T) {
 		t.Fatalf("first backup=%q error=%v", raw, err)
 	}
 	firstRows := pipelineFixtureReadRows(t, h.fixture.db)
+	if diff := pipelineFixtureDiff(firstExpectation.D1, firstRows); len(diff) != 0 {
+		t.Fatalf("first InPlace rows differ from the authored D1: %v", diff)
+	}
 	baseCalls := len(h.fixture.backend.calls)
 
 	// The text unit's new source is the previously translated bytes, so the
@@ -544,7 +554,7 @@ func testPipelineFixtureTextInPlaceRerun(t *testing.T) {
 		t.Fatal("the translated source identity did not change")
 	}
 	secondRow := pipelineFixtureRow{secondKey.Schema(), hex.EncodeToString(secondKey.SourceBytes()), hex.EncodeToString(secondKey.ProfileBytes()), secondTranslation}
-	wantRows := pipelineFixtureSortRows(append(slices.Clone(firstRows), secondRow))
+	wantRows := pipelineFixtureSortRows(append(slices.Clone(firstExpectation.D1), secondRow))
 	actualRows := pipelineFixtureReadRows(t, h.fixture.db)
 	pipelineFixtureSaveJSON(t, "text-in-place-second-rows.json", actualRows)
 	pipelineFixtureSaveJSON(t, "text-in-place-want-rows.json", wantRows)
