@@ -15,21 +15,65 @@ jobs:
         run: docker build --progress=plain -t yakuori-publication-probe -f ci/Dockerfile .
       - name: Non-root host filesystem and separate-mount probes
         run: |
-          mkdir -p "$RUNNER_TEMP/publication"
+          mkdir -p "$RUNNER_TEMP/publication" "$RUNNER_TEMP/publication/tmp" \
+            "$RUNNER_TEMP/publication/cache" "$RUNNER_TEMP/publication/gopath" \
+            "$RUNNER_TEMP/publication/pipeline-evidence"
           findmnt -T "$RUNNER_TEMP/publication" -o TARGET,FSTYPE,OPTIONS
+          findmnt -T "$RUNNER_TEMP/publication/tmp" -o TARGET,FSTYPE,OPTIONS
+          test -w "$RUNNER_TEMP/publication/tmp"
           docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD:/src" -v "$RUNNER_TEMP/publication:/evidence" \
             -e GOCACHE=/evidence/cache -e GOPATH=/evidence/gopath \
+            -e TMPDIR=/evidence/tmp -e GOTMPDIR=/evidence/tmp \
+            -e YAKUORI_PIPELINE_EVIDENCE=/evidence/pipeline-evidence \
             yakuori-publication-probe sh -ec '
               test "$(id -u)" != 0
               uname -sr
               go version
               stat -f -c "host filesystem: %T %t" /evidence
               test "$(stat -f -c %t /evidence)" = ef53
+              test -w /evidence/tmp
+              test -w "$YAKUORI_PIPELINE_EVIDENCE"
+              echo "qualified TMPDIR=$(stat -f -c %T /evidence/tmp) GOTMPDIR=/evidence/tmp"
+
+              run_required() {
+                label=$1
+                name=$2
+                leaves=$3
+                shift 3
+                log=/evidence/"$label".log
+                if ! "$@" >"$log" 2>&1; then cat "$log"; return 1; fi
+                cat "$log"
+                grep -q "^=== RUN   $name$" "$log"
+                grep -q "^--- PASS: $name (" "$log"
+                ! grep -Eq "^[[:space:]]*--- (FAIL|SKIP)" "$log"
+                test "$(grep -cE "^[[:space:]]*--- PASS: $name/" "$log" || true)" -eq "$leaves"
+              }
+
+              run_required bridge TestPipelineFaultBridge 2 \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/publication -run "^TestPipelineFaultBridge$" -v
+              run_required fixture-inputs TestPipelineFixtureInputs 6 \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineFixtureInputs$" -v
+              run_required fixture TestPipelineFixture 18 \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineFixture$" -v
+              run_required boundaries TestPipelineHarnessBoundaries 9 \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessBoundaries$" -v
+              run_required state TestPipelineHarnessState 28 \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessState$" -v
+              run_required barrier TestPipelineHarnessBarrier 0 \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessBarrier$" -v
+              run_required guards TestPipelineHarnessGuards 9 \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessGuards$" -v
+              run_required fault TestPipelineHarnessFault 8 \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessFault$" -v
+              run_required cli TestPipelineHarnessCLI 3 \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelineHarnessCLI$" -v
+              find "$YAKUORI_PIPELINE_EVIDENCE" -type f -printf "%p %s bytes\n" | sort
+
               TMPDIR=/evidence go test -count=1 -v ./research/publication
-              TMPDIR=/tmp go test -count=1 -v ./research/publication
+              TMPDIR=/tmp GOTMPDIR=/tmp go test -count=1 -v ./research/publication
               TMPDIR=/evidence go test -count=1 -v ./internal/publication ./internal/artifact ./internal/cli
-              TMPDIR=/tmp go test -count=1 -v ./internal/publication -run "^TestUnsupportedFilesystem$"
+              TMPDIR=/tmp GOTMPDIR=/tmp go test -count=1 -v ./internal/publication -run "^TestUnsupportedFilesystem$"
               test -z "$(gofmt -l research/publication)"
               go vet ./research/publication
               go vet ./internal/publication
