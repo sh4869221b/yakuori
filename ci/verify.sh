@@ -56,6 +56,8 @@ pipeline_require() {
  names=$2
  test_log=$3
  pass_names="$pipeline_tmp/$label.pass"
+ run_names="$pipeline_tmp/$label.run"
+ observed="$pipeline_tmp/$label.observed"
  allowed="$pipeline_tmp/$label.allowed"
  roots="$pipeline_tmp/$label.roots"
  bad=0
@@ -71,6 +73,12 @@ pipeline_require() {
  fi
  if [ -n "$(uniq -d "$pass_names")" ]; then
   echo "pipeline $label duplicated a PASS name" >&2
+  return 1
+ fi
+ grep -E '^[[:space:]]*=== RUN   ' "$test_log" \
+  | sed -E 's/^[[:space:]]*=== RUN   //' | sort >"$run_names"
+ if [ -n "$(uniq -d "$run_names")" ]; then
+  echo "pipeline $label duplicated a RUN name" >&2
   return 1
  fi
  : >"$allowed"
@@ -103,12 +111,20 @@ pipeline_require() {
    printf "%s\n" "$prefix" >>"$allowed"
   done
  done <"$names"
+ { cat "$run_names"; cat "$pass_names"; } | sort -u >"$observed"
  while IFS= read -r name; do
+  [ -n "$name" ] || continue
   grep -Fqx "$name" "$allowed" || {
-   echo "pipeline $label unexpected PASS $name" >&2
+   echo "pipeline $label unexpected terminal $name" >&2
    bad=1
   }
- done <"$pass_names"
+  runs=$(grep -Ec "^[[:space:]]*=== RUN   $name[[:space:]]*$" "$test_log" || true)
+  passes=$(grep -Ec "^[[:space:]]*--- PASS: $name[[:space:]]*[(]" "$test_log" || true)
+  if [ "$runs" -ne 1 ] || [ "$passes" -ne 1 ]; then
+   echo "pipeline $label incomplete terminal $name RUN=$runs PASS=$passes, want 1/1" >&2
+   bad=1
+  fi
+ done <"$observed"
  [ "$bad" -eq 0 ]
 }
 
