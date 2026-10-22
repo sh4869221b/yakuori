@@ -253,7 +253,7 @@ func testPipelineFaultBridgeDelegates(t *testing.T) {
 
 func testPipelineFaultBridgeCloseError(t *testing.T) {
 	r, options := bridgeRun(t, Replace, true)
-	injected := errors.New("bridge close injection")
+	injected := unix.EIO
 	var hooked *os.File
 	closeCalls := 0
 	paths := r.SetPipelineFaultHooks(PipelineFaultHooks{
@@ -290,7 +290,7 @@ func testPipelineFaultBridgeCloseError(t *testing.T) {
 	}
 
 	recordRun, recordOptions := bridgeRun(t, Replace, true)
-	recordInjected := errors.New("bridge record close injection")
+	recordInjected := unix.EIO
 	var recordFD *os.File
 	recordCloseCalls := 0
 	recordRun.SetPipelineFaultHooks(PipelineFaultHooks{
