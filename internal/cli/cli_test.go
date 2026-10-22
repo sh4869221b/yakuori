@@ -203,7 +203,7 @@ func testTranslationArguments(t *testing.T) {
 			translationArgs(action, "--artifact", "", "source")[1:],
 			translationArgs(action, "--target-language", "", "source")[1:],
 			translationArgs(action, "--source-language", "", "source")[1:],
-			translationArgs(action, "--format", "w3strings", "source")[1:],
+			translationArgs(action, "--format", "binary", "source")[1:],
 		} {
 			var out, diag bytes.Buffer
 			calls := 0

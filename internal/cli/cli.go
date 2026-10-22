@@ -33,7 +33,7 @@ Commands:
   doctor     Diagnose storage; --check-model loads the selected model
   models     Import, pull, select, or verify a local GGUF model
   translate  Translate a UTF-8 text file to stdout
-  localize   Translate a UTF-8 text file to a published file
+  localize   Translate a UTF-8 text or binary W3 strings file to a published file
 
 Options:
   -h, --help Show this help
@@ -56,6 +56,11 @@ func run(args []string, stdout, stderr io.Writer, resolve func() (config.Paths, 
 type fileRunner func(context.Context, publication.Options) (localize.Result, error)
 
 func runWithPipeline(ctx context.Context, args []string, stdout, stderr io.Writer, resolve func() (config.Paths, error), runner fileRunner) int {
+	return runWithTranslationOpener(ctx, args, stdout, stderr, resolve, runner, nil)
+}
+
+// runWithTranslationOpener is the single pipeline body. A nil opener selects the resolved model registry.
+func runWithTranslationOpener(ctx context.Context, args []string, stdout, stderr io.Writer, resolve func() (config.Paths, error), runner fileRunner, open selectedEngineOpener) int {
 	fail := func(code int, message string) int {
 		// A failed diagnostic write must still return failure.
 		_, _ = fmt.Fprintf(stderr, "yakuori: %s\n", message)
@@ -86,7 +91,10 @@ func runWithPipeline(ctx context.Context, args []string, stdout, stderr io.Write
 			if err != nil {
 				return reportPipeline(stderr, localize.Result{}, &localize.Error{Phase: "config", Err: err})
 			}
-			result, err := command.execute(ctx, stdout, paths, models.New(paths).OpenSelected)
+			if open == nil {
+				open = models.New(paths).OpenSelected
+			}
+			result, err := command.execute(ctx, stdout, paths, open)
 			return reportPipeline(stderr, result, err)
 		}
 		n, err := io.WriteString(stdout, help)
@@ -142,15 +150,14 @@ func reportPipeline(stderr io.Writer, result localize.Result, err error) int {
 }
 
 type translationCommand struct {
-	action, sourceLanguage, targetLanguage, backend string
-	scope                                           tm.Scope
-	options                                         publication.Options
+	action, format, sourceLanguage, targetLanguage, backend string
+	scope                                                   tm.Scope
+	options                                                 publication.Options
 }
 
 func parseTranslation(action string, args []string) (translationCommand, string, error) {
-	command := translationCommand{action: action}
+	command := translationCommand{action: action, format: "text"}
 	var output string
-	var format string
 	var replaceOutput, inPlace bool
 	var outputSpecified, replaceSpecified, inPlaceSpecified bool
 	var help strings.Builder
@@ -162,14 +169,20 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 	flags.StringVar(&command.scope.ArtifactNamespace, "artifact", "", "required artifact namespace")
 	flags.StringVar(&command.backend, "backend", "cpu", "cpu or cuda")
 	if action == "localize" {
-		flags.StringVar(&format, "format", "", "required format: text")
+		flags.StringVar(&command.format, "format", "", "required format: text or w3strings (binary Witcher 3 table)")
 		flags.StringVar(&output, "output", "", "write the result to OUT")
 		flags.BoolVar(&replaceOutput, "replace-output", false, "replace OUT atomically when it exists")
 		flags.BoolVar(&inPlace, "in-place", false, "replace SOURCE while retaining an original backup")
 	}
 	flags.Usage = func() {
 		fmt.Fprintf(flags.Output(), "Usage: yakuori %s [options] SOURCE\n", action)
-		fmt.Fprintln(flags.Output(), "Flags precede SOURCE. SOURCE must be a regular UTF-8 text file; stdin is unsupported.")
+		if action == "localize" {
+			fmt.Fprintln(flags.Output(), "Flags precede SOURCE; stdin is unsupported.")
+			fmt.Fprintln(flags.Output(), "--format text: SOURCE must be a regular UTF-8 text file.")
+			fmt.Fprintln(flags.Output(), "--format w3strings: SOURCE must be a binary Witcher 3 w3strings table with --source-language en|ja and --target-language ja.")
+		} else {
+			fmt.Fprintln(flags.Output(), "Flags precede SOURCE. SOURCE must be a regular UTF-8 text file; stdin is unsupported.")
+		}
 		fmt.Fprintln(flags.Output(), "\nOptions:")
 		flags.PrintDefaults()
 	}
@@ -182,7 +195,13 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 	if flags.NArg() != 1 || flags.Arg(0) == "" || flags.Arg(0) == "-" ||
 		command.sourceLanguage == "" || command.targetLanguage == "" ||
 		command.scope.GameNamespace == "" || command.scope.ArtifactNamespace == "" ||
-		command.backend != "cpu" && command.backend != "cuda" || action == "localize" && format != "text" {
+		command.backend != "cpu" && command.backend != "cuda" {
+		return command, "", errInvalidLocalizeArguments
+	}
+	if action == "localize" && command.format != "text" && command.format != "w3strings" {
+		return command, "", errInvalidLocalizeArguments
+	}
+	if command.format == "w3strings" && (command.sourceLanguage != "en" && command.sourceLanguage != "ja" || command.targetLanguage != "ja") {
 		return command, "", errInvalidLocalizeArguments
 	}
 	command.options.Source = flags.Arg(0)

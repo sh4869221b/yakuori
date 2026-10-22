@@ -31,6 +31,11 @@ func (c Core) text(ctx context.Context, input []byte, adapter Adapter, profile v
 	if err != nil {
 		return result, &Error{Phase: "import", Err: err}
 	}
+	if memory != nil {
+		if err := memory.bindKeys(session, adapter); err != nil {
+			return result, &Error{Phase: "tm_begin", Err: err}
+		}
+	}
 	accepted, err := c.generate(ctx, session, profile, memory)
 	if err != nil {
 		return result, err

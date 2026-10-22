@@ -9,12 +9,14 @@ import (
 	"testing"
 
 	textadapter "github.com/sh4869221b/yakuori/internal/adapter/text"
+	"github.com/sh4869221b/yakuori/internal/adapter/w3strings"
 	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/identity"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/localize"
 	"github.com/sh4869221b/yakuori/internal/prompt"
 	"github.com/sh4869221b/yakuori/internal/unit"
+	"github.com/sh4869221b/yakuori/internal/validate"
 )
 
 type translationTMRow struct {
@@ -123,4 +125,76 @@ func translationTMContains(rows []translationTMRow, key identity.ExactKey, text 
 		}
 	}
 	return false
+}
+
+type w3TMInput struct {
+	Raw            []byte
+	SourceLanguage string
+	ModelID        string
+	Game           string
+	Artifact       string
+	Keys           map[string][][]byte
+	Texts          map[string]string
+}
+
+// w3ExpectedProfile rebuilds the common canonical profile from the controlled
+// engine's effective metadata, never from persisted rows.
+func w3ExpectedProfile(t *testing.T, engine inference.Engine, modelID, sourceLanguage string) validate.Profile {
+	t.Helper()
+	ctx := context.Background()
+	info, err := engine.Info(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits := config.DefaultLimits()
+	policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, limits.MaxOutputTokens, limits.RequestTimeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := engine.(requestFactory).NewRequest(ctx, prompt.Input{
+		SourceLanguage: sourceLanguage, TargetLanguage: "ja",
+	}, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := localize.NewCanonicalInferenceProfile(info, request, localize.InferenceProfileInput{
+		ModelID: modelID, Glossary: identity.GlossaryInput{Mode: "none"}, Limits: limits,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return profile
+}
+
+// expectedW3TranslationRows builds every exact key from the original fixture
+// bytes, independently authored raw key bytes and the common canonical profile.
+func expectedW3TranslationRows(t *testing.T, input w3TMInput, engine inference.Engine) []translationTMRow {
+	t.Helper()
+	profile := w3ExpectedProfile(t, engine, input.ModelID, input.SourceLanguage)
+	adapter, err := w3strings.NewForSource(input.SourceLanguage, config.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := adapter.Import(input.Raw, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := make([]translationTMRow, 0, len(session.Units()))
+	for _, u := range session.Units() {
+		stable := u.ID().StableID()
+		source, err := unit.NewSourceIdentity(session, u.ID(), input.Game, input.Artifact, input.Keys[stable])
+		if err != nil {
+			t.Fatal(err)
+		}
+		key, err := profile.ExactKey(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text, exists := input.Texts[stable]
+		if !exists {
+			t.Fatalf("no expected text for unit %s", stable)
+		}
+		rows = append(rows, translationTMRow{Schema: key.Schema(), Source: key.SourceBytes(), Profile: key.ProfileBytes(), Text: text})
+	}
+	return rows
 }

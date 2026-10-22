@@ -1,6 +1,7 @@
 package w3strings
 
 import (
+	"errors"
 	"slices"
 	"strconv"
 
@@ -16,10 +17,11 @@ const (
 )
 
 type Adapter struct {
-	limits  config.Limits
-	session unit.Session
-	source  *parsedFile
-	keys    []artifact.KeyRelation
+	limits         config.Limits
+	expectedSource string
+	session        unit.Session
+	source         *parsedFile
+	keys           []artifact.KeyRelation
 }
 
 func New() *Adapter {
@@ -34,6 +36,20 @@ func NewWithLimits(limits config.Limits) (*Adapter, error) {
 	return &Adapter{limits: limits}, nil
 }
 
+// NewForSource requires the imported header to declare canonical en or ja.
+// Binary jp still satisfies ja; other declarations are rejected here.
+func NewForSource(sourceLanguage string, limits config.Limits) (*Adapter, error) {
+	a, err := NewWithLimits(limits)
+	if err != nil {
+		return nil, err
+	}
+	if sourceLanguage != "en" && sourceLanguage != "ja" {
+		return nil, errors.New("unsupported w3strings source language")
+	}
+	a.expectedSource = sourceLanguage
+	return a, nil
+}
+
 func (a *Adapter) Import(raw []byte, _ validate.Profile) (unit.Session, error) {
 	source, err := parse(raw, a.limits.ArtifactBytes, &a.limits)
 	if err != nil {
@@ -42,6 +58,9 @@ func (a *Adapter) Import(raw []byte, _ validate.Profile) (unit.Session, error) {
 	sourceLanguage := source.language
 	if sourceLanguage == "jp" {
 		sourceLanguage = "ja"
+	}
+	if a.expectedSource != "" && sourceLanguage != a.expectedSource {
+		return unit.Session{}, errors.New("w3strings source language does not match header")
 	}
 	units := make([]unit.TranslationUnit, len(source.entries))
 	ids := make(map[uint32]unit.UnitID, len(source.entries))
