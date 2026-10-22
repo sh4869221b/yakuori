@@ -16,7 +16,11 @@ import (
 
 var ErrConflict = errors.New("translation candidate changed since lookup")
 
-func (r *Run) Commit(ctx context.Context, session unit.Session, profile validate.Profile, accepted []validate.AcceptedTranslation) (err error) {
+func (r *Run) Commit(ctx context.Context, session unit.Session, profile validate.Profile, accepted []validate.AcceptedTranslation) error {
+	return r.commit(ctx, session, profile, accepted, nil)
+}
+
+func (r *Run) commit(ctx context.Context, session unit.Session, profile validate.Profile, accepted []validate.AcceptedTranslation, beforeCommit func(context.Context, *sql.Conn) error) (err error) {
 	if r.finished || r.staged == nil || !r.manifestChecked {
 		return ErrRunState
 	}
@@ -58,6 +62,11 @@ func (r *Run) Commit(ctx context.Context, session unit.Session, profile validate
 	}()
 	for _, translation := range r.staged {
 		if err = r.commitRow(ctx, c, translation); err != nil {
+			return errors.Join(err, ctx.Err())
+		}
+	}
+	if beforeCommit != nil {
+		if err = beforeCommit(ctx, c); err != nil {
 			return errors.Join(err, ctx.Err())
 		}
 	}
