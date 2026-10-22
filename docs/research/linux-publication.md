@@ -566,9 +566,12 @@ wrong boundary, occurrence or PID before releasing anything. At `ready` the
 parent also records that the child is alive and that the stage descriptor and
 flock are still open/held (`stage_fd_open_at_ready`, `lock_held_at_ready`).
 
-The parent then writes one release byte: `G` for success, or the explicit
-error/cancel stimulus. A hook that performed the real operation returns nil; a
-later cancellation or pause is a separate stimulus. The child emits `injected`
+The request mode, including a stage-close error or cancellation stimulus, is
+selected before `Start`. After `ready`, the parent writes exactly one release
+byte `G` in every mode, and the already-selected mode makes the child behave as
+happy, error or cancel. There is no separate error or cancel release byte, and
+a hook that performed the real operation returns nil once released. The child
+emits `injected`
 and `returned`; the parent reads to EOF, calls `Wait` exactly once, and checks
 PID, process group and `/proc` absence plus zero residual notices. The
 post-Wait evidence records `child_stage_fd_closed`, `child_lock_released` and

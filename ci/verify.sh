@@ -57,6 +57,7 @@ pipeline_require() {
  test_log=$3
  pass_names="$pipeline_tmp/$label.pass"
  allowed="$pipeline_tmp/$label.allowed"
+ roots="$pipeline_tmp/$label.roots"
  bad=0
  if grep -Eq '^[[:space:]]*--- (FAIL|SKIP)' "$test_log"; then
   echo "pipeline lane reported FAIL or SKIP" >&2
@@ -73,6 +74,7 @@ pipeline_require() {
   return 1
  fi
  : >"$allowed"
+ : >"$roots"
  while IFS= read -r name; do
   [ -n "$name" ] || continue
   runs=$(grep -Ec "^[[:space:]]*=== RUN   $name[[:space:]]*$" "$test_log" || true)
@@ -80,6 +82,16 @@ pipeline_require() {
   if [ "$runs" -ne 1 ] || [ "$passes" -ne 1 ]; then
    echo "pipeline $label terminal $name RUN=$runs PASS=$passes, want 1/1" >&2
    bad=1
+  fi
+  root=${name%%/*}
+  if ! grep -Fqx "$root" "$roots"; then
+   printf "%s\n" "$root" >>"$roots"
+   root_runs=$(grep -Ec "^[[:space:]]*=== RUN   $root[[:space:]]*$" "$test_log" || true)
+   root_passes=$(grep -Ec "^[[:space:]]*--- PASS: $root[[:space:]]*[(]" "$test_log" || true)
+   if [ "$root_runs" -ne 1 ] || [ "$root_passes" -ne 1 ]; then
+    echo "pipeline $label root $root RUN=$root_runs PASS=$root_passes, want 1/1" >&2
+    bad=1
+   fi
   fi
   printf "%s\n" "$name" >>"$allowed"
   prefix=$name
