@@ -160,12 +160,7 @@ type pipelineHarnessRun struct {
 
 func (r *pipelineHarnessRun) Stage(ctx context.Context, produce func(io.Writer) error, check func(io.Reader) error) error {
 	err := r.publicationRun.Stage(ctx, func(writer io.Writer) error {
-		r.trace.mark(pipelineBoundaryStageWriteBefore)
-		produceErr := produce(writer)
-		if produceErr == nil {
-			r.trace.mark(pipelineBoundaryStageWriteAfter)
-		}
-		return produceErr
+		return produce(&pipelineHarnessStageWriter{target: writer, trace: r.trace})
 	}, check)
 	if err != nil {
 		return err
@@ -176,6 +171,23 @@ func (r *pipelineHarnessRun) Stage(ctx context.Context, produce func(io.Writer) 
 		return r.afterStage()
 	}
 	return nil
+}
+
+// pipelineHarnessStageWriter wraps the real writer that Stage hands to
+// Adapter.Export. Each actual Write is one occurrence, so a producer that
+// writes zero or two times cannot be reported as one completed export.
+type pipelineHarnessStageWriter struct {
+	target io.Writer
+	trace  *pipelineHarnessTrace
+}
+
+func (w *pipelineHarnessStageWriter) Write(raw []byte) (int, error) {
+	w.trace.mark(pipelineBoundaryStageWriteBefore)
+	n, err := w.target.Write(raw)
+	if err == nil && n == len(raw) {
+		w.trace.mark(pipelineBoundaryStageWriteAfter)
+	}
+	return n, err
 }
 
 func (r *pipelineHarnessRun) Publish(ctx context.Context) (publication.Result, error) {
@@ -381,9 +393,15 @@ type pipelineHarness struct {
 	requestedOccurrence int
 	stimulus            string
 	injected            []string
+	afterStageHook      func() error
 
 	rowsAfterStage []pipelineFixtureRow
 	rowsAtCommit   []pipelineFixtureRow
+
+	// beforeOutput is captured from the real filesystem before the pipeline
+	// starts. The record's existing-output identity is judged against this
+	// physical pre-run capture, not against authored bytes alone.
+	beforeOutput pipelineHarnessFile
 }
 
 func newPipelineHarness(t *testing.T, spec pipelineHarnessCase, wrapped bool) *pipelineHarness {
@@ -437,6 +455,11 @@ func newPipelineHarness(t *testing.T, spec pipelineHarnessCase, wrapped bool) *p
 				t.Fatal(err)
 			}
 		}
+		captured, err := pipelineHarnessReadFile(h.options.Output)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.beforeOutput = captured
 		h.ops = newPipelineHarnessOperations(t, h.trace, h.options.Source)
 	} else {
 		h.stdoutPath = filepath.Join(parent, "stdout.bin")
@@ -473,13 +496,65 @@ func (h *pipelineHarness) execute(ctx context.Context) (Result, error) {
 	return h.result, h.runErr
 }
 
+// executeStageCloseFault runs the real file Core with an injected stage close
+// error. The bridge still performs the mandatory real Close, so the observed
+// descriptor state is physical.
+func (h *pipelineHarness) executeStageCloseFault(ctx context.Context, fault error) (Result, error) {
+	return h.executeWithHooks(ctx, "error", pipelineBoundaryStageCloseBefore, func() publication.PipelineFaultHooks {
+		hooks := h.ops.hooks()
+		stageClose := hooks.CloseStage
+		hooks.CloseStage = func(f *os.File) error {
+			if err := stageClose(f); err != nil {
+				return err
+			}
+			h.injected = append(h.injected, "close-stage-eio")
+			return fault
+		}
+		return hooks
+	})
+}
+
+// executePrecommitCancel cancels the caller context at tm-commit.before after
+// the real Stage returned nil, so the real final.commit has to reject it.
+func (h *pipelineHarness) executePrecommitCancel(ctx context.Context) (Result, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	h.afterStageHook = func() error {
+		h.rowsAfterStage = pipelineFixtureReadRows(h.t, h.fixture.db)
+		cancel()
+		h.injected = append(h.injected, "ctx-cancel")
+		return nil
+	}
+	return h.executeWithHooks(ctx, "cancel", pipelineBoundaryTMCommitBefore, h.ops.hooks)
+}
+
+func (h *pipelineHarness) executeWithHooks(ctx context.Context, stimulus, boundary string, build func() publication.PipelineFaultHooks) (Result, error) {
+	h.requestedBoundary, h.requestedOccurrence, h.stimulus = boundary, 1, stimulus
+	h.memory = &tmExecution{store: h.fixture.store, scope: h.fixture.scope}
+	prepare := func(ctx context.Context, options publication.Options) (publicationRun, error) {
+		run, err := h.prepare(ctx, options)
+		if err != nil {
+			return nil, err
+		}
+		real := run.(*pipelineHarnessRun).publicationRun.(*publication.Run)
+		real.SetPipelineFaultHooks(build())
+		return run, nil
+	}
+	h.result, h.runErr = h.core.fileWithTM(ctx, h.options, h.adapter, h.fixture.profile, nil, h.memory, prepare)
+	return h.result, h.runErr
+}
+
 func (h *pipelineHarness) prepare(ctx context.Context, options publication.Options) (publicationRun, error) {
 	real, err := publication.PrepareWithLimits(ctx, options, h.fixture.limits)
 	if err != nil {
 		return nil, err
 	}
 	h.ops.paths = real.SetPipelineFaultHooks(h.ops.hooks())
-	return &pipelineHarnessRun{publicationRun: real, trace: h.trace, afterStage: h.afterStage, publishEntry: h.commitEntry}, nil
+	afterStage := h.afterStage
+	if h.afterStageHook != nil {
+		afterStage = h.afterStageHook
+	}
+	return &pipelineHarnessRun{publicationRun: real, trace: h.trace, afterStage: afterStage, publishEntry: h.commitEntry}, nil
 }
 
 // afterStage runs at tm-commit.before: Stage, including the real CompareFinal,

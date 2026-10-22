@@ -4,6 +4,7 @@ package localize
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -207,8 +208,8 @@ func pipelineHarnessScenarioTable(t *testing.T) []pipelineHarnessExpectation {
 	w3, _ := pipelineHarnessInput(t, "w3")
 	textFixture := newPipelineFixture(t, text)
 	w3Fixture := newPipelineFixture(t, w3)
-	publishedText := pipelineHarnessExpectationForFixture(t, pipelineHarnessCase{name: "file-replace-existing/text", kind: "text", surface: "file", mode: publication.Replace}, textFixture)
-	publishedW3 := pipelineHarnessExpectationForFixture(t, pipelineHarnessCase{name: "file-replace-existing/w3", kind: "w3", surface: "file", mode: publication.Replace}, w3Fixture)
+	publishedText := pipelineHarnessExpectationForFixture(t, pipelineHarnessCase{name: "file-replace-existing/text", kind: "text", surface: "file", mode: publication.Replace, outputPresent: true}, textFixture)
+	publishedW3 := pipelineHarnessExpectationForFixture(t, pipelineHarnessCase{name: "file-replace-existing/w3", kind: "w3", surface: "file", mode: publication.Replace, outputPresent: true}, w3Fixture)
 	publishedStdout := pipelineHarnessExpectationForFixture(t, pipelineHarnessCase{name: "stdout/text", kind: "text", surface: "stdout", mode: publication.Replace}, textFixture)
 
 	precommit := publishedText
@@ -601,14 +602,33 @@ func pipelineHarnessFaultCellStatus(setup pipelineHarnessFaultSetup, boundary, s
 	case "error":
 		return pipelineHarnessNotRun, setup.note + "error cell enumerated for the fixed contract; task5 executes the minimal set"
 	case "cancel":
+		if !pipelineHarnessCancellationObserved(setup, boundary) {
+			return pipelineHarnessNA, "no context-consuming operation follows " + boundary + " on the " + setup.surface + " surface, so a cancellation there cannot be observed"
+		}
 		if boundary == pipelineBoundaryTMCommitBefore {
 			return pipelineHarnessNotRun, "ctx cancellation is contracted at tm-commit.before: Stage returns nil and the real final.commit rejects the context; task5 executes it"
 		}
-		return pipelineHarnessNA, "cancellation is contracted only at tm-commit.before; no other cancellation cell is defined (IS-4)"
+		return pipelineHarnessNotRun, "ctx cancellation at " + boundary + " is possible and unselected: the real Stage, final.commit, Publish or post-commit context gate observes it; task5 executes the minimal set"
 	case "process-stop":
 		return pipelineHarnessNotRun, "SIGKILL at this boundary is owned by the task4/5 process harness; the cell is enumerated only"
 	}
 	return pipelineHarnessNA, "no contract for stimulus " + stimulus
+}
+
+// pipelineHarnessCancellationObserved reports whether a cancellation injected at
+// boundary can be observed by a later real operation. Stage, final.commit,
+// Publish and the post-commit commit gate all read the caller context on the
+// file surface. The stdout surface has no publication Stage and its writer
+// receives no context, so only a cancellation before the TM commit is
+// observable there. Run.Close never consumes a context.
+func pipelineHarnessCancellationObserved(setup pipelineHarnessFaultSetup, boundary string) bool {
+	switch boundary {
+	case pipelineBoundaryRunCloseAfter:
+		return false
+	case pipelineBoundaryTMCommitAfter, pipelineBoundaryStdoutWriteBefore, pipelineBoundaryStdoutWriteAfter:
+		return setup.surface != "stdout"
+	}
+	return true
 }
 
 func pipelineHarnessInjectedField(boundary, stimulus string) string {
@@ -790,6 +810,10 @@ type pipelineHarnessSnapshot struct {
 	AuthoredD0 []pipelineFixtureRow `json:"authored_d0"`
 	AuthoredD1 []pipelineFixtureRow `json:"authored_d1"`
 
+	// BeforeOutput is the real pre-run capture of the publication output. It is
+	// filled from the filesystem before the pipeline runs and never from it.
+	BeforeOutput *pipelineHarnessFile `json:"before_output,omitempty"`
+
 	StageFDClosed  bool   `json:"stage_fd_closed"`
 	RecordFDClosed bool   `json:"record_fd_closed"`
 	ErrorPhase     string `json:"error_phase,omitempty"`
@@ -819,6 +843,10 @@ func (h *pipelineHarness) snapshot(exp pipelineHarnessExpectation) (pipelineHarn
 	}
 	snapshot.AuthoredD0 = slices.Clone(exp.D0)
 	snapshot.AuthoredD1 = slices.Clone(exp.D1)
+	if h.surface == "file" {
+		before := h.beforeOutput
+		snapshot.BeforeOutput = &before
+	}
 	snapshot.RequestedBoundary = h.requestedBoundary
 	snapshot.RequestedOccurrence = h.requestedOccurrence
 	snapshot.Stimulus = h.stimulus
@@ -963,6 +991,10 @@ func (s pipelineHarnessSnapshot) clone() pipelineHarnessSnapshot {
 	clone.AuthoredD0 = slices.Clone(s.AuthoredD0)
 	clone.AuthoredD1 = slices.Clone(s.AuthoredD1)
 	clone.Injected = slices.Clone(s.Injected)
+	if s.BeforeOutput != nil {
+		before := *s.BeforeOutput
+		clone.BeforeOutput = &before
+	}
 	if s.Record != nil {
 		record := *s.Record
 		if s.Record.Backup != nil {
@@ -1234,11 +1266,10 @@ func pipelineHarnessCheckRecord(expectation pipelineHarnessExpectation, snapshot
 	if expectation.OutputPresent {
 		if record.ExistingOutput.Absent || record.ExistingOutput.File == nil {
 			problems = append(problems, "record reports an absent output, but this mode requires an existing one")
-		} else if digest := pipelineHarnessDigest(existing); record.ExistingOutput.File.SHA256 != digest ||
-			record.ExistingOutput.File.Size != int64(len(existing)) ||
-			record.ExistingOutput.File.Identity.Mode&unix.S_IFMT != unix.S_IFREG ||
-			record.ExistingOutput.File.Identity.Nlink != 1 {
-			problems = append(problems, "recorded existing output identity or digest does not match the authored pre-run output")
+		} else if snapshot.BeforeOutput == nil {
+			problems = append(problems, "no real pre-run capture exists for the required old output")
+		} else {
+			problems = append(problems, pipelineHarnessCheckRecordedFile("recorded existing output", *record.ExistingOutput.File, *snapshot.BeforeOutput, snapshot.BeforeOutput.Path, existing)...)
 		}
 	} else if !record.ExistingOutput.Absent || record.ExistingOutput.File != nil {
 		problems = append(problems, "record claims an existing output for a create/absent setup")
@@ -1423,9 +1454,10 @@ func testPipelineHarnessStateValid(t *testing.T) {
 	states := make([]pipelineHarnessSnapshot, 0, len(pipelineHarnessCases()))
 	for _, spec := range pipelineHarnessCases() {
 		t.Run(spec.name, func(t *testing.T) {
-			// Given: expectation fixed before the run, from authored S/O/T/D0/D1.
+			// Given: the static table's own selected expectation, fixed before the
+			// run from authored S/O/T/D0/D1 rather than regenerated afterwards.
 			harness := newPipelineHarness(t, spec, true)
-			expectation := pipelineHarnessExpectationForFixture(t, spec, harness.fixture)
+			expectation := pipelineHarnessScenarioSelected(t, table, spec.name)
 			// When: the real wrapped pipeline runs.
 			if _, err := harness.execute(t.Context()); err != nil {
 				t.Fatalf("pipeline: %v", err)
@@ -1480,10 +1512,10 @@ func pipelineHarnessScenarioPassed(scenario pipelineHarnessExpectation, executed
 }
 
 func testPipelineHarnessStateReject(t *testing.T) {
-	// Given: one real published observation and its static expectation.
+	// Given: one real published observation and its static table expectation.
 	spec := pipelineHarnessCases()[0]
 	publishedHarness := newPipelineHarness(t, spec, true)
-	publishedExpectation := pipelineHarnessExpectationForFixture(t, spec, publishedHarness.fixture)
+	publishedExpectation := pipelineHarnessScenarioByCase(t, spec.name)
 	if _, err := publishedHarness.execute(t.Context()); err != nil {
 		t.Fatalf("published control: %v", err)
 	}
@@ -1494,19 +1526,36 @@ func testPipelineHarnessStateReject(t *testing.T) {
 	if problems := pipelineHarnessJudge(publishedExpectation, published); len(problems) != 0 {
 		t.Fatalf("valid published observation rejected: %v", problems)
 	}
+	// The negative controls are actual fault observations: a real stage close
+	// error and a real cancellation that the final commit rejects.
 	precommit := pipelineHarnessScenarioByCase(t, "precommit-stage-close/text")
-	control := pipelineHarnessPrecommitObservation(t, published, precommit)
+	stageFault := errors.New("stage close fault")
+	stageCloseHarness := newPipelineHarness(t, spec, true)
+	if _, err := stageCloseHarness.executeStageCloseFault(t.Context(), stageFault); !errors.Is(err, stageFault) {
+		t.Fatalf("stage-close fault was not reached: %v", err)
+	}
+	control, err := stageCloseHarness.snapshot(precommit)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if problems := pipelineHarnessJudge(precommit, control); len(problems) != 0 {
-		t.Fatalf("pre-commit positive control rejected: %v", problems)
+		t.Fatalf("real pre-commit stage-close control rejected: %v", problems)
 	}
 	cancelScenario := pipelineHarnessScenarioByCase(t, "precommit-cancel/text")
-	cancelControl := pipelineHarnessPrecommitObservation(t, published, cancelScenario)
+	cancelHarness := newPipelineHarness(t, spec, true)
+	if _, err := cancelHarness.executePrecommitCancel(t.Context()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("real pre-commit cancellation was not observed: %v", err)
+	}
+	cancelControl, err := cancelHarness.snapshot(cancelScenario)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if problems := pipelineHarnessJudge(cancelScenario, cancelControl); len(problems) != 0 {
-		t.Fatalf("pre-commit cancel positive control rejected: %v", problems)
+		t.Fatalf("real pre-commit cancellation control rejected: %v", problems)
 	}
 	pipelineHarnessSaveJSON(t, "reject-controls.json", map[string]any{
-		"published": published, "precommit_control": control,
-		"note": "oracle acceptance of a hypothetical not-run observation is not an execution pass; the pass count comes only from pipelineHarnessScenarioPassed",
+		"published": published, "stage_close_control": control, "cancel_control": cancelControl,
+		"note": "controls are real captured fault states; only cloned single-field corruptions of them are judged as negatives, and no execution pass follows from acceptance",
 	})
 	type mutation struct {
 		name   string
@@ -1530,7 +1579,7 @@ func testPipelineHarnessStateReject(t *testing.T) {
 			s.RecordClosed = true
 			s.Reached[pipelineBoundaryRecordCloseBefore] = 1
 		}},
-		{"certainty-from-flag", precommit, control, func(s *pipelineHarnessSnapshot) {
+		{"certainty-from-flag", cancelScenario, cancelControl, func(s *pipelineHarnessSnapshot) {
 			s.RowsAfterStage = nil
 			s.Reached[pipelineBoundaryStageCloseAfter] = 0
 			s.Certainty = pipelineHarnessNotCommitted
@@ -1611,7 +1660,7 @@ func testPipelineHarnessStateReject(t *testing.T) {
 		t.Logf("ambiguous COMMIT classified unknown with basis %v", ambiguous.CertaintyBasis)
 	})
 	t.Run("historical-precommit-rows-cannot-prove-rollback", func(t *testing.T) {
-		historical := control.clone()
+		historical := cancelControl.clone()
 		historical.Rows = slices.Clone(historical.AuthoredD1)
 		certainty, basis := pipelineHarnessObserveCertainty(historical)
 		if certainty == pipelineHarnessNotCommitted {
@@ -1623,54 +1672,18 @@ func testPipelineHarnessStateReject(t *testing.T) {
 
 func pipelineHarnessScenarioByCase(t *testing.T, name string) pipelineHarnessExpectation {
 	t.Helper()
-	for _, scenario := range pipelineHarnessScenarioTable(t) {
+	return pipelineHarnessScenarioSelected(t, pipelineHarnessScenarioTable(t), name)
+}
+
+// pipelineHarnessScenarioSelected returns the table object itself, so a valid
+// run is judged against the same expectation the static table publishes.
+func pipelineHarnessScenarioSelected(t *testing.T, table []pipelineHarnessExpectation, name string) pipelineHarnessExpectation {
+	t.Helper()
+	for _, scenario := range table {
 		if scenario.Case == name {
 			return scenario
 		}
 	}
 	t.Fatalf("scenario %s is not in the state table", name)
 	return pipelineHarnessExpectation{}
-}
-
-// pipelineHarnessPrecommitObservation builds the hypothetical pre-commit
-// observation used to judge the oracle. It carries the authored stage bytes and
-// D0 rows and is not an execution claim.
-func pipelineHarnessPrecommitObservation(t *testing.T, published pipelineHarnessSnapshot, expectation pipelineHarnessExpectation) pipelineHarnessSnapshot {
-	t.Helper()
-	snapshot := published.clone()
-	snapshot.Case = expectation.Case
-	snapshot.Files["output"] = pipelineHarnessFile{
-		Path: published.Files["output"].Path, Exists: true, Bytes: slices.Clone(expectation.OutputBytes),
-		Mode: unix.S_IFREG | 0600, Nlink: 1, Size: int64(len(expectation.OutputBytes)),
-	}
-	snapshot.Files["stage"] = pipelineHarnessFile{
-		Path: published.Files["stage"].Path, Exists: true, Bytes: slices.Clone(expectation.StageBytes),
-		Mode: unix.S_IFREG | 0600, Nlink: 1, Size: int64(len(expectation.StageBytes)),
-	}
-	delete(snapshot.Files, "record")
-	delete(snapshot.Files, "backup")
-	snapshot.Record = nil
-	snapshot.RecordInstalled = false
-	snapshot.RecordClosed = false
-	snapshot.StageClosed = false
-	snapshot.Rows = slices.Clone(expectation.D0)
-	snapshot.RowsAfterStage = nil
-	if expectation.StageCheckpoint {
-		snapshot.RowsAfterStage = slices.Clone(expectation.D0)
-	}
-	snapshot.RowsAtCommit = nil
-	snapshot.TMCommitted = false
-	snapshot.AuthoredD0 = slices.Clone(expectation.D0)
-	snapshot.AuthoredD1 = slices.Clone(expectation.D1)
-	snapshot.StageFDClosed = expectation.StageFDClosed
-	snapshot.RecordFDClosed = expectation.RecordFDClosed
-	snapshot.ErrorPhase = "stage"
-	snapshot.Reached = maps.Clone(expectation.RequiredBoundaries)
-	snapshot.Order = slices.Clone(expectation.BoundaryOrder)
-	snapshot.RecordEvents = nil
-	snapshot.Result = Result{TMCommitted: false, Publication: publication.Result{State: publication.NotPublished}}
-	snapshot.ResultPresent = true
-	snapshot.Outcome = pipelineHarnessObserveOutcome(snapshot)
-	snapshot.Certainty, snapshot.CertaintyBasis = pipelineHarnessObserveCertainty(snapshot)
-	return snapshot
 }
