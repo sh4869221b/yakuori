@@ -530,6 +530,73 @@ callback, a stale phase label, a missing record and an ambiguous commit remain
 manual-review or refusal outcomes. No automatic retry, old-stage publication,
 copy/delete fallback or evidence deletion is introduced.
 
+### Covered state table (measured 2026-10-22)
+
+This table describes the actual Issue68 lanes run against the controlled fixture
+Engine on non-root ext4 (GitHub lane requirement) or adopted Btrfs (local
+measurement). It is not a native inference, GPU or translation-quality table.
+S/O/T/D0/D1 keep the meaning above; `F0` is the pre-run final.
+
+| Surface / case | Stimulus | Outcome | Stage / source / output / backup | Record and rows | Later stages |
+| --- | --- | --- | --- | --- | --- |
+| text or W3 file, Create | none | `file-published` | stage absent; source `S`; output `T`; backup absent | installed `published`/`publish-rename`; D1 | all reached |
+| text or W3 file, Replace-absent | none | `file-published` | stage absent; source `S`; output `T`; backup absent | installed; D1 | all reached |
+| text or W3 file, Replace-existing | none | `file-published` | old output `O` replaced by `T`; source `S`; stage absent | installed; D1 | all reached |
+| text or W3 file, InPlace | none | `file-published` | source path holds `T`; backup holds `S`; stage absent | installed; D1 | all reached |
+| text stdout | none | `stdout-delivered` | no publication files, record or backup | D1 committed; stdout bytes exactly `T` | file publication not applicable |
+| text or W3 repeat (TM hit) | same source/profile | `file-published` | same as its mode; D1 unchanged | no additional Generate for existing rows | Import/Export/Observe/CompareFinal rerun |
+| invalid candidate | corrupted non-empty candidate | `file-published` | same as its mode | current-session revalidation rejects the candidate; only that unit is regenerated and repaired | commit after repair |
+| stage-close EIO, Replace-existing | error at `stage.close.before`, once | `not-published` | stage retained `T`; source `S`; old output `O`; backup absent | no installed record; D0; `TMCommitted=false`; certainty `not-committed` | Observe/commit/publish not reached |
+| process error/cancel at stage-close | real child error or cancellation | `not-published` | stage retained `T`; source `S`; old output `O` | no installed record; D0 | single Wait/EOF; PID, group and proc absent; no rescue |
+| cleanup-rescue guard | registered cleanup had to kill | owning scheduled-case test FAILs | child killed and reaped once; residual notices 0 | lifecycle record only | this intentional negative is not a pass |
+| unsupported tmpfs/overlay | real public `FileWithTM` | typed prepare refusal | source identity unchanged; no output or run directory | D0; Generate 0 | Import onward `not-run` |
+
+`guards/cleanup-rescue` is the inverse control: the child is reaped with one
+SIGKILL by the registered cleanup, `CleanupRescueKills=1`, and the owning test
+must fail. A normally scheduled case that needs that rescue is a failure, not a
+clean lifecycle. `TestPipelineHarnessFault/cleanup-rescue` records the same
+mechanism as an expected absence without converting it into a product pass.
+
+### Ready/release, live state and single-Wait guide
+
+Before `Start`, the parent registers the notice read, release write, a single
+`Wait` and a bounded read deadline/watchdog. The child emits `armed` and `ready`
+with the exact case, boundary, occurrence, PID and PPID; the parent rejects a
+wrong boundary, occurrence or PID before releasing anything. At `ready` the
+parent also records that the child is alive and that the stage descriptor and
+flock are still open/held (`stage_fd_open_at_ready`, `lock_held_at_ready`).
+
+The parent then writes one release byte: `G` for success, or the explicit
+error/cancel stimulus. A hook that performed the real operation returns nil; a
+later cancellation or pause is a separate stimulus. The child emits `injected`
+and `returned`; the parent reads to EOF, calls `Wait` exactly once, and checks
+PID, process group and `/proc` absence plus zero residual notices. The
+post-Wait evidence records `child_stage_fd_closed`, `child_lock_released` and
+`lock_released_after_wait`; OS-lifetime descriptor release is never substituted
+for these checks. Unreached, uninjected, wrong-boundary, early-return,
+malformed-wire, timeout and unreaped outcomes are typed failures. A cleanup
+rescue in a scheduled positive is a failure; only the two explicit rescue
+controls above exercise the rescued path.
+
+### Fault and same-target rerun guide
+
+- A failed run that leaves no record is a manual missing-record refusal. The run
+directory and stage are retained; there is no copy/delete fallback and no
+automatic old-stage publication. A fresh same-target run must fail at prepare
+with the invalid-or-missing-record reason rather than publishing the old stage.
+- Create against an existing target refuses at prepare. Replace with the same
+original bytes/profile republishes successfully with zero additional Generate
+calls and unchanged D1.
+- Text InPlace on the same target is a new source identity: one additional
+Generate, a new translation row, and the second backup contains the first
+published `T`.
+- W3 InPlace after the target header changed to `ja`, replayed with the `en`
+fixture adapter, is an import source-language mismatch: zero additional
+Generate, D1 and the translated source unchanged, first backup unchanged. It is
+not a TM hit and not a reason to relax the adapter language check.
+- Text stdout on the same input/profile performs zero additional Generate and
+delivers the same bytes and D1.
+
 ### Not-run and claim boundaries
 
 Not run in this issue: the W3 Core stdout surface, a strict

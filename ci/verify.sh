@@ -52,36 +52,93 @@ done
 echo 'pipelinefaults compile-only: tagged test binaries built; not a behavior PASS'
 
 pipeline_require() {
- test_log=$1
- test_name=$2
- want_leaves=$3
- grep -Eq "^[[:space:]]*=== RUN   $test_name[[:space:]]*$" "$test_log" || {
-  echo "pipeline selector matched no $test_name" >&2; return 1; }
- grep -Eq "^[[:space:]]*--- PASS: $test_name[[:space:]]*[(]" "$test_log" || {
-  echo "pipeline $test_name did not PASS" >&2; return 1; }
+ label=$1
+ names=$2
+ test_log=$3
+ pass_names="$pipeline_tmp/$label.pass"
+ allowed="$pipeline_tmp/$label.allowed"
+ bad=0
  if grep -Eq '^[[:space:]]*--- (FAIL|SKIP)' "$test_log"; then
-  echo "pipeline lane reported FAIL or SKIP" >&2; return 1; fi
- leaves=$(grep -Ec "^[[:space:]]*--- PASS: $test_name/" "$test_log" || true)
- [ "$leaves" -eq "$want_leaves" ] || {
-  echo "pipeline $test_name leaves=$leaves, want $want_leaves" >&2; return 1; }
+  echo "pipeline lane reported FAIL or SKIP" >&2
+  return 1
+ fi
+ grep -E '^[[:space:]]*--- PASS: ' "$test_log" \
+  | sed -E "s/^[[:space:]]*--- PASS: //; s/ [(].*//" | sort >"$pass_names"
+ if [ ! -s "$pass_names" ]; then
+  echo "pipeline $label selected no PASS output" >&2
+  return 1
+ fi
+ if [ -n "$(uniq -d "$pass_names")" ]; then
+  echo "pipeline $label duplicated a PASS name" >&2
+  return 1
+ fi
+ : >"$allowed"
+ while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  runs=$(grep -Ec "^[[:space:]]*=== RUN   $name[[:space:]]*$" "$test_log" || true)
+  passes=$(grep -Ec "^[[:space:]]*--- PASS: $name[[:space:]]*[(]" "$test_log" || true)
+  if [ "$runs" -ne 1 ] || [ "$passes" -ne 1 ]; then
+   echo "pipeline $label terminal $name RUN=$runs PASS=$passes, want 1/1" >&2
+   bad=1
+  fi
+  printf "%s\n" "$name" >>"$allowed"
+  prefix=$name
+  while :; do
+   case $prefix in
+   */*) prefix=${prefix%/*} ;;
+   *) break ;;
+   esac
+   printf "%s\n" "$prefix" >>"$allowed"
+  done
+ done <"$names"
+ while IFS= read -r name; do
+  grep -Fqx "$name" "$allowed" || {
+   echo "pipeline $label unexpected PASS $name" >&2
+   bad=1
+  }
+ done <"$pass_names"
+ [ "$bad" -eq 0 ]
 }
+
+cat >"$pipeline_tmp/fixture-inputs.names" <<'EOF'
+TestPipelineFixtureInputs/valid/text
+TestPipelineFixtureInputs/valid/w3
+TestPipelineFixtureInputs/reject-authored-mismatch/text
+TestPipelineFixtureInputs/reject-authored-mismatch/w3
+EOF
+cat >"$pipeline_tmp/barrier.names" <<'EOF'
+TestPipelineHarnessBarrier
+EOF
+cat >"$pipeline_tmp/guards.names" <<'EOF'
+TestPipelineHarnessGuards/healthy-positive-control
+TestPipelineHarnessGuards/wrong-boundary
+TestPipelineHarnessGuards/unreached
+TestPipelineHarnessGuards/uninjected
+TestPipelineHarnessGuards/early-return
+TestPipelineHarnessGuards/timeout-explicit-cancel
+TestPipelineHarnessGuards/unreaped
+TestPipelineHarnessGuards/malformed-input
+TestPipelineHarnessGuards/cleanup-rescue
+EOF
+cat >"$pipeline_tmp/refusal.names" <<'EOF'
+TestPipelineUnsupportedFilesystem
+EOF
 
 pipeline_fs_independent() {
  label=$1
- test_name=$2
- selector=$3
- want_leaves=$4
+ selector=$2
+ names=$3
  log="$pipeline_tmp/$label.log"
  if ! go test -count=1 -timeout 180s -tags pipelinefaults ./internal/localize \
   -run "$selector" -v >"$log" 2>&1; then
   cat "$log" >&2; echo "pipeline lane $label failed" >&2; exit 1; fi
- pipeline_require "$log" "$test_name" "$want_leaves"
+ pipeline_require "$label" "$names" "$log"
  cat "$log"
 }
 
-pipeline_fs_independent fixture-inputs TestPipelineFixtureInputs '^TestPipelineFixtureInputs$' 6
-pipeline_fs_independent barrier TestPipelineHarnessBarrier '^TestPipelineHarnessBarrier$' 0
-pipeline_fs_independent guards TestPipelineHarnessGuards '^TestPipelineHarnessGuards$' 9
+pipeline_fs_independent fixture-inputs '^TestPipelineFixtureInputs$' "$pipeline_tmp/fixture-inputs.names"
+pipeline_fs_independent barrier '^TestPipelineHarnessBarrier$' "$pipeline_tmp/barrier.names"
+pipeline_fs_independent guards '^TestPipelineHarnessGuards$' "$pipeline_tmp/guards.names"
 
 # The clean image's /tmp must be a real tmpfs/overlay, so this lane proves the
 # typed unsupported-filesystem refusal rather than passing by accident.
@@ -95,7 +152,7 @@ if ! TMPDIR=/tmp GOTMPDIR=/tmp go test -count=1 -timeout 180s -tags pipelinefaul
  ./internal/localize -run '^TestPipelineUnsupportedFilesystem$' -v \
  >"$pipeline_tmp/refusal.log" 2>&1; then
  cat "$pipeline_tmp/refusal.log" >&2; echo 'unsupported-filesystem refusal lane failed' >&2; exit 1; fi
-pipeline_require "$pipeline_tmp/refusal.log" TestPipelineUnsupportedFilesystem 0
+pipeline_require refusal "$pipeline_tmp/refusal.names" "$pipeline_tmp/refusal.log"
 cat "$pipeline_tmp/refusal.log"
 mkdir -p bin
 GOOS=linux GOARCH=arm64 go build -o bin/yakuori-linux-arm64 ./cmd/yakuori
