@@ -735,6 +735,17 @@ func testPipelineHarnessBoundariesReject(t *testing.T) {
 		t.Run(mutation.name, func(t *testing.T) {
 			invalid := valid.clone()
 			mutation.mutate(&invalid)
+			if mutation.name == "observe-after-before-commit" || mutation.name == "publish-before-commit" {
+				before, after := slices.Clone(valid.Order), slices.Clone(invalid.Order)
+				slices.Sort(before)
+				slices.Sort(after)
+				if !slices.Equal(before, after) {
+					t.Fatalf("ordering control changed the boundary multiset: got %v, want %v", after, before)
+				}
+				if slices.Equal(valid.Order, invalid.Order) {
+					t.Fatal("ordering control did not change the boundary order")
+				}
+			}
 			problems := pipelineHarnessJudge(expectation, invalid)
 			if len(problems) == 0 {
 				t.Fatalf("boundary oracle accepted invalid observation %s", mutation.name)

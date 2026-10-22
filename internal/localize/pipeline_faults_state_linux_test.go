@@ -1448,7 +1448,7 @@ func pipelineHarnessDrop(order []string, name string) []string {
 }
 
 func pipelineHarnessMoveBefore(order []string, target, name string) []string {
-	result := pipelineHarnessDrop(pipelineHarnessDrop(order, name), target)
+	result := pipelineHarnessDrop(order, name)
 	for index, event := range result {
 		if event == target {
 			out := append([]string{}, result[:index]...)
