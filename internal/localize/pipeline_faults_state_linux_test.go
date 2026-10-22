@@ -4,6 +4,7 @@ package localize
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -40,16 +41,17 @@ const (
 )
 
 type pipelineHarnessCase struct {
-	name    string
-	kind    string
-	surface string
-	mode    publication.Mode
+	name          string
+	kind          string
+	surface       string
+	mode          publication.Mode
+	outputPresent bool
 }
 
 func pipelineHarnessCases() []pipelineHarnessCase {
 	return []pipelineHarnessCase{
-		{name: "file-replace-existing/text", kind: "text", surface: "file", mode: publication.Replace},
-		{name: "file-replace-existing/w3", kind: "w3", surface: "file", mode: publication.Replace},
+		{name: "file-replace-existing/text", kind: "text", surface: "file", mode: publication.Replace, outputPresent: true},
+		{name: "file-replace-existing/w3", kind: "w3", surface: "file", mode: publication.Replace, outputPresent: true},
 		{name: "stdout/text", kind: "text", surface: "stdout", mode: publication.Replace},
 	}
 }
@@ -89,6 +91,10 @@ type pipelineHarnessExpectation struct {
 	RecordInstalled bool   `json:"record_installed"`
 	RecordPhase     string `json:"record_phase,omitempty"`
 	RecordOperation string `json:"record_operation,omitempty"`
+	OutputPresent   bool   `json:"output_present"`
+	StageFDClosed   bool   `json:"stage_fd_closed"`
+	RecordFDClosed  bool   `json:"record_fd_closed"`
+	Cause           string `json:"cause,omitempty"`
 
 	CommitCertainty  pipelineHarnessCertaintyValue `json:"commit_certainty"`
 	StageCheckpoint  bool                          `json:"stage_checkpoint"`
@@ -111,6 +117,8 @@ func pipelineHarnessExpectationForFixture(t *testing.T, spec pipelineHarnessCase
 		D0:          slices.Clone(f.d0), D1: slices.Clone(d1), FinalRows: slices.Clone(d1),
 		StageCheckpoint: spec.surface == "file", CommitCheckpoint: true,
 		CommitCertainty: pipelineHarnessCommitted, ResultPresent: true,
+		OutputPresent: spec.outputPresent || spec.mode == publication.InPlace,
+		StageFDClosed: spec.surface == "file", RecordFDClosed: spec.surface == "file",
 		BoundaryOrder: pipelineHarnessOrder(input, spec.surface),
 	}
 	if spec.surface == "file" {
@@ -217,6 +225,10 @@ func pipelineHarnessScenarioTable(t *testing.T) []pipelineHarnessExpectation {
 	precommit.RecordOperation = ""
 	precommit.CommitCertainty = pipelineHarnessNotCommitted
 	precommit.CommitCheckpoint = false
+	precommit.StageCheckpoint = false
+	precommit.StageFDClosed = true
+	precommit.RecordFDClosed = false
+	precommit.Cause = "the stage close reports EIO after the mandatory real descriptor Close; no successful afterStage checkpoint can exist"
 	precommit.FinalRows = slices.Clone(textFixture.d0)
 	precommit.BoundaryOrder = []string{
 		pipelineBoundaryGenerateBefore, pipelineBoundaryGenerateAfter,
@@ -231,6 +243,29 @@ func pipelineHarnessScenarioTable(t *testing.T) []pipelineHarnessExpectation {
 		pipelineBoundaryRunCloseAfter:    1,
 	}
 
+	precommitCancel := precommit
+	precommitCancel.Case = "precommit-cancel/text"
+	precommitCancel.Reason = "ctx cancellation after Stage success and before final.commit; task5 executes this fault"
+	precommitCancel.Cause = "ctx.Cancel at tm-commit.before after Stage returned nil; the real final.commit rejected the context"
+	precommitCancel.StageCheckpoint = true
+	precommitCancel.BoundaryOrder = []string{
+		pipelineBoundaryGenerateBefore, pipelineBoundaryGenerateAfter,
+		pipelineBoundaryStageWriteBefore, pipelineBoundaryStageWriteAfter,
+		pipelineBoundaryObserveBefore, pipelineBoundaryObserveAfter,
+		pipelineBoundaryCompareFinalAfter, pipelineBoundaryTMCommitBefore,
+		pipelineBoundaryRunCloseAfter,
+	}
+	precommitCancel.RequiredBoundaries = map[string]int{
+		pipelineBoundaryGenerateBefore: 1, pipelineBoundaryGenerateAfter: 1,
+		pipelineBoundaryStageWriteBefore: 1, pipelineBoundaryStageWriteAfter: 1,
+		pipelineBoundaryStageSyncBefore: 1, pipelineBoundaryStageSyncAfter: 1,
+		pipelineBoundaryStageCloseBefore: 1,
+		pipelineBoundaryObserveBefore:    1, pipelineBoundaryObserveAfter: 1,
+		pipelineBoundaryCompareFinalAfter: 1,
+		pipelineBoundaryTMCommitBefore:    1,
+		pipelineBoundaryRunCloseAfter:     1,
+	}
+
 	postcommit := publishedText
 	postcommit.Case = "postcommit-prepublish/text"
 	postcommit.Status = pipelineHarnessNotRun
@@ -243,6 +278,9 @@ func pipelineHarnessScenarioTable(t *testing.T) []pipelineHarnessExpectation {
 	postcommit.RecordInstalled = false
 	postcommit.RecordPhase = ""
 	postcommit.RecordOperation = ""
+	postcommit.StageFDClosed = true
+	postcommit.RecordFDClosed = false
+	postcommit.Cause = "context cancellation at the Publish entry after the real commit returned; no record operation started"
 	postcommit.BoundaryOrder = []string{
 		pipelineBoundaryGenerateBefore, pipelineBoundaryGenerateAfter,
 		pipelineBoundaryStageWriteBefore, pipelineBoundaryStageWriteAfter,
@@ -255,8 +293,8 @@ func pipelineHarnessScenarioTable(t *testing.T) []pipelineHarnessExpectation {
 		pipelineBoundaryGenerateBefore: 1, pipelineBoundaryGenerateAfter: 1,
 		pipelineBoundaryStageWriteBefore: 1, pipelineBoundaryStageWriteAfter: 1,
 		pipelineBoundaryStageSyncBefore: 1, pipelineBoundaryStageSyncAfter: 1,
-		pipelineBoundaryStageCloseBefore: 1, pipelineBoundaryStageCloseAfter: 1,
-		pipelineBoundaryObserveBefore: 1, pipelineBoundaryObserveAfter: 1,
+		pipelineBoundaryStageCloseBefore: 1,
+		pipelineBoundaryObserveBefore:    1, pipelineBoundaryObserveAfter: 1,
 		pipelineBoundaryCompareFinalAfter: 1,
 		pipelineBoundaryTMCommitBefore:    1, pipelineBoundaryTMCommitAfter: 1,
 		pipelineBoundaryRunCloseAfter: 1,
@@ -274,6 +312,9 @@ func pipelineHarnessScenarioTable(t *testing.T) []pipelineHarnessExpectation {
 	restored.RecordInstalled = true
 	restored.RecordPhase = "restored"
 	restored.RecordOperation = "restore"
+	restored.StageFDClosed = true
+	restored.RecordFDClosed = true
+	restored.Cause = "an ordinary publish error after the InPlace backup rename is reconciled to the Restored outcome"
 	restored.BoundaryOrder = nil
 	restored.RequiredBoundaries = nil
 
@@ -302,19 +343,30 @@ func pipelineHarnessScenarioTable(t *testing.T) []pipelineHarnessExpectation {
 		pipelineBoundaryTMCommitAfter: 1, pipelineBoundaryStdoutWriteBefore: 1,
 	}
 
-	closedOnly := precommit
+	closedOnly := postcommit
 	closedOnly.Case = "record-close-before-install/text"
 	closedOnly.Reason = "record close completion is not installation; task5 owns the record-close fault"
+	closedOnly.Cause = "the temporary publication record close reports EIO after the real commit; the record is closed but never installed"
+	closedOnly.StageRetained = true
+	closedOnly.StageBytes = slices.Clone(text.target)
+	closedOnly.OutputBytes = slices.Clone(pipelineHarnessOldOutput)
+	closedOnly.RecordInstalled = false
+	closedOnly.RecordPhase = ""
+	closedOnly.RecordOperation = ""
+	closedOnly.StageFDClosed = true
+	closedOnly.RecordFDClosed = true
 	closedOnly.RequiredBoundaries = map[string]int{
 		pipelineBoundaryGenerateBefore: 1, pipelineBoundaryGenerateAfter: 1,
 		pipelineBoundaryStageWriteBefore: 1, pipelineBoundaryStageWriteAfter: 1,
-		pipelineBoundaryObserveBefore: 1, pipelineBoundaryObserveAfter: 1,
+		pipelineBoundaryStageSyncBefore: 1, pipelineBoundaryStageSyncAfter: 1,
+		pipelineBoundaryStageCloseBefore: 1,
+		pipelineBoundaryObserveBefore:    1, pipelineBoundaryObserveAfter: 1,
 		pipelineBoundaryCompareFinalAfter: 1,
 		pipelineBoundaryTMCommitBefore:    1, pipelineBoundaryTMCommitAfter: 1,
 		pipelineBoundaryRecordWriteBefore: 1, pipelineBoundaryRecordWriteAfter: 1,
 		pipelineBoundaryRecordSyncBefore: 1, pipelineBoundaryRecordSyncAfter: 1,
-		pipelineBoundaryRecordCloseBefore: 1, pipelineBoundaryRecordCloseAfter: 1,
-		pipelineBoundaryRunCloseAfter: 1,
+		pipelineBoundaryRecordCloseBefore: 1,
+		pipelineBoundaryRunCloseAfter:     1,
 	}
 	closedOnly.BoundaryOrder = []string{
 		pipelineBoundaryGenerateBefore, pipelineBoundaryGenerateAfter,
@@ -364,7 +416,16 @@ func pipelineHarnessScenarioTable(t *testing.T) []pipelineHarnessExpectation {
 	tmCommitError.PlanOutcome = "D0/F0"
 	tmCommitError.CommitCertainty = pipelineHarnessNotCommitted
 	tmCommitError.CommitCheckpoint = false
+	tmCommitError.StageCheckpoint = true
 	tmCommitError.RecordInstalled = false
+	tmCommitError.RecordPhase = ""
+	tmCommitError.RecordOperation = ""
+	tmCommitError.StageRetained = true
+	tmCommitError.StageBytes = slices.Clone(text.target)
+	tmCommitError.OutputBytes = slices.Clone(pipelineHarnessOldOutput)
+	tmCommitError.StageFDClosed = true
+	tmCommitError.RecordFDClosed = false
+	tmCommitError.Cause = "a trigger on the same real SQLite database aborts COMMIT; the all-column final rows remain D0"
 	tmCommitError.FinalRows = slices.Clone(textFixture.d0)
 	tmCommitError.BoundaryOrder = []string{
 		pipelineBoundaryGenerateBefore, pipelineBoundaryGenerateAfter,
@@ -377,8 +438,8 @@ func pipelineHarnessScenarioTable(t *testing.T) []pipelineHarnessExpectation {
 		pipelineBoundaryGenerateBefore: 1, pipelineBoundaryGenerateAfter: 1,
 		pipelineBoundaryStageWriteBefore: 1, pipelineBoundaryStageWriteAfter: 1,
 		pipelineBoundaryStageSyncBefore: 1, pipelineBoundaryStageSyncAfter: 1,
-		pipelineBoundaryStageCloseBefore: 1, pipelineBoundaryStageCloseAfter: 1,
-		pipelineBoundaryObserveBefore: 1, pipelineBoundaryObserveAfter: 1,
+		pipelineBoundaryStageCloseBefore: 1,
+		pipelineBoundaryObserveBefore:    1, pipelineBoundaryObserveAfter: 1,
 		pipelineBoundaryCompareFinalAfter: 1, pipelineBoundaryTMCommitBefore: 1,
 		pipelineBoundaryRunCloseAfter: 1,
 	}
@@ -392,8 +453,249 @@ func pipelineHarnessScenarioTable(t *testing.T) []pipelineHarnessExpectation {
 
 	return []pipelineHarnessExpectation{
 		publishedText, publishedW3, publishedStdout,
-		precommit, postcommit, restored, publishedThenError, stdoutPrefix, closedOnly, killed,
+		precommit, precommitCancel, postcommit, restored, publishedThenError, stdoutPrefix, closedOnly, killed,
 		flush, stdoutPublication, stdoutCommitBefore, tmCommitError, publishedDiagnostic,
+	}
+}
+
+// pipelineHarnessFaultCell is one enumerable cell of the fixed contract:
+// setup (mode and surface) x boundary occurrence x error/cancel/process-stop.
+// The requested fields and the injected descriptor are part of the evidence;
+// enumerating a cell never executes it and never makes it a pass.
+type pipelineHarnessFaultCell struct {
+	Case       string                `json:"case"`
+	Setup      string                `json:"setup"`
+	Mode       string                `json:"mode"`
+	Surface    string                `json:"surface"`
+	Boundary   string                `json:"requested_boundary"`
+	Occurrence int                   `json:"requested_occurrence"`
+	Stimulus   string                `json:"stimulus"`
+	Injected   string                `json:"injected"`
+	Status     pipelineHarnessStatus `json:"status"`
+	Reason     string                `json:"reason"`
+}
+
+type pipelineHarnessFaultAbsence struct {
+	status pipelineHarnessStatus
+	reason string
+}
+
+type pipelineHarnessFaultSetup struct {
+	name        string
+	mode        string
+	surface     string
+	counts      map[string]int
+	absent      map[string]pipelineHarnessFaultAbsence
+	note        string
+	unsupported string
+}
+
+func pipelineHarnessContractBoundaries() []string {
+	return []string{
+		pipelineBoundaryGenerateBefore, pipelineBoundaryGenerateAfter,
+		pipelineBoundaryStageWriteBefore, pipelineBoundaryStageWriteAfter,
+		pipelineBoundaryStageSyncBefore, pipelineBoundaryStageSyncAfter,
+		pipelineBoundaryStageCloseBefore, pipelineBoundaryStageCloseAfter,
+		pipelineBoundaryObserveBefore, pipelineBoundaryObserveAfter,
+		pipelineBoundaryCompareFinalAfter,
+		pipelineBoundaryTMCommitBefore, pipelineBoundaryTMCommitAfter,
+		pipelineBoundaryRecordWriteBefore, pipelineBoundaryRecordWriteAfter,
+		pipelineBoundaryRecordSyncBefore, pipelineBoundaryRecordSyncAfter,
+		pipelineBoundaryRecordCloseBefore, pipelineBoundaryRecordCloseAfter,
+		pipelineBoundaryRecordInstallBefore, pipelineBoundaryRecordInstallAfter,
+		pipelineBoundaryBackupRenameBefore, pipelineBoundaryBackupRenameAfter,
+		pipelineBoundaryPublishRenameBefore, pipelineBoundaryPublishRenameAfter,
+		pipelineBoundaryStdoutWriteBefore, pipelineBoundaryStdoutWriteAfter,
+		pipelineBoundaryDiagnosticWriteBefore, pipelineBoundaryDiagnosticWriteAfter,
+		pipelineBoundaryRunCloseAfter,
+	}
+}
+
+func pipelineHarnessFaultSetups() []pipelineHarnessFaultSetup {
+	fileCounts := func(records int, inPlace bool) map[string]int {
+		counts := map[string]int{
+			pipelineBoundaryGenerateBefore: 1, pipelineBoundaryGenerateAfter: 1,
+			pipelineBoundaryStageWriteBefore: 1, pipelineBoundaryStageWriteAfter: 1,
+			pipelineBoundaryStageSyncBefore: 1, pipelineBoundaryStageSyncAfter: 1,
+			pipelineBoundaryStageCloseBefore: 1, pipelineBoundaryStageCloseAfter: 1,
+			pipelineBoundaryObserveBefore: 1, pipelineBoundaryObserveAfter: 1,
+			pipelineBoundaryCompareFinalAfter: 1,
+			pipelineBoundaryTMCommitBefore:    1, pipelineBoundaryTMCommitAfter: 1,
+			pipelineBoundaryRecordWriteBefore: records, pipelineBoundaryRecordWriteAfter: records,
+			pipelineBoundaryRecordSyncBefore: 2 * records, pipelineBoundaryRecordSyncAfter: 2 * records,
+			pipelineBoundaryRecordCloseBefore: records, pipelineBoundaryRecordCloseAfter: records,
+			pipelineBoundaryRecordInstallBefore: records, pipelineBoundaryRecordInstallAfter: records,
+			pipelineBoundaryPublishRenameBefore: 1, pipelineBoundaryPublishRenameAfter: 1,
+			pipelineBoundaryDiagnosticWriteBefore: 1, pipelineBoundaryDiagnosticWriteAfter: 1,
+			pipelineBoundaryRunCloseAfter: 1,
+		}
+		if inPlace {
+			counts[pipelineBoundaryBackupRenameBefore] = 1
+			counts[pipelineBoundaryBackupRenameAfter] = 1
+		}
+		return counts
+	}
+	stdoutCounts := map[string]int{
+		pipelineBoundaryGenerateBefore: 1, pipelineBoundaryGenerateAfter: 1,
+		pipelineBoundaryObserveBefore: 1, pipelineBoundaryObserveAfter: 1,
+		pipelineBoundaryTMCommitAfter:     1,
+		pipelineBoundaryStdoutWriteBefore: 1, pipelineBoundaryStdoutWriteAfter: 1,
+		pipelineBoundaryDiagnosticWriteBefore: 1, pipelineBoundaryDiagnosticWriteAfter: 1,
+	}
+	stdoutAbsent := map[string]pipelineHarnessFaultAbsence{
+		pipelineBoundaryTMCommitBefore:    {pipelineHarnessNotRun, "Core.MText has no strict pre-commit callback; the Observe return is not substituted for it (Issue68 contract)"},
+		pipelineBoundaryCompareFinalAfter: {pipelineHarnessNA, "the text surface has no publication Stage callback, so CompareFinal completion has no separate observable boundary"},
+	}
+	return []pipelineHarnessFaultSetup{
+		{name: "create/text", mode: string(publication.Create), surface: "file", counts: fileCounts(2, false)},
+		{name: "replace-absent/text", mode: string(publication.Replace), surface: "file", counts: fileCounts(2, false)},
+		{name: "replace-existing/text", mode: string(publication.Replace), surface: "file", counts: fileCounts(2, false)},
+		{name: "in-place/text", mode: string(publication.InPlace), surface: "file", counts: fileCounts(3, true)},
+		{name: "stdout/text", mode: string(publication.Replace), surface: "stdout", counts: stdoutCounts, absent: stdoutAbsent},
+		{name: "stdout/w3-core", mode: string(publication.Replace), surface: "stdout", counts: stdoutCounts, absent: stdoutAbsent,
+			note: "Core can export W3 to stdout, but this unit does not execute it; "},
+		{name: "w3-cli-text-stdout", mode: string(publication.Replace), surface: "stdout",
+			unsupported: "the CLI supports text stdout only; W3 stdout is unsupported at the CLI surface"},
+	}
+}
+
+func pipelineHarnessFaultCatalog() []pipelineHarnessFaultCell {
+	var cells []pipelineHarnessFaultCell
+	for _, setup := range pipelineHarnessFaultSetups() {
+		for _, boundary := range pipelineHarnessContractBoundaries() {
+			count := setup.counts[boundary]
+			if count < 1 {
+				count = 1
+			}
+			for occurrence := 1; occurrence <= count; occurrence++ {
+				for _, stimulus := range []string{"error", "cancel", "process-stop"} {
+					status, reason := pipelineHarnessFaultCellStatus(setup, boundary, stimulus, setup.counts[boundary] > 0)
+					cells = append(cells, pipelineHarnessFaultCell{
+						Case:  fmt.Sprintf("%s/%s#%d/%s", setup.name, boundary, occurrence, stimulus),
+						Setup: setup.name, Mode: setup.mode, Surface: setup.surface,
+						Boundary: boundary, Occurrence: occurrence, Stimulus: stimulus,
+						Injected: pipelineHarnessInjectedField(boundary, stimulus),
+						Status:   status, Reason: reason,
+					})
+				}
+			}
+		}
+	}
+	return cells
+}
+
+func pipelineHarnessFaultCellStatus(setup pipelineHarnessFaultSetup, boundary, stimulus string, present bool) (pipelineHarnessStatus, string) {
+	if setup.unsupported != "" {
+		return pipelineHarnessNA, setup.unsupported
+	}
+	if !present {
+		if absence, ok := setup.absent[boundary]; ok {
+			return absence.status, absence.reason
+		}
+		return pipelineHarnessNA, fmt.Sprintf("%s does not perform %s", setup.name, boundary)
+	}
+	if boundary == pipelineBoundaryDiagnosticWriteBefore || boundary == pipelineBoundaryDiagnosticWriteAfter {
+		return pipelineHarnessNotRun, "post-publication diagnostics use the existing CLI reportPipeline writer; this unit only records the later contract"
+	}
+	switch stimulus {
+	case "error":
+		return pipelineHarnessNotRun, setup.note + "error cell enumerated for the fixed contract; task5 executes the minimal set"
+	case "cancel":
+		if boundary == pipelineBoundaryTMCommitBefore {
+			return pipelineHarnessNotRun, "ctx cancellation is contracted at tm-commit.before: Stage returns nil and the real final.commit rejects the context; task5 executes it"
+		}
+		return pipelineHarnessNA, "cancellation is contracted only at tm-commit.before; no other cancellation cell is defined (IS-4)"
+	case "process-stop":
+		return pipelineHarnessNotRun, "SIGKILL at this boundary is owned by the task4/5 process harness; the cell is enumerated only"
+	}
+	return pipelineHarnessNA, "no contract for stimulus " + stimulus
+}
+
+func pipelineHarnessInjectedField(boundary, stimulus string) string {
+	if stimulus == "cancel" {
+		return "ctx-cancel"
+	}
+	if stimulus == "process-stop" {
+		return "sigkill-child"
+	}
+	switch boundary {
+	case pipelineBoundaryGenerateBefore, pipelineBoundaryGenerateAfter:
+		return "generation-error"
+	case pipelineBoundaryStageWriteBefore, pipelineBoundaryStageWriteAfter:
+		return "export-writer-error"
+	case pipelineBoundaryStageSyncBefore, pipelineBoundaryStageSyncAfter:
+		return "sync-stage-eio"
+	case pipelineBoundaryStageCloseBefore, pipelineBoundaryStageCloseAfter:
+		return "close-stage-eio"
+	case pipelineBoundaryObserveBefore, pipelineBoundaryObserveAfter:
+		return "observe-error"
+	case pipelineBoundaryCompareFinalAfter:
+		return "compare-final-mismatch"
+	case pipelineBoundaryTMCommitBefore, pipelineBoundaryTMCommitAfter:
+		return "sqlite-trigger"
+	case pipelineBoundaryRecordWriteBefore, pipelineBoundaryRecordWriteAfter:
+		return "record-write-eio"
+	case pipelineBoundaryRecordSyncBefore, pipelineBoundaryRecordSyncAfter:
+		return "record-sync-eio"
+	case pipelineBoundaryRecordCloseBefore, pipelineBoundaryRecordCloseAfter:
+		return "record-close-eio"
+	case pipelineBoundaryRecordInstallBefore, pipelineBoundaryRecordInstallAfter:
+		return "install-rename-eio"
+	case pipelineBoundaryBackupRenameBefore, pipelineBoundaryBackupRenameAfter:
+		return "backup-rename-eio"
+	case pipelineBoundaryPublishRenameBefore, pipelineBoundaryPublishRenameAfter:
+		return "publish-rename-eio"
+	case pipelineBoundaryStdoutWriteBefore, pipelineBoundaryStdoutWriteAfter:
+		return "stdout-write-error"
+	case pipelineBoundaryDiagnosticWriteBefore, pipelineBoundaryDiagnosticWriteAfter:
+		return "diagnostic-writer-error"
+	case pipelineBoundaryRunCloseAfter:
+		return "run-close-error"
+	}
+	return "unspecified-error"
+}
+
+func pipelineHarnessCheckFaultCatalog(t *testing.T, cells []pipelineHarnessFaultCell) {
+	t.Helper()
+	if len(cells) == 0 {
+		t.Fatal("fault catalog is empty")
+	}
+	setups := map[string]bool{}
+	applicable := map[string]int{}
+	statuses := map[pipelineHarnessStatus]int{}
+	for _, cell := range cells {
+		switch cell.Status {
+		case pipelineHarnessPass, pipelineHarnessFail:
+			t.Fatalf("fault cell %s is %s; enumeration cannot pass or fail a cell", cell.Case, cell.Status)
+		case pipelineHarnessNotRun, pipelineHarnessNA:
+			if cell.Reason == "" {
+				t.Fatalf("fault cell %s is %s without a reason", cell.Case, cell.Status)
+			}
+		}
+		if cell.Boundary == "" || cell.Occurrence < 1 || cell.Stimulus == "" || cell.Injected == "" {
+			t.Fatalf("fault cell %s lacks requested boundary/occurrence/stimulus or injected field", cell.Case)
+		}
+		if want := fmt.Sprintf("%s/%s#%d/%s", cell.Setup, cell.Boundary, cell.Occurrence, cell.Stimulus); cell.Case != want {
+			t.Fatalf("fault cell name %q, want %q", cell.Case, want)
+		}
+		setups[cell.Setup] = true
+		statuses[cell.Status]++
+		if cell.Status != pipelineHarnessNA {
+			applicable[cell.Boundary]++
+		}
+	}
+	for _, boundary := range pipelineHarnessContractBoundaries() {
+		if applicable[boundary] == 0 {
+			t.Fatalf("contract boundary %s has no applicable cell", boundary)
+		}
+	}
+	for _, setup := range pipelineHarnessFaultSetups() {
+		if !setups[setup.name] {
+			t.Fatalf("setup %s is missing from the fault catalog", setup.name)
+		}
+	}
+	if statuses[pipelineHarnessPass] != 0 {
+		t.Fatalf("fault catalog contains %d pass cells", statuses[pipelineHarnessPass])
 	}
 }
 
@@ -401,6 +703,7 @@ type pipelineHarnessFile struct {
 	Path    string `json:"path"`
 	Exists  bool   `json:"exists"`
 	Bytes   []byte `json:"bytes,omitempty"`
+	Dev     uint64 `json:"dev,omitempty"`
 	Inode   uint64 `json:"inode,omitempty"`
 	MountID uint64 `json:"mount_id,omitempty"`
 	Mode    uint16 `json:"mode,omitempty"`
@@ -425,14 +728,29 @@ type pipelineHarnessRecordFile struct {
 	Size     int64                         `json:"size"`
 }
 
+type pipelineHarnessRecordPath struct {
+	Path     string `json:"path"`
+	Basename string `json:"basename"`
+}
+
+type pipelineHarnessExistingOutput struct {
+	Absent bool                       `json:"absent"`
+	File   *pipelineHarnessRecordFile `json:"file"`
+}
+
 type pipelineHarnessRecord struct {
-	SchemaVersion          int                       `json:"schema_version"`
-	RunID                  string                    `json:"run_id"`
-	Mode                   string                    `json:"mode"`
-	Source                 pipelineHarnessRecordFile `json:"source"`
-	Stage                  pipelineHarnessRecordFile `json:"stage"`
-	Phase                  string                    `json:"phase"`
-	LastCompletedOperation string                    `json:"last_completed_operation"`
+	SchemaVersion          int                           `json:"schema_version"`
+	RunID                  string                        `json:"run_id"`
+	Mode                   string                        `json:"mode"`
+	Source                 pipelineHarnessRecordFile     `json:"source"`
+	Output                 pipelineHarnessRecordPath     `json:"output"`
+	Stage                  pipelineHarnessRecordFile     `json:"stage"`
+	Backup                 *pipelineHarnessRecordPath    `json:"backup"`
+	SourceParent           pipelineHarnessRecordIdentity `json:"source_parent"`
+	OutputParent           pipelineHarnessRecordIdentity `json:"output_parent"`
+	ExistingOutput         pipelineHarnessExistingOutput `json:"existing_output"`
+	Phase                  string                        `json:"phase"`
+	LastCompletedOperation string                        `json:"last_completed_operation"`
 }
 
 type pipelineHarnessSnapshot struct {
@@ -468,6 +786,18 @@ type pipelineHarnessSnapshot struct {
 	Reaped          string                        `json:"reaped"`
 	Outcome         string                        `json:"outcome"`
 	Filesystem      string                        `json:"filesystem"`
+
+	AuthoredD0 []pipelineFixtureRow `json:"authored_d0"`
+	AuthoredD1 []pipelineFixtureRow `json:"authored_d1"`
+
+	StageFDClosed  bool   `json:"stage_fd_closed"`
+	RecordFDClosed bool   `json:"record_fd_closed"`
+	ErrorPhase     string `json:"error_phase,omitempty"`
+
+	RequestedBoundary   string   `json:"requested_boundary,omitempty"`
+	RequestedOccurrence int      `json:"requested_occurrence,omitempty"`
+	Stimulus            string   `json:"stimulus"`
+	Injected            []string `json:"injected,omitempty"`
 }
 
 func (h *pipelineHarness) snapshot(exp pipelineHarnessExpectation) (pipelineHarnessSnapshot, error) {
@@ -487,6 +817,16 @@ func (h *pipelineHarness) snapshot(exp pipelineHarnessExpectation) (pipelineHarn
 		Reaped:         "NA: no child process",
 		Filesystem:     pipelineHarnessFilesystem(h.t, h.stdoutOrSource()),
 	}
+	snapshot.AuthoredD0 = slices.Clone(exp.D0)
+	snapshot.AuthoredD1 = slices.Clone(exp.D1)
+	snapshot.RequestedBoundary = h.requestedBoundary
+	snapshot.RequestedOccurrence = h.requestedOccurrence
+	snapshot.Stimulus = h.stimulus
+	snapshot.Injected = slices.Clone(h.injected)
+	var typed *Error
+	if errors.As(h.runErr, &typed) {
+		snapshot.ErrorPhase = typed.Phase
+	}
 	if h.runErr != nil {
 		snapshot.Error = h.runErr.Error()
 	}
@@ -505,6 +845,23 @@ func (h *pipelineHarness) snapshot(exp pipelineHarnessExpectation) (pipelineHarn
 	}
 	snapshot.StageClosed = snapshot.Reached[pipelineBoundaryStageCloseAfter] > 0
 	snapshot.RecordClosed = snapshot.Reached[pipelineBoundaryRecordCloseAfter] > 0
+	if h.ops != nil {
+		snapshot.StageFDClosed = h.ops.stageFDClosed
+		snapshot.RecordFDClosed = h.ops.recordFDClosed
+		if !snapshot.StageFDClosed && h.ops.stageFD != nil {
+			if _, err := h.ops.stageFD.Stat(); errors.Is(err, os.ErrClosed) {
+				snapshot.StageFDClosed = true
+			}
+		}
+		if !snapshot.RecordFDClosed {
+			for index := len(h.ops.recordFDs) - 1; index >= 0; index-- {
+				if _, err := h.ops.recordFDs[index].Stat(); errors.Is(err, os.ErrClosed) {
+					snapshot.RecordFDClosed = true
+					break
+				}
+			}
+		}
+	}
 
 	paths := map[string]string{}
 	paths["source"] = h.sourcePath
@@ -570,6 +927,7 @@ func pipelineHarnessReadFile(path string) (pipelineHarnessFile, error) {
 	}
 	file.Exists = true
 	file.Bytes = raw
+	file.Dev = unix.Mkdev(stat.Dev_major, stat.Dev_minor)
 	file.Inode, file.MountID, file.Mode = stat.Ino, stat.Mnt_id, stat.Mode
 	file.Nlink, file.Size = stat.Nlink, int64(len(raw))
 	return file, nil
@@ -602,34 +960,70 @@ func (s pipelineHarnessSnapshot) clone() pipelineHarnessSnapshot {
 	clone.Order = slices.Clone(s.Order)
 	clone.RecordEvents = slices.Clone(s.RecordEvents)
 	clone.CertaintyBasis = slices.Clone(s.CertaintyBasis)
+	clone.AuthoredD0 = slices.Clone(s.AuthoredD0)
+	clone.AuthoredD1 = slices.Clone(s.AuthoredD1)
+	clone.Injected = slices.Clone(s.Injected)
 	if s.Record != nil {
 		record := *s.Record
+		if s.Record.Backup != nil {
+			backup := *s.Record.Backup
+			record.Backup = &backup
+		}
+		if s.Record.ExistingOutput.File != nil {
+			existing := *s.Record.ExistingOutput.File
+			record.ExistingOutput.File = &existing
+		}
 		clone.Record = &record
 	}
 	return clone
 }
 
-// pipelineHarnessObserveCertainty derives the commit state from DB checkpoints,
-// never from TMCommitted alone. Without a checkpoint the answer is unknown.
+// pipelineHarnessObserveCertainty derives the commit state from actual final
+// rows and real commit-entry checkpoints, never from TMCommitted alone or from
+// the historical pre-commit afterStage rows. A commit-entry checkpoint is the
+// Publish/Write entry, which Core reaches only after final.commit returned.
 func pipelineHarnessObserveCertainty(snapshot pipelineHarnessSnapshot) (pipelineHarnessCertaintyValue, []string) {
-	var basis []string
-	if snapshot.RowsAfterStage != nil {
-		basis = append(basis, "rows-after-stage")
-	}
-	if snapshot.RowsAtCommit != nil {
-		basis = append(basis, "rows-at-commit")
-	}
+	commitEntry := snapshot.Reached[pipelineBoundaryTMCommitAfter] > 0
+	commitRows := len(snapshot.RowsAtCommit) > 0
+	finalD0 := pipelineHarnessRowsEqual(snapshot.AuthoredD0, snapshot.Rows)
+	finalD1 := pipelineHarnessRowsEqual(snapshot.AuthoredD1, snapshot.Rows)
 	switch {
-	case snapshot.RowsAtCommit != nil && snapshot.TMCommitted:
-		return pipelineHarnessCommitted, basis
-	case snapshot.RowsAfterStage != nil && snapshot.RowsAtCommit == nil && !snapshot.TMCommitted:
-		return pipelineHarnessNotCommitted, basis
+	case commitRows && snapshot.TMCommitted && finalD1 && pipelineHarnessRowsEqual(snapshot.AuthoredD1, snapshot.RowsAtCommit):
+		return pipelineHarnessCommitted, []string{"rows-at-commit", "final-rows-D1", "tm-committed"}
+	case !commitEntry && !commitRows && finalD0:
+		return pipelineHarnessNotCommitted, []string{"no-commit-entry", "final-rows-D0"}
 	default:
-		if snapshot.TMCommitted {
-			basis = append(basis, "tm-committed-flag")
+		var basis []string
+		if commitEntry {
+			basis = append(basis, "commit-entry-reached")
+		} else {
+			basis = append(basis, "no-commit-entry")
 		}
-		return pipelineHarnessUnknown, append(basis, "no-commit-checkpoint")
+		if commitRows {
+			basis = append(basis, "rows-at-commit")
+		} else {
+			basis = append(basis, "no-commit-rows")
+		}
+		switch {
+		case finalD0:
+			basis = append(basis, "final-rows-D0")
+		case finalD1:
+			basis = append(basis, "final-rows-D1")
+		default:
+			basis = append(basis, "final-rows-other")
+		}
+		if snapshot.TMCommitted {
+			basis = append(basis, "tm-committed")
+		}
+		if snapshot.ErrorPhase != "" {
+			basis = append(basis, "error-phase-"+snapshot.ErrorPhase)
+		}
+		return pipelineHarnessUnknown, basis
 	}
+}
+
+func pipelineHarnessRowsEqual(expected, actual []pipelineFixtureRow) bool {
+	return expected != nil && actual != nil && slices.Equal(expected, actual)
 }
 
 func pipelineHarnessObservationNames() map[string]bool {
@@ -738,6 +1132,12 @@ func pipelineHarnessCheckBoundaries(expectation pipelineHarnessExpectation, snap
 // install rename.
 func pipelineHarnessCheckFiles(expectation pipelineHarnessExpectation, snapshot pipelineHarnessSnapshot) []string {
 	var problems []string
+	if snapshot.StageFDClosed != expectation.StageFDClosed {
+		problems = append(problems, fmt.Sprintf("stage descriptor actually closed = %t, want %t", snapshot.StageFDClosed, expectation.StageFDClosed))
+	}
+	if snapshot.RecordFDClosed != expectation.RecordFDClosed {
+		problems = append(problems, fmt.Sprintf("record descriptor actually closed = %t, want %t", snapshot.RecordFDClosed, expectation.RecordFDClosed))
+	}
 	problems = append(problems, pipelineHarnessCheckLeaf("source", snapshot.Files["source"], expectation.SourceBytes)...)
 	if expectation.Surface == "stdout" {
 		problems = append(problems, pipelineHarnessCheckLeaf("stdout", snapshot.Files["stdout"], expectation.StdoutBytes)...)
@@ -797,6 +1197,12 @@ func pipelineHarnessCheckRecord(expectation pipelineHarnessExpectation, snapshot
 	if record == nil {
 		return []string{"installed record cannot be decoded"}
 	}
+	if record.SchemaVersion != 1 {
+		problems = append(problems, fmt.Sprintf("record schema version %d, want 1", record.SchemaVersion))
+	}
+	if record.RunID == "" || record.RunID != snapshot.Result.Publication.RunID {
+		problems = append(problems, fmt.Sprintf("record run id %q does not match the actual run %q", record.RunID, snapshot.Result.Publication.RunID))
+	}
 	if record.Phase != expectation.RecordPhase {
 		problems = append(problems, fmt.Sprintf("record phase %q, want %q", record.Phase, expectation.RecordPhase))
 	}
@@ -806,20 +1212,94 @@ func pipelineHarnessCheckRecord(expectation pipelineHarnessExpectation, snapshot
 	if record.Mode != expectation.Mode {
 		problems = append(problems, fmt.Sprintf("record mode %q, want %q", record.Mode, expectation.Mode))
 	}
-	stage, output, source := record.Stage.Identity, snapshot.Files["output"], snapshot.Files["source"]
-	if stage.Ino == 0 || stage.Ino != output.Inode || stage.MountID != output.MountID {
-		problems = append(problems, "published output identity does not match the recorded stage identity")
+	output := snapshot.Files["output"]
+	sourcePath := snapshot.Files["source"].Path
+	sourcePhysical := snapshot.Files["source"]
+	if expectation.Mode == string(publication.InPlace) && snapshot.Files["backup"].Exists {
+		// InPlace renames the original source to the backup, so the physical
+		// counterpart of record.Source is the backup, not the new output.
+		sourcePhysical = snapshot.Files["backup"]
 	}
-	if record.Stage.Size != int64(len(expectation.TargetBytes)) || output.Size != int64(len(expectation.TargetBytes)) {
-		problems = append(problems, "published output bytes do not match the recorded stage size")
+	problems = append(problems, pipelineHarnessCheckRecordedFile("recorded source", record.Source, sourcePhysical, sourcePath, expectation.SourceBytes)...)
+	problems = append(problems, pipelineHarnessCheckRecordedFile("recorded stage", record.Stage, output, snapshot.Files["stage"].Path, expectation.TargetBytes)...)
+	if record.Output.Path != output.Path || record.Output.Basename != filepath.Base(output.Path) {
+		problems = append(problems, fmt.Sprintf("recorded output %q/%q does not match the physical output %q", record.Output.Path, record.Output.Basename, output.Path))
 	}
-	if stage.Mode&unix.S_IFMT != unix.S_IFREG || stage.Nlink != 1 {
-		problems = append(problems, "recorded stage was not a regular single-link file")
+	problems = append(problems, pipelineHarnessCheckRecordedParent("source parent", record.SourceParent, filepath.Dir(sourcePath))...)
+	problems = append(problems, pipelineHarnessCheckRecordedParent("output parent", record.OutputParent, filepath.Dir(output.Path))...)
+	existing := expectation.OldOutput
+	if expectation.Mode == string(publication.InPlace) {
+		existing = expectation.SourceBytes
 	}
-	if source.Inode != snapshot.Files["source"].Inode || source.Size != snapshot.Files["source"].Size {
-		problems = append(problems, "recorded source identity does not match the unchanged source file")
+	if expectation.OutputPresent {
+		if record.ExistingOutput.Absent || record.ExistingOutput.File == nil {
+			problems = append(problems, "record reports an absent output, but this mode requires an existing one")
+		} else if digest := pipelineHarnessDigest(existing); record.ExistingOutput.File.SHA256 != digest ||
+			record.ExistingOutput.File.Size != int64(len(existing)) ||
+			record.ExistingOutput.File.Identity.Mode&unix.S_IFMT != unix.S_IFREG ||
+			record.ExistingOutput.File.Identity.Nlink != 1 {
+			problems = append(problems, "recorded existing output identity or digest does not match the authored pre-run output")
+		}
+	} else if !record.ExistingOutput.Absent || record.ExistingOutput.File != nil {
+		problems = append(problems, "record claims an existing output for a create/absent setup")
+	}
+	if expectation.Mode == string(publication.InPlace) {
+		backup := snapshot.Files["backup"]
+		if record.Backup == nil || record.Backup.Path != backup.Path || record.Backup.Basename != filepath.Base(backup.Path) {
+			problems = append(problems, "recorded backup path does not match the physical InPlace backup")
+		}
+	} else if record.Backup != nil {
+		problems = append(problems, "record carries a backup for a mode that never creates one")
 	}
 	return problems
+}
+
+// pipelineHarnessCheckRecordedFile compares an established record entry to the
+// independently captured physical file. Path and basename are checked against
+// the logical location the record names; identity, size and the publication
+// record's own SHA-256 integrity field are checked against actual bytes.
+func pipelineHarnessCheckRecordedFile(label string, recorded pipelineHarnessRecordFile, physical pipelineHarnessFile, logicalPath string, authored []byte) []string {
+	var problems []string
+	if !physical.Exists {
+		return []string{label + " has no physical counterpart"}
+	}
+	if recorded.Path != logicalPath || recorded.Basename != filepath.Base(logicalPath) {
+		problems = append(problems, fmt.Sprintf("%s path %q/%q, want %q/%q", label, recorded.Path, recorded.Basename, logicalPath, filepath.Base(logicalPath)))
+	}
+	identity := recorded.Identity
+	if identity.Dev != physical.Dev || identity.Ino != physical.Inode || identity.MountID != physical.MountID ||
+		identity.Size != physical.Size || identity.Mode != uint32(physical.Mode) || identity.Nlink != uint64(physical.Nlink) {
+		problems = append(problems, fmt.Sprintf("%s identity %+v does not match physical dev=%d ino=%d mount=%d size=%d mode=%#x nlink=%d",
+			label, identity, physical.Dev, physical.Inode, physical.MountID, physical.Size, physical.Mode, physical.Nlink))
+	}
+	if recorded.Size != physical.Size || recorded.Size != int64(len(physical.Bytes)) {
+		problems = append(problems, fmt.Sprintf("%s recorded size %d does not match physical bytes %d", label, recorded.Size, len(physical.Bytes)))
+	}
+	if !bytes.Equal(physical.Bytes, authored) {
+		problems = append(problems, label+" physical bytes differ from the authored bytes")
+	}
+	if digest := pipelineHarnessDigest(physical.Bytes); recorded.SHA256 != digest {
+		problems = append(problems, label+" SHA-256 does not match the physical bytes")
+	}
+	return problems
+}
+
+func pipelineHarnessCheckRecordedParent(label string, recorded pipelineHarnessRecordIdentity, dir string) []string {
+	var stat unix.Statx_t
+	if err := unix.Statx(unix.AT_FDCWD, dir, unix.AT_SYMLINK_NOFOLLOW, unix.STATX_BASIC_STATS|unix.STATX_MNT_ID, &stat); err != nil {
+		return []string{fmt.Sprintf("%s %q cannot be inspected: %v", label, dir, err)}
+	}
+	dev := unix.Mkdev(stat.Dev_major, stat.Dev_minor)
+	if recorded.Dev != dev || recorded.Ino != stat.Ino || recorded.MountID != stat.Mnt_id {
+		return []string{fmt.Sprintf("%s identity dev=%d ino=%d mount=%d does not match the physical directory dev=%d ino=%d mount=%d",
+			label, recorded.Dev, recorded.Ino, recorded.MountID, dev, stat.Ino, stat.Mnt_id)}
+	}
+	return nil
+}
+
+func pipelineHarnessDigest(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
 }
 
 func pipelineHarnessCheckRows(expectation pipelineHarnessExpectation, snapshot pipelineHarnessSnapshot) []string {
@@ -848,9 +1328,12 @@ func pipelineHarnessCheckRows(expectation pipelineHarnessExpectation, snapshot p
 
 func pipelineHarnessCheckCertainty(expectation pipelineHarnessExpectation, snapshot pipelineHarnessSnapshot) []string {
 	var problems []string
-	observed, _ := pipelineHarnessObserveCertainty(snapshot)
+	observed, basis := pipelineHarnessObserveCertainty(snapshot)
 	if snapshot.Certainty != observed {
 		problems = append(problems, fmt.Sprintf("commit certainty claim %q disagrees with observation evidence %q", snapshot.Certainty, observed))
+	}
+	if !slices.Equal(snapshot.CertaintyBasis, basis) {
+		problems = append(problems, fmt.Sprintf("commit certainty basis %v disagrees with observation evidence %v", snapshot.CertaintyBasis, basis))
 	}
 	if snapshot.Certainty != expectation.CommitCertainty {
 		problems = append(problems, fmt.Sprintf("commit certainty %q, want %q", snapshot.Certainty, expectation.CommitCertainty))
@@ -863,12 +1346,15 @@ func pipelineHarnessCheckCertainty(expectation pipelineHarnessExpectation, snaps
 		if len(snapshot.RowsAtCommit) == 0 {
 			problems = append(problems, "commit was claimed without rows observed at the commit entry")
 		}
+		if !pipelineHarnessRowsEqual(snapshot.AuthoredD1, snapshot.Rows) {
+			problems = append(problems, "commit was claimed without the authored final D1 rows")
+		}
 	case pipelineHarnessNotCommitted:
-		if len(snapshot.RowsAfterStage) == 0 {
-			problems = append(problems, "TMCommitted=false alone is not evidence of a rejected commit")
+		if !slices.Contains(basis, "final-rows-D0") || !slices.Contains(basis, "no-commit-entry") {
+			problems = append(problems, "not-committed was claimed without final D0 rows and an unreached commit entry")
 		}
 	case pipelineHarnessUnknown:
-		if len(snapshot.CertaintyBasis) == 0 {
+		if len(basis) == 0 {
 			problems = append(problems, "unknown commit certainty has no observation basis")
 		}
 	}
@@ -930,6 +1416,9 @@ func TestPipelineHarnessState(t *testing.T) {
 func testPipelineHarnessStateValid(t *testing.T) {
 	table := pipelineHarnessScenarioTable(t)
 	pipelineHarnessSaveJSON(t, "state-table.json", table)
+	catalog := pipelineHarnessFaultCatalog()
+	pipelineHarnessCheckFaultCatalog(t, catalog)
+	pipelineHarnessSaveJSON(t, "fault-catalog.json", catalog)
 	executed := map[string]bool{}
 	states := make([]pipelineHarnessSnapshot, 0, len(pipelineHarnessCases()))
 	for _, spec := range pipelineHarnessCases() {
@@ -1010,21 +1499,27 @@ func testPipelineHarnessStateReject(t *testing.T) {
 	if problems := pipelineHarnessJudge(precommit, control); len(problems) != 0 {
 		t.Fatalf("pre-commit positive control rejected: %v", problems)
 	}
+	cancelScenario := pipelineHarnessScenarioByCase(t, "precommit-cancel/text")
+	cancelControl := pipelineHarnessPrecommitObservation(t, published, cancelScenario)
+	if problems := pipelineHarnessJudge(cancelScenario, cancelControl); len(problems) != 0 {
+		t.Fatalf("pre-commit cancel positive control rejected: %v", problems)
+	}
 	pipelineHarnessSaveJSON(t, "reject-controls.json", map[string]any{
 		"published": published, "precommit_control": control,
 		"note": "oracle acceptance of a hypothetical not-run observation is not an execution pass; the pass count comes only from pipelineHarnessScenarioPassed",
 	})
-	mutations := []struct {
+	type mutation struct {
 		name   string
 		expect pipelineHarnessExpectation
 		base   pipelineHarnessSnapshot
 		mutate func(*pipelineHarnessSnapshot)
-	}{
+	}
+	mutations := []mutation{
 		{"stage-missing", precommit, control, func(s *pipelineHarnessSnapshot) {
 			delete(s.Files, "stage")
 		}},
 		{"d0-wrong-row", precommit, control, func(s *pipelineHarnessSnapshot) {
-			s.RowsAfterStage[0].Text = "wrong D0 text"
+			s.Rows[0].Text = "wrong D0 text"
 		}},
 		{"d1-wrong-row", publishedExpectation, published, func(s *pipelineHarnessSnapshot) {
 			s.RowsAtCommit[0].Text = "wrong D1 text"
@@ -1042,6 +1537,36 @@ func testPipelineHarnessStateReject(t *testing.T) {
 			s.CertaintyBasis = []string{"tm-committed-false"}
 		}},
 	}
+	recordMutations := []struct {
+		name   string
+		mutate func(*pipelineHarnessRecord)
+	}{
+		{"record-source-inode", func(record *pipelineHarnessRecord) { record.Source.Identity.Ino++ }},
+		{"record-source-dev", func(record *pipelineHarnessRecord) { record.Source.Identity.Dev++ }},
+		{"record-source-size", func(record *pipelineHarnessRecord) { record.Source.Identity.Size++ }},
+		{"record-source-mount", func(record *pipelineHarnessRecord) { record.Source.Identity.MountID++ }},
+		{"record-source-mode", func(record *pipelineHarnessRecord) { record.Source.Identity.Mode++ }},
+		{"record-source-nlink", func(record *pipelineHarnessRecord) { record.Source.Identity.Nlink++ }},
+		{"record-source-hash", func(record *pipelineHarnessRecord) { record.Source.SHA256 = "invalid-existing-integrity-field" }},
+		{"record-source-path", func(record *pipelineHarnessRecord) {
+			record.Source.Path = filepath.Join(filepath.Dir(record.Source.Path), "other-source")
+		}},
+		{"record-stage-inode", func(record *pipelineHarnessRecord) { record.Stage.Identity.Ino++ }},
+		{"record-stage-size", func(record *pipelineHarnessRecord) { record.Stage.Identity.Size++ }},
+		{"record-stage-mount", func(record *pipelineHarnessRecord) { record.Stage.Identity.MountID++ }},
+		{"record-stage-mode", func(record *pipelineHarnessRecord) { record.Stage.Identity.Mode++ }},
+		{"record-stage-nlink", func(record *pipelineHarnessRecord) { record.Stage.Identity.Nlink++ }},
+		{"record-stage-hash", func(record *pipelineHarnessRecord) { record.Stage.SHA256 = "invalid-existing-integrity-field" }},
+		{"record-existing-output-hash", func(record *pipelineHarnessRecord) {
+			record.ExistingOutput.File.SHA256 = "invalid-existing-integrity-field"
+		}},
+	}
+	for _, field := range recordMutations {
+		mutations = append(mutations, mutation{
+			name: field.name, expect: publishedExpectation, base: published,
+			mutate: func(s *pipelineHarnessSnapshot) { field.mutate(s.Record) },
+		})
+	}
 	for _, mutation := range mutations {
 		t.Run(mutation.name, func(t *testing.T) {
 			invalid := mutation.base.clone()
@@ -1058,6 +1583,42 @@ func testPipelineHarnessStateReject(t *testing.T) {
 			t.Logf("invalid state observation %s rejected: %v", mutation.name, problems)
 		})
 	}
+	stageCheckpoint := cancelControl.clone()
+	stageCheckpoint.RowsAfterStage[0].Text = "wrong D0 text"
+	if problems := pipelineHarnessJudge(cancelScenario, stageCheckpoint); len(problems) == 0 {
+		t.Fatal("oracle accepted a wrong D0 row at the tm-commit.before checkpoint")
+	} else {
+		pipelineHarnessSaveJSON(t, "reject-stage-checkpoint-wrong-row.json", map[string]any{"problems": problems})
+		t.Logf("invalid state observation stage-checkpoint-wrong-row rejected: %v", problems)
+	}
+	t.Run("ambiguous-commit-is-unknown", func(t *testing.T) {
+		ambiguous := published.clone()
+		ambiguous.RowsAtCommit = nil
+		ambiguous.TMCommitted = false
+		ambiguous.Result.TMCommitted = false
+		ambiguous.Error = "ambiguous COMMIT result; checkpoint unavailable"
+		ambiguous.ErrorPhase = "commit"
+		ambiguous.Certainty, ambiguous.CertaintyBasis = pipelineHarnessObserveCertainty(ambiguous)
+		if ambiguous.Certainty != pipelineHarnessUnknown {
+			t.Fatalf("historical precommit evidence plus a false flag classified an ambiguous COMMIT as %s", ambiguous.Certainty)
+		}
+		if problems := pipelineHarnessJudge(publishedExpectation, ambiguous); len(problems) == 0 {
+			t.Fatal("oracle accepted an ambiguous COMMIT as a committed observation")
+		}
+		pipelineHarnessSaveJSON(t, "reject-ambiguous-commit.json", map[string]any{
+			"certainty": ambiguous.Certainty, "basis": ambiguous.CertaintyBasis, "observation": ambiguous,
+		})
+		t.Logf("ambiguous COMMIT classified unknown with basis %v", ambiguous.CertaintyBasis)
+	})
+	t.Run("historical-precommit-rows-cannot-prove-rollback", func(t *testing.T) {
+		historical := control.clone()
+		historical.Rows = slices.Clone(historical.AuthoredD1)
+		certainty, basis := pipelineHarnessObserveCertainty(historical)
+		if certainty == pipelineHarnessNotCommitted {
+			t.Fatalf("historical afterStage D0 plus TMCommitted=false was accepted as not-committed although final rows are D1 (basis %v)", basis)
+		}
+		pipelineHarnessSaveJSON(t, "reject-historical-precommit.json", map[string]any{"certainty": certainty, "basis": basis})
+	})
 }
 
 func pipelineHarnessScenarioByCase(t *testing.T, name string) pipelineHarnessExpectation {
@@ -1093,9 +1654,17 @@ func pipelineHarnessPrecommitObservation(t *testing.T, published pipelineHarness
 	snapshot.RecordClosed = false
 	snapshot.StageClosed = false
 	snapshot.Rows = slices.Clone(expectation.D0)
-	snapshot.RowsAfterStage = slices.Clone(expectation.D0)
+	snapshot.RowsAfterStage = nil
+	if expectation.StageCheckpoint {
+		snapshot.RowsAfterStage = slices.Clone(expectation.D0)
+	}
 	snapshot.RowsAtCommit = nil
 	snapshot.TMCommitted = false
+	snapshot.AuthoredD0 = slices.Clone(expectation.D0)
+	snapshot.AuthoredD1 = slices.Clone(expectation.D1)
+	snapshot.StageFDClosed = expectation.StageFDClosed
+	snapshot.RecordFDClosed = expectation.RecordFDClosed
+	snapshot.ErrorPhase = "stage"
 	snapshot.Reached = maps.Clone(expectation.RequiredBoundaries)
 	snapshot.Order = slices.Clone(expectation.BoundaryOrder)
 	snapshot.RecordEvents = nil

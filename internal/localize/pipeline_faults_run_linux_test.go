@@ -29,34 +29,36 @@ import (
 // after the last callback (stage/record descriptor close) are confirmed at the
 // next observable real operation by checking the descriptor reports os.ErrClosed.
 const (
-	pipelineBoundaryGenerateBefore      = "generate.before"
-	pipelineBoundaryGenerateAfter       = "generate.after"
-	pipelineBoundaryStageWriteBefore    = "stage.write.before"
-	pipelineBoundaryStageWriteAfter     = "stage.write.after"
-	pipelineBoundaryStageSyncBefore     = "stage.sync.before"
-	pipelineBoundaryStageSyncAfter      = "stage.sync.after"
-	pipelineBoundaryStageCloseBefore    = "stage.close.before"
-	pipelineBoundaryStageCloseAfter     = "stage.close.after"
-	pipelineBoundaryObserveBefore       = "observe.before"
-	pipelineBoundaryObserveAfter        = "observe.after"
-	pipelineBoundaryCompareFinalAfter   = "compare-final.after"
-	pipelineBoundaryTMCommitBefore      = "tm-commit.before"
-	pipelineBoundaryTMCommitAfter       = "tm-commit.after"
-	pipelineBoundaryRecordWriteBefore   = "record.write.before"
-	pipelineBoundaryRecordWriteAfter    = "record.write.after"
-	pipelineBoundaryRecordSyncBefore    = "record.sync.before"
-	pipelineBoundaryRecordSyncAfter     = "record.sync.after"
-	pipelineBoundaryRecordCloseBefore   = "record.close.before"
-	pipelineBoundaryRecordCloseAfter    = "record.close.after"
-	pipelineBoundaryRecordInstallBefore = "record.install.before"
-	pipelineBoundaryRecordInstallAfter  = "record.install.after"
-	pipelineBoundaryBackupRenameBefore  = "backup-rename.before"
-	pipelineBoundaryBackupRenameAfter   = "backup-rename.after"
-	pipelineBoundaryPublishRenameBefore = "publish-rename.before"
-	pipelineBoundaryPublishRenameAfter  = "publish-rename.after"
-	pipelineBoundaryStdoutWriteBefore   = "stdout.write.before"
-	pipelineBoundaryStdoutWriteAfter    = "stdout.write.after"
-	pipelineBoundaryRunCloseAfter       = "run.close.after"
+	pipelineBoundaryGenerateBefore        = "generate.before"
+	pipelineBoundaryGenerateAfter         = "generate.after"
+	pipelineBoundaryStageWriteBefore      = "stage.write.before"
+	pipelineBoundaryStageWriteAfter       = "stage.write.after"
+	pipelineBoundaryStageSyncBefore       = "stage.sync.before"
+	pipelineBoundaryStageSyncAfter        = "stage.sync.after"
+	pipelineBoundaryStageCloseBefore      = "stage.close.before"
+	pipelineBoundaryStageCloseAfter       = "stage.close.after"
+	pipelineBoundaryObserveBefore         = "observe.before"
+	pipelineBoundaryObserveAfter          = "observe.after"
+	pipelineBoundaryCompareFinalAfter     = "compare-final.after"
+	pipelineBoundaryTMCommitBefore        = "tm-commit.before"
+	pipelineBoundaryTMCommitAfter         = "tm-commit.after"
+	pipelineBoundaryRecordWriteBefore     = "record.write.before"
+	pipelineBoundaryRecordWriteAfter      = "record.write.after"
+	pipelineBoundaryRecordSyncBefore      = "record.sync.before"
+	pipelineBoundaryRecordSyncAfter       = "record.sync.after"
+	pipelineBoundaryRecordCloseBefore     = "record.close.before"
+	pipelineBoundaryRecordCloseAfter      = "record.close.after"
+	pipelineBoundaryRecordInstallBefore   = "record.install.before"
+	pipelineBoundaryRecordInstallAfter    = "record.install.after"
+	pipelineBoundaryBackupRenameBefore    = "backup-rename.before"
+	pipelineBoundaryBackupRenameAfter     = "backup-rename.after"
+	pipelineBoundaryPublishRenameBefore   = "publish-rename.before"
+	pipelineBoundaryPublishRenameAfter    = "publish-rename.after"
+	pipelineBoundaryStdoutWriteBefore     = "stdout.write.before"
+	pipelineBoundaryStdoutWriteAfter      = "stdout.write.after"
+	pipelineBoundaryDiagnosticWriteBefore = "diagnostic.write.before"
+	pipelineBoundaryDiagnosticWriteAfter  = "diagnostic.write.after"
+	pipelineBoundaryRunCloseAfter         = "run.close.after"
 )
 
 // pipelineHarnessOldOutput is authored here rather than derived from the
@@ -225,15 +227,17 @@ type pipelineHarnessRecordEvent struct {
 // and records record write/sync/close/install and rename boundaries. The close
 // hooks return nil because the bridge performs the mandatory real Close.
 type pipelineHarnessOperations struct {
-	trace     *pipelineHarnessTrace
-	t         *testing.T
-	source    string
-	paths     publication.PipelineFaultPaths
-	stageFD   *os.File
-	recordFDs []*os.File
-	lastPhase string
-	counts    map[string]int
-	events    []pipelineHarnessRecordEvent
+	trace          *pipelineHarnessTrace
+	t              *testing.T
+	source         string
+	paths          publication.PipelineFaultPaths
+	stageFD        *os.File
+	recordFDs      []*os.File
+	stageFDClosed  bool
+	recordFDClosed bool
+	lastPhase      string
+	counts         map[string]int
+	events         []pipelineHarnessRecordEvent
 }
 
 func newPipelineHarnessOperations(t *testing.T, trace *pipelineHarnessTrace, source string) *pipelineHarnessOperations {
@@ -309,6 +313,7 @@ func (o *pipelineHarnessOperations) hooks() publication.PipelineFaultHooks {
 				if _, err := closed.Stat(); !errors.Is(err, os.ErrClosed) {
 					o.t.Fatalf("record %s Close-after checkpoint still open: %v", phase, err)
 				}
+				o.recordFDClosed = true
 				o.trace.mark(pipelineBoundaryRecordCloseAfter)
 				o.trace.mark(pipelineBoundaryRecordInstallBefore)
 				o.event(phase, "install-before")
@@ -337,6 +342,7 @@ func (o *pipelineHarnessOperations) hooks() publication.PipelineFaultHooks {
 			if _, err := o.stageFD.Stat(); !errors.Is(err, os.ErrClosed) {
 				o.t.Fatalf("stage Close-after checkpoint still open: %v", err)
 			}
+			o.stageFDClosed = true
 			o.trace.mark(pipelineBoundaryStageCloseAfter)
 			o.stageFD = nil
 			o.trace.mark(pipelineBoundaryPublishRenameBefore)
@@ -368,6 +374,14 @@ type pipelineHarness struct {
 	result     Result
 	runErr     error
 
+	// A fault cell requests one boundary, occurrence and stimulus. The fields
+	// are copied into the observation so evidence records what was asked for
+	// and which fault field was actually injected, separately from expectations.
+	requestedBoundary   string
+	requestedOccurrence int
+	stimulus            string
+	injected            []string
+
 	rowsAfterStage []pipelineFixtureRow
 	rowsAtCommit   []pipelineFixtureRow
 }
@@ -380,7 +394,7 @@ func newPipelineHarness(t *testing.T, spec pipelineHarnessCase, wrapped bool) *p
 	}
 	// Given: a fresh real fixture, SQLite store and unrelated D0 row per harness.
 	f := newPipelineFixture(t, input)
-	h := &pipelineHarness{t: t, fixture: f, kind: spec.kind, surface: spec.surface, mode: spec.mode, wrapped: wrapped}
+	h := &pipelineHarness{t: t, fixture: f, kind: spec.kind, surface: spec.surface, mode: spec.mode, wrapped: wrapped, stimulus: "none"}
 	if wrapped {
 		h.trace = newPipelineHarnessTrace()
 	}
@@ -418,7 +432,7 @@ func newPipelineHarness(t *testing.T, spec pipelineHarnessCase, wrapped bool) *p
 		if spec.mode == publication.InPlace {
 			h.options.Output = h.options.Source
 		}
-		if spec.mode == publication.Replace {
+		if spec.mode == publication.Replace && spec.outputPresent {
 			if err := os.WriteFile(h.options.Output, pipelineHarnessOldOutput, 0600); err != nil {
 				t.Fatal(err)
 			}
