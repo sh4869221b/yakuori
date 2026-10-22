@@ -1228,11 +1228,11 @@ func pipelineHarnessCheckFiles(expectation pipelineHarnessExpectation, snapshot 
 	if record.Exists != expectation.RecordInstalled {
 		problems = append(problems, fmt.Sprintf("record presence = %t, want installed=%t", record.Exists, expectation.RecordInstalled))
 	}
-	installed := record.Exists && (snapshot.Reached[pipelineBoundaryRecordInstallAfter] > 0 || snapshot.InstallBasis != "")
+	installed := record.Exists && snapshot.Reached[pipelineBoundaryRecordInstallAfter] > 0
 	if snapshot.RecordInstalled != installed {
 		problems = append(problems, fmt.Sprintf("record installed claim = %t, physical install evidence = %t", snapshot.RecordInstalled, installed))
 	}
-	if snapshot.RecordInstalled && snapshot.InstallBasis == "" && !snapshot.RecordClosed {
+	if snapshot.RecordInstalled && !snapshot.RecordClosed {
 		problems = append(problems, "record installation was claimed without a completed Close")
 	}
 	backup := snapshot.Files["backup"]
@@ -1618,6 +1618,10 @@ func testPipelineHarnessStateReject(t *testing.T) {
 			s.RecordInstalled = true
 			s.RecordClosed = true
 			s.Reached[pipelineBoundaryRecordCloseBefore] = 1
+		}},
+		{"record-close-missing-with-prose-basis", publishedExpectation, published, func(s *pipelineHarnessSnapshot) {
+			s.RecordClosed = false
+			s.InstallBasis = "explanatory prose is not install or Close evidence on the wrapped path"
 		}},
 		{"certainty-from-flag", cancelScenario, cancelControl, func(s *pipelineHarnessSnapshot) {
 			s.RowsAfterStage = nil
