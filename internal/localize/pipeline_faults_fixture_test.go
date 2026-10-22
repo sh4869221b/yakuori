@@ -48,7 +48,25 @@ type pipelineFixtureInput struct {
 	suffix            []byte
 	targetHeader      []byte
 	source            []byte
+	target            []byte
 	units             []pipelineFixtureUnit
+}
+
+// Independently authored W3 vectors as fixed bytes: the en source fed to the
+// real Import and the expected ja target artifact. These are separate from the
+// fixture units table and are not derived from production Export/Core output.
+const (
+	pipelineW3SourceHex = "52545357a20000009743047a14327900000000060000007914327907000000000000007814327908000000060000006ce8cd860f0000000500000002040302017a143279efcdab896ce8cd8615e95e27bde87a63f54aea64d400000000f65e2dbdf67a63f541ea64d40000c62c75595bb222649cc800003951"
+	pipelineW3TargetHex = "52545357a2000000835404af5582590000000002000000ac5582590300000000000000ad5582590400000002000000b9a97da607000000020000000204030201af558259efcdab89b9a97da60a310d074000000000310d0e400000310d457300009348"
+)
+
+func pipelineFixedVector(t *testing.T, encoded string) []byte {
+	t.Helper()
+	raw, err := hex.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("fixed vector is not valid hex: %v", err)
+	}
+	return raw
 }
 
 func pipelineFixtureTable(t *testing.T) []pipelineFixtureInput {
@@ -58,6 +76,8 @@ func pipelineFixtureTable(t *testing.T) []pipelineFixtureInput {
 		gameNamespace: "issue68", artifactNamespace: "w3", language: "en",
 		header: []byte{'R', 'T', 'S', 'W', 162, 0, 0, 0, 0x97, 0x43}, suffix: []byte{0x39, 0x51},
 		targetHeader: []byte{0x83, 0x54, 0x93, 0x48},
+		source:       pipelineFixedVector(t, pipelineW3SourceHex),
+		target:       pipelineFixedVector(t, pipelineW3TargetHex),
 		units: []pipelineFixtureUnit{
 			{stableID: "1001", source: "Hello.", translation: "訳一", keys: [][]byte{{0x04, 0x03, 0x02, 0x01}}},
 			{stableID: "1002", source: "", translation: ""},
@@ -65,33 +85,16 @@ func pipelineFixtureTable(t *testing.T) []pipelineFixtureInput {
 			{stableID: "4294967295", source: "Last.", translation: "訳終", keys: [][]byte{{0xef, 0xcd, 0xab, 0x89}}},
 		},
 	}
-	w3.source = pipelineW3Vector(t, w3.units)
 	return []pipelineFixtureInput{
 		{
 			kind: "text", adapterName: "text", formatSchema: "text-v1",
 			gameNamespace: "issue68", artifactNamespace: "text", language: "en",
 			source: []byte("Hello.\n"),
+			target: []byte("訳文。\n"),
 			units:  []pipelineFixtureUnit{{stableID: "document", source: "Hello.\n", translation: "訳文。\n"}},
 		},
 		w3,
 	}
-}
-
-func pipelineW3Vector(t *testing.T, units []pipelineFixtureUnit) []byte {
-	t.Helper()
-	entries := make([]w3SQLiteEntry, len(units))
-	for i, u := range units {
-		id, err := strconv.ParseUint(u.stableID, 10, 32)
-		if err != nil {
-			t.Fatalf("authored stable ID is not a W3 ID: %v", err)
-		}
-		hashes := make([]uint32, len(u.keys))
-		for j, key := range u.keys {
-			hashes[j] = binary.LittleEndian.Uint32(key)
-		}
-		entries[i] = w3SQLiteEntry{id: uint32(id), text: u.source, keys: hashes}
-	}
-	return w3SQLiteArtifactBytes(entries)
 }
 
 type pipelineBackend struct {
@@ -461,35 +464,63 @@ func (f *pipelineFixture) exercise(t *testing.T) []byte {
 
 func (f *pipelineFixture) assertFixtureOutput(t *testing.T, input pipelineFixtureInput, out []byte) {
 	t.Helper()
-	if input.kind == "text" {
-		if !bytes.Equal(out, []byte(input.units[0].translation)) {
-			t.Fatal("text output differs from the authored translation")
-		}
-		return
+	if err := f.checkFixtureOutput(input, out); err != nil {
+		t.Fatal(err)
 	}
+}
+
+// checkFixtureOutput compares the produced artifact to the fixed authored
+// target vector, then verifies the ordered authored identity through the real
+// Observe contract.
+func (f *pipelineFixture) checkFixtureOutput(input pipelineFixtureInput, out []byte) error {
+	if !bytes.Equal(out, input.target) {
+		return fmt.Errorf("target artifact differs from the fixed authored vector")
+	}
+	if input.kind == "text" {
+		return nil
+	}
+	return f.checkObservedOutput(input, out)
+}
+
+// checkObservedOutput is order-sensitive: every authored ID, including the
+// empty unit, must appear at its authored record position with the authored
+// text, keys and header. A missing unit never reads as an empty translation.
+func (f *pipelineFixture) checkObservedOutput(input pipelineFixtureInput, out []byte) error {
 	observed, err := f.adapter.Observe(bytes.NewReader(out))
 	if err != nil {
-		t.Fatalf("observe target: %v", err)
+		return fmt.Errorf("observe target: %w", err)
 	}
-	texts := make(map[string]string, len(observed.Units))
-	for _, u := range observed.Units {
+	if len(observed.Units) != len(input.units) {
+		return fmt.Errorf("target units = %d, want %d", len(observed.Units), len(input.units))
+	}
+	wantKeys := make([]artifact.KeyRelation, 0, len(observed.Keys))
+	for i, entry := range input.units {
+		u := observed.Units[i]
+		if u.ID.StableID() != entry.stableID {
+			return fmt.Errorf("target unit %d ID = %q, want authored %q", i, u.ID.StableID(), entry.stableID)
+		}
 		if u.TargetLanguage != "ja" {
-			t.Fatalf("target language = %q, want ja", u.TargetLanguage)
+			return fmt.Errorf("target language = %q, want ja", u.TargetLanguage)
 		}
-		texts[u.ID.StableID()] = u.Text
-	}
-	if len(texts) != len(input.units) {
-		t.Fatalf("target units = %d, want %d", len(texts), len(input.units))
-	}
-	for _, entry := range input.units {
-		if texts[entry.stableID] != entry.translation {
-			t.Fatalf("target unit %s differs from the authored translation", entry.stableID)
+		if u.Text != entry.translation {
+			return fmt.Errorf("target unit %s differs from the authored translation", entry.stableID)
 		}
+		id, err := unit.NewUnitID(input.adapterName, input.formatSchema, entry.stableID)
+		if err != nil {
+			return err
+		}
+		for _, key := range entry.keys {
+			wantKeys = append(wantKeys, artifact.KeyRelation{UnitID: id, Key: string(key)})
+		}
+	}
+	if !slices.Equal(observed.Keys, wantKeys) {
+		return fmt.Errorf("target key records differ from the authored order or bytes")
 	}
 	if len(out) < len(input.targetHeader) || !bytes.Equal(out[:8], input.source[:8]) ||
 		!bytes.Equal(out[8:10], input.targetHeader[:2]) || !bytes.HasSuffix(out, input.targetHeader[2:]) {
-		t.Fatal("target W3 header differs from the authored ja header")
+		return fmt.Errorf("target W3 header differs from the authored ja header")
 	}
+	return nil
 }
 
 func pipelineFixtureSave(t *testing.T, name string, raw []byte) {
@@ -538,6 +569,7 @@ func pipelineFixtureEvidence(output []byte, f *pipelineFixture, measured pipelin
 		"units":             units, "real_key_relations": relations,
 		"paths":        map[string]string{"stage": f.stage, "record": f.record, "backup": f.backup},
 		"target_bytes": len(output), "generate_calls": len(f.backend.calls), "limits": measured,
+		"authored_source_hex": hex.EncodeToString(f.input.source), "authored_target_hex": hex.EncodeToString(f.input.target),
 		"authored_targets": f.targets,
 	}
 }
@@ -610,7 +642,10 @@ func testPipelineFixtureInputsReject(t *testing.T) {
 			if err := valid.verifyAuthoredInputs(t, input.units); err != nil {
 				t.Fatalf("valid counterpart rejected: %v", err)
 			}
-			valid.exercise(t)
+			validOutput := valid.exercise(t)
+			if err := valid.checkFixtureOutput(input, validOutput); err != nil {
+				t.Fatalf("valid counterpart rejected by the output checker: %v", err)
+			}
 			if diff := pipelineFixtureDiff(valid.expectedRows(t, input.units), pipelineFixtureReadRows(t, valid.db)); len(diff) != 0 {
 				t.Fatalf("valid counterpart D1 differs: %v", diff)
 			}
@@ -645,13 +680,58 @@ func testPipelineFixtureInputsReject(t *testing.T) {
 			if validDiff := pipelineFixtureDiff(textFixture.expectedRows(t, input.units), actual); len(validDiff) != 0 {
 				t.Fatalf("unmutated expectations do not match the same rows: %v", validDiff)
 			}
+			rejectedOutputs := pipelineRejectOutputMutations(t, valid, input, validOutput)
 			pipelineFixtureSaveJSON(t, "mismatch.json", map[string]any{
 				"valid_counterpart_d1_rows": validD1, "source_id_rejected": true,
 				"d0_rows_after_rejection": len(before), "generate_after_id_rejection": len(idFixture.backend.calls),
 				"translated_text_differences": len(diff), "d0_sentinel_unchanged": true,
+				"rejected_output_mutations": rejectedOutputs,
 			})
-			t.Logf("kind=%s valid counterpart D1=%d; source-ID mutation rejected with D0 unchanged and Generate=0; translated-text mutation produced exactly 1 row difference with D0 sentinel unchanged",
-				input.kind, validD1)
+			t.Logf("kind=%s valid counterpart D1=%d; source-ID mutation rejected with D0 unchanged and Generate=0; translated-text mutation produced exactly 1 row difference with D0 sentinel unchanged; output mutations rejected=%v",
+				input.kind, validD1, rejectedOutputs)
 		})
 	}
+}
+
+// pipelineRejectOutputMutations keeps each former false positive structurally
+// valid for the real Observe contract, then requires the shipped ordered
+// checker to reject it. A nil error is an actual checker failure.
+func pipelineRejectOutputMutations(t *testing.T, f *pipelineFixture, input pipelineFixtureInput, out []byte) []string {
+	t.Helper()
+	if input.kind != "w3" {
+		return nil
+	}
+	if len(input.units) < 4 {
+		t.Fatalf("output mutation fixture has %d units, want at least 4", len(input.units))
+	}
+	recordsAt, keyAt := 11, 11+12*len(input.units)+1
+	mutations := []struct {
+		name   string
+		mutate func([]byte)
+	}{
+		{"changed-key", func(raw []byte) { raw[keyAt] ^= 0x40 }},
+		{"reordered-id-records", func(raw []byte) {
+			first := bytes.Clone(raw[recordsAt : recordsAt+12])
+			copy(raw[recordsAt:recordsAt+12], raw[recordsAt+12:recordsAt+24])
+			copy(raw[recordsAt+12:recordsAt+24], first)
+		}},
+		{"missing-empty-id", func(raw []byte) {
+			id := recordsAt + 12
+			binary.LittleEndian.PutUint32(raw[id:], binary.LittleEndian.Uint32(raw[id:])^0x1000)
+		}},
+	}
+	var rejected []string
+	for _, mutation := range mutations {
+		raw := bytes.Clone(out)
+		mutation.mutate(raw)
+		if _, err := f.adapter.Observe(bytes.NewReader(raw)); err != nil {
+			t.Fatalf("mutation %s is structurally invalid, so rejection would not prove the checker: %v", mutation.name, err)
+		}
+		if err := f.checkObservedOutput(input, raw); err == nil {
+			t.Fatalf("output checker accepted %s", mutation.name)
+		}
+		t.Logf("output mutation %s rejected by the ordered checker", mutation.name)
+		rejected = append(rejected, mutation.name)
+	}
+	return rejected
 }
