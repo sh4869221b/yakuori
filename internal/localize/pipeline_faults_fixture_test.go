@@ -97,30 +97,157 @@ func pipelineFixtureTable(t *testing.T) []pipelineFixtureInput {
 	}
 }
 
+// pipelineBackendCallbacks replaces one operation on the same controlled
+// pointer. A nil field keeps the existing success behaviour, so a test can
+// inject a single fault without a second engine or a production hook.
+type pipelineBackendCallbacks struct {
+	Info        func(context.Context) (inference.ModelInfo, error)
+	CountTokens func(context.Context, inference.GenerationRequest) (int, error)
+	Generate    func(context.Context, inference.GenerationRequest) (inference.GenerationResult, error)
+	Close       func() error
+}
+
+type pipelineBackendPolicyRecord struct {
+	Schema           int   `json:"schema"`
+	MaxOutputTokens  int   `json:"max_output_tokens"`
+	RequestTimeoutNS int64 `json:"request_timeout_ns"`
+	Seed             int64 `json:"seed"`
+	SeedFixed        bool  `json:"seed_fixed"`
+	StopIDs          []int `json:"stop_ids,omitempty"`
+}
+
+// pipelineBackendCall is the ordinal history of one backend operation. The
+// request snapshot, policy and token IDs come from the actual argument, never
+// from the expected table.
+type pipelineBackendCall struct {
+	Operation string                      `json:"operation"`
+	Ordinal   int                         `json:"ordinal"`
+	Backend   string                      `json:"backend"`
+	Request   string                      `json:"request,omitempty"`
+	TokenIDs  []int                       `json:"token_ids,omitempty"`
+	Policy    pipelineBackendPolicyRecord `json:"policy"`
+	Finish    string                      `json:"finish,omitempty"`
+	Error     string                      `json:"error,omitempty"`
+}
+
 type pipelineBackend struct {
-	info  inference.ModelInfo
-	texts map[string]string
-	calls []string
+	info      inference.ModelInfo
+	texts     map[string]string
+	calls     []string
+	callbacks pipelineBackendCallbacks
+	history   []pipelineBackendCall
+}
+
+func (e *pipelineBackend) record(operation string, request *inference.GenerationRequest) int {
+	call := pipelineBackendCall{Operation: operation, Ordinal: len(e.history) + 1, Backend: e.info.Backend}
+	if request != nil {
+		call.Request, call.TokenIDs = request.RenderedPrompt(), request.TokenIDs()
+		policy := request.Policy()
+		call.Policy = pipelineBackendPolicyRecord{
+			Schema: policy.Schema, MaxOutputTokens: policy.MaxOutputTokens,
+			RequestTimeoutNS: int64(policy.RequestTimeout), Seed: policy.Seed, SeedFixed: policy.SeedFixed,
+			StopIDs: policy.StopIDs,
+		}
+	}
+	e.history = append(e.history, call)
+	return len(e.history) - 1
+}
+
+func (e *pipelineBackend) settled(index int, result *inference.GenerationResult, err error) {
+	if result != nil {
+		e.history[index].Finish = string(result.Finish)
+	}
+	if err != nil {
+		e.history[index].Error = err.Error()
+	}
 }
 
 func (e *pipelineBackend) Info(ctx context.Context) (inference.ModelInfo, error) {
-	return e.info, ctx.Err()
+	index := e.record("info", nil)
+	var info inference.ModelInfo
+	var err error
+	if e.callbacks.Info != nil {
+		info, err = e.callbacks.Info(ctx)
+	} else {
+		info, err = e.info, ctx.Err()
+	}
+	e.history[index].Backend = info.Backend
+	e.settled(index, nil, err)
+	return info, err
 }
 
 func (e *pipelineBackend) CountTokens(ctx context.Context, r inference.GenerationRequest) (int, error) {
-	return len(r.TokenIDs()), ctx.Err()
+	index := e.record("count", &r)
+	var count int
+	var err error
+	if e.callbacks.CountTokens != nil {
+		count, err = e.callbacks.CountTokens(ctx, r)
+	} else {
+		count, err = len(r.TokenIDs()), ctx.Err()
+	}
+	e.settled(index, nil, err)
+	return count, err
 }
 
 func (e *pipelineBackend) Generate(ctx context.Context, r inference.GenerationRequest) (inference.GenerationResult, error) {
+	index := e.record("generate", &r)
 	e.calls = append(e.calls, r.RenderedPrompt())
-	text, found := e.texts[r.RenderedPrompt()]
-	if !found || r.RenderedPrompt() == "" {
-		return inference.GenerationResult{}, fmt.Errorf("%w: unexpected controlled request", inference.ErrInvalidPolicy)
+	var result inference.GenerationResult
+	var err error
+	if e.callbacks.Generate != nil {
+		result, err = e.callbacks.Generate(ctx, r)
+	} else {
+		text, found := e.texts[r.RenderedPrompt()]
+		switch {
+		case !found || r.RenderedPrompt() == "":
+			err = fmt.Errorf("%w: unexpected controlled request", inference.ErrInvalidPolicy)
+		default:
+			result = inference.GenerationResult{Text: text, Finish: inference.Stop, PromptTokens: len(r.TokenIDs()), OutputTokens: 2}
+			err = ctx.Err()
+		}
 	}
-	return inference.GenerationResult{Text: text, Finish: inference.Stop, PromptTokens: len(r.TokenIDs()), OutputTokens: 2}, ctx.Err()
+	e.settled(index, &result, err)
+	return result, err
 }
 
-func (*pipelineBackend) Close() error { return nil }
+func (e *pipelineBackend) Close() error {
+	index := e.record("close", nil)
+	var err error
+	if e.callbacks.Close != nil {
+		err = e.callbacks.Close()
+	}
+	e.settled(index, nil, err)
+	return err
+}
+
+func (e *pipelineBackend) operationCount(operation string) int {
+	count := 0
+	for _, call := range e.history {
+		if call.Operation == operation {
+			count++
+		}
+	}
+	return count
+}
+
+func (e *pipelineBackend) operations(operation string) []pipelineBackendCall {
+	var calls []pipelineBackendCall
+	for _, call := range e.history {
+		if call.Operation == operation {
+			calls = append(calls, call)
+		}
+	}
+	return calls
+}
+
+// pipelineControlledCUDAInfo keeps the CPU/controlled fixture identity and
+// switches only the backend-consistent fields the canonical profile validates.
+func pipelineControlledCUDAInfo(base inference.ModelInfo) inference.ModelInfo {
+	base.Backend, base.RequestedBackend = "cuda", "cuda"
+	base.CUDABackendPin, base.KVPrecision = "controlled-cuda-v1", "f16"
+	base.Prefill = inference.PrefillPolicy{Path: "cuda", Fast: "off"}
+	return base
+}
 
 func pipelineRequest(info inference.ModelInfo, text string) (inference.GenerationRequest, error) {
 	policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, 2, time.Second)
@@ -177,9 +304,24 @@ type pipelineFixture struct {
 	stage     string
 	record    string
 	backup    string
+	// seedKind selects the authored D0 shape; empty keeps the unrelated
+	// sentinel plus target miss used by the ordinary fault cases.
+	seedKind string
+	// buildRequest is the per-run request builder; nil keeps the fixture's
+	// authored success requests.
+	buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)
 }
 
 func newPipelineFixture(t *testing.T, input pipelineFixtureInput) *pipelineFixture {
+	t.Helper()
+	return newPipelineFixtureWith(t, input, nil)
+}
+
+// newPipelineFixtureWith runs setup after the controlled backend exists and
+// before the canonical profile, Core and adapter import are built. CPU/CUDA
+// consistent model info and the per-run request builder are therefore fixed
+// before any identity exists, and the default Core is unchanged.
+func newPipelineFixtureWith(t *testing.T, input pipelineFixtureInput, setup func(*pipelineFixture)) *pipelineFixture {
 	t.Helper()
 	f := &pipelineFixture{input: input, limits: config.DefaultLimits(), targets: map[string]string{}, keys: map[string][][]byte{}}
 	f.scope = tm.Scope{GameNamespace: input.gameNamespace, ArtifactNamespace: input.artifactNamespace}
@@ -195,6 +337,9 @@ func newPipelineFixture(t *testing.T, input pipelineFixtureInput) *pipelineFixtu
 		f.targets[u.stableID], f.keys[u.stableID] = u.translation, u.keys
 		f.backend.texts[u.source] = u.translation
 	}
+	if setup != nil {
+		setup(f)
+	}
 	info := f.backend.info
 	request, err := pipelineRequest(info, "")
 	if err != nil {
@@ -206,9 +351,7 @@ func newPipelineFixture(t *testing.T, input pipelineFixtureInput) *pipelineFixtu
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.core, err = NewCoreWithLimits(NewInferenceEngine(f.backend, func(_ context.Context, _ unit.UnitID, text string) (inference.GenerationRequest, error) {
-		return pipelineRequest(info, text)
-	}), f.limits)
+	f.core, err = NewCoreWithLimits(NewInferenceEngine(f.backend, f.requestBuilder()), f.limits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,8 +380,82 @@ func newPipelineFixture(t *testing.T, input pipelineFixtureInput) *pipelineFixtu
 	dir := t.TempDir()
 	f.stage, f.record, f.backup = filepath.Join(dir, "stage"), filepath.Join(dir, "record"), filepath.Join(dir, "backup")
 	f.store, f.db = tmStoreFixture(t)
-	f.d0 = f.seedUnrelated(t)
+	f.d0 = f.seedD0(t)
 	return f
+}
+
+// requestBuilder is the builder current Core and harness callers use for one
+// run. A nil override keeps the authored pipelineRequest success behaviour.
+func (f *pipelineFixture) requestBuilder() func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error) {
+	if f.buildRequest != nil {
+		return f.buildRequest
+	}
+	info := f.backend.info
+	return func(_ context.Context, _ unit.UnitID, text string) (inference.GenerationRequest, error) {
+		return pipelineRequest(info, text)
+	}
+}
+
+func (f *pipelineFixture) setRequestBuilder(build func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) {
+	f.buildRequest = build
+}
+
+func (f *pipelineFixture) seedD0(t *testing.T) []pipelineFixtureRow {
+	t.Helper()
+	switch f.seedKind {
+	case "", "unrelated":
+		return f.seedUnrelated(t)
+	case "target-hit":
+		return f.seedTargetHit(t)
+	default:
+		t.Fatalf("unknown D0 seed kind %q", f.seedKind)
+		return nil
+	}
+}
+
+// seedTargetHit seeds the first non-empty authored unit as a valid TM hit and
+// leaves every later authored unit absent. The hit and the later authored
+// misses are computed from the imported session/profile before the pipeline runs.
+func (f *pipelineFixture) seedTargetHit(t *testing.T) []pipelineFixtureRow {
+	t.Helper()
+	var hit *pipelineFixtureRow
+	var misses []pipelineFixtureRow
+	for _, entry := range f.input.units {
+		if entry.source == "" || entry.translation == "" {
+			continue
+		}
+		row := f.authoredRow(t, entry)
+		if hit == nil {
+			hit = &row
+			if _, err := f.db.Exec("INSERT INTO tm VALUES(?,?,?,?)", row.Schema, pipelineFixtureKeyBytes(t, row.Source), pipelineFixtureKeyBytes(t, row.Profile), row.Text); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		misses = append(misses, row)
+	}
+	if hit == nil {
+		t.Fatal("fixture has no non-empty authored unit for the target-hit D0 seed")
+	}
+	d0 := pipelineFixtureReadRows(t, f.db)
+	if !slices.Equal(d0, []pipelineFixtureRow{*hit}) {
+		t.Fatalf("target-hit D0 readback rows=%d, want only the authored hit", len(d0))
+	}
+	for _, miss := range misses {
+		if slices.Contains(d0, miss) {
+			t.Fatalf("authored miss unit %s was seeded into D0", miss.Source)
+		}
+	}
+	return d0
+}
+
+func pipelineFixtureKeyBytes(t *testing.T, encoded string) []byte {
+	t.Helper()
+	raw, err := hex.DecodeString(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
 
 // pipelineAuthoredSession keeps expectation identity separate from the real adapter import.
@@ -365,23 +582,30 @@ func (f *pipelineFixture) assertWithinDefaultLimits(t *testing.T) pipelineFixtur
 	return measured
 }
 
+// authoredRow computes one row from the authored session, the authored key
+// relations and the canonical profile, before any run observes a row.
+func (f *pipelineFixture) authoredRow(t *testing.T, entry pipelineFixtureUnit) pipelineFixtureRow {
+	t.Helper()
+	id, err := unit.NewUnitID(f.input.adapterName, f.input.formatSchema, entry.stableID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := unit.NewSourceIdentity(f.authored, id, f.scope.GameNamespace, f.scope.ArtifactNamespace, f.keys[entry.stableID])
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := f.profile.ExactKey(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pipelineFixtureRow{key.Schema(), hex.EncodeToString(key.SourceBytes()), hex.EncodeToString(key.ProfileBytes()), entry.translation}
+}
+
 func (f *pipelineFixture) expectedRows(t *testing.T, units []pipelineFixtureUnit) []pipelineFixtureRow {
 	t.Helper()
 	rows := slices.Clone(f.d0)
 	for _, entry := range units {
-		id, err := unit.NewUnitID(f.input.adapterName, f.input.formatSchema, entry.stableID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		source, err := unit.NewSourceIdentity(f.authored, id, f.scope.GameNamespace, f.scope.ArtifactNamespace, f.keys[entry.stableID])
-		if err != nil {
-			t.Fatal(err)
-		}
-		key, err := f.profile.ExactKey(source)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rows = append(rows, pipelineFixtureRow{key.Schema(), hex.EncodeToString(key.SourceBytes()), hex.EncodeToString(key.ProfileBytes()), entry.translation})
+		rows = append(rows, f.authoredRow(t, entry))
 	}
 	slices.SortFunc(rows, func(a, b pipelineFixtureRow) int {
 		if c := strings.Compare(a.Source, b.Source); c != 0 {
