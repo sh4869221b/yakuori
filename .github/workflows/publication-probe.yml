@@ -15,21 +15,151 @@ jobs:
         run: docker build --progress=plain -t yakuori-publication-probe -f ci/Dockerfile .
       - name: Non-root host filesystem and separate-mount probes
         run: |
-          mkdir -p "$RUNNER_TEMP/publication"
+          mkdir -p "$RUNNER_TEMP/publication" "$RUNNER_TEMP/publication/tmp" \
+            "$RUNNER_TEMP/publication/cache" "$RUNNER_TEMP/publication/gopath" \
+            "$RUNNER_TEMP/publication/pipeline-evidence"
           findmnt -T "$RUNNER_TEMP/publication" -o TARGET,FSTYPE,OPTIONS
+          findmnt -T "$RUNNER_TEMP/publication/tmp" -o TARGET,FSTYPE,OPTIONS
+          test -w "$RUNNER_TEMP/publication/tmp"
           docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD:/src" -v "$RUNNER_TEMP/publication:/evidence" \
             -e GOCACHE=/evidence/cache -e GOPATH=/evidence/gopath \
+            -e TMPDIR=/evidence/tmp -e GOTMPDIR=/evidence/tmp \
+            -e YAKUORI_PIPELINE_EVIDENCE=/evidence/pipeline-evidence \
             yakuori-publication-probe sh -ec '
               test "$(id -u)" != 0
               uname -sr
               go version
               stat -f -c "host filesystem: %T %t" /evidence
               test "$(stat -f -c %t /evidence)" = ef53
+              test -w /evidence/tmp
+              test -w "$YAKUORI_PIPELINE_EVIDENCE"
+              echo "qualified TMPDIR=$(stat -f -c %T /evidence/tmp) GOTMPDIR=/evidence/tmp"
+
+              mkdir -p /evidence/names
+              printf "%s\n" "TestPipelineFaultBridge/close-error" "TestPipelineFaultBridge/delegates" > /evidence/names/bridge
+              printf "%s\n" "TestPipelineFixtureInputs/reject-authored-mismatch/text" "TestPipelineFixtureInputs/reject-authored-mismatch/w3" "TestPipelineFixtureInputs/valid/text" "TestPipelineFixtureInputs/valid/w3" > /evidence/names/fixture-inputs
+              printf "%s\n" "TestPipelineFixture/invalid-candidate/text" "TestPipelineFixture/invalid-candidate/w3" "TestPipelineFixture/repeat/stdout-text" "TestPipelineFixture/repeat/text" "TestPipelineFixture/repeat/w3" "TestPipelineFixture/rerun/create-refuses-existing" "TestPipelineFixture/rerun/replace-same-target" "TestPipelineFixture/rerun/text-in-place" "TestPipelineFixture/rerun/w3-in-place-ja-header" "TestPipelineFixture/stdout/text" "TestPipelineFixture/text/create" "TestPipelineFixture/text/in-place" "TestPipelineFixture/text/replace-absent" "TestPipelineFixture/text/replace-existing" "TestPipelineFixture/w3/create" "TestPipelineFixture/w3/in-place" "TestPipelineFixture/w3/replace-absent" "TestPipelineFixture/w3/replace-existing" > /evidence/names/fixture
+              printf "%s\n" "TestPipelineHarnessBoundaries/reject-invalid-observation/missing-stage-write" "TestPipelineHarnessBoundaries/reject-invalid-observation/observe-after-before-commit" "TestPipelineHarnessBoundaries/reject-invalid-observation/publish-before-commit" "TestPipelineHarnessBoundaries/reject-invalid-observation/stdout-boundary-on-file" "TestPipelineHarnessBoundaries/valid/file-replace-existing/text" "TestPipelineHarnessBoundaries/valid/file-replace-existing/w3" "TestPipelineHarnessBoundaries/valid/stdout/text" > /evidence/names/boundaries
+              printf "%s\n" "TestPipelineHarnessState/reject-invalid-observation/ambiguous-commit-is-unknown" "TestPipelineHarnessState/reject-invalid-observation/certainty-from-flag" "TestPipelineHarnessState/reject-invalid-observation/d0-wrong-row" "TestPipelineHarnessState/reject-invalid-observation/d1-wrong-row" "TestPipelineHarnessState/reject-invalid-observation/historical-precommit-rows-cannot-prove-rollback" "TestPipelineHarnessState/reject-invalid-observation/record-close-missing-with-prose-basis" "TestPipelineHarnessState/reject-invalid-observation/record-existing-output-hash" "TestPipelineHarnessState/reject-invalid-observation/record-installed-misread" "TestPipelineHarnessState/reject-invalid-observation/record-source-dev" "TestPipelineHarnessState/reject-invalid-observation/record-source-hash" "TestPipelineHarnessState/reject-invalid-observation/record-source-inode" "TestPipelineHarnessState/reject-invalid-observation/record-source-mode" "TestPipelineHarnessState/reject-invalid-observation/record-source-mount" "TestPipelineHarnessState/reject-invalid-observation/record-source-nlink" "TestPipelineHarnessState/reject-invalid-observation/record-source-path" "TestPipelineHarnessState/reject-invalid-observation/record-source-size" "TestPipelineHarnessState/reject-invalid-observation/record-stage-hash" "TestPipelineHarnessState/reject-invalid-observation/record-stage-inode" "TestPipelineHarnessState/reject-invalid-observation/record-stage-mode" "TestPipelineHarnessState/reject-invalid-observation/record-stage-mount" "TestPipelineHarnessState/reject-invalid-observation/record-stage-nlink" "TestPipelineHarnessState/reject-invalid-observation/record-stage-size" "TestPipelineHarnessState/reject-invalid-observation/stage-missing" "TestPipelineHarnessState/valid/file-replace-existing/text" "TestPipelineHarnessState/valid/file-replace-existing/w3" "TestPipelineHarnessState/valid/stdout/text" > /evidence/names/state
+              printf "%s\n" "TestPipelineHarnessBarrier" > /evidence/names/barrier
+              printf "%s\n" "TestPipelineHarnessGuards/cleanup-rescue" "TestPipelineHarnessGuards/early-return" "TestPipelineHarnessGuards/healthy-positive-control" "TestPipelineHarnessGuards/malformed-input" "TestPipelineHarnessGuards/timeout-explicit-cancel" "TestPipelineHarnessGuards/uninjected" "TestPipelineHarnessGuards/unreached" "TestPipelineHarnessGuards/unreaped" "TestPipelineHarnessGuards/wrong-boundary" > /evidence/names/guards
+              printf "%s\n" "TestPipelineHarnessFault/cleanup-rescue" "TestPipelineHarnessFault/normal-counterpart/text" "TestPipelineHarnessFault/normal-counterpart/w3" "TestPipelineHarnessFault/process/cancel/text" "TestPipelineHarnessFault/process/error/text" "TestPipelineHarnessFault/process/error/w3" "TestPipelineHarnessFault/stage-close/text" "TestPipelineHarnessFault/stage-close/w3" > /evidence/names/fault
+              printf "%s\n" "TestPipelineHarnessCLI/localize-close-error" "TestPipelineHarnessCLI/localize-diagnostic-writer-error" "TestPipelineHarnessCLI/translate-text-stdout" > /evidence/names/cli
+              require_names() {
+                label=$1
+                names=$2
+                test_log=$3
+                pass_names=/evidence/names/"$label".pass
+                run_names=/evidence/names/"$label".run
+                observed=/evidence/names/"$label".observed
+                allowed=/evidence/names/"$label".allowed
+                roots=/evidence/names/"$label".roots
+                bad=0
+                if grep -Eq "^[[:space:]]*--- (FAIL|SKIP)" "$test_log"; then
+                  echo "required lane reported FAIL or SKIP" >&2
+                  return 1
+                fi
+                grep -E "^[[:space:]]*--- PASS: " "$test_log" \
+                  | sed -E "s/^[[:space:]]*--- PASS: //; s/ [(].*//" | sort >"$pass_names"
+                if [ ! -s "$pass_names" ]; then
+                  echo "required lane $label selected no PASS output" >&2
+                  return 1
+                fi
+                if [ -n "$(uniq -d "$pass_names")" ]; then
+                  echo "required lane $label duplicated a PASS name" >&2
+                  return 1
+                fi
+                grep -E "^[[:space:]]*=== RUN   " "$test_log" \
+                  | sed -E "s/^[[:space:]]*=== RUN   //" | sort >"$run_names"
+                if [ -n "$(uniq -d "$run_names")" ]; then
+                  echo "required lane $label duplicated a RUN name" >&2
+                  return 1
+                fi
+                : >"$allowed"
+                : >"$roots"
+                while IFS= read -r name; do
+                  [ -n "$name" ] || continue
+                  runs=$(grep -Ec "^[[:space:]]*=== RUN   $name[[:space:]]*$" "$test_log" || true)
+                  passes=$(grep -Ec "^[[:space:]]*--- PASS: $name[[:space:]]*[(]" "$test_log" || true)
+                  if [ "$runs" -ne 1 ] || [ "$passes" -ne 1 ]; then
+                    echo "required lane $label terminal $name RUN=$runs PASS=$passes, want 1/1" >&2
+                    bad=1
+                  fi
+                  root=${name%%/*}
+                  if ! grep -Fqx "$root" "$roots"; then
+                    printf "%s\n" "$root" >>"$roots"
+                    root_runs=$(grep -Ec "^[[:space:]]*=== RUN   $root[[:space:]]*$" "$test_log" || true)
+                    root_passes=$(grep -Ec "^[[:space:]]*--- PASS: $root[[:space:]]*[(]" "$test_log" || true)
+                    if [ "$root_runs" -ne 1 ] || [ "$root_passes" -ne 1 ]; then
+                      echo "required lane $label root $root RUN=$root_runs PASS=$root_passes, want 1/1" >&2
+                      bad=1
+                    fi
+                  fi
+                  printf "%s\n" "$name" >>"$allowed"
+                  prefix=$name
+                  while :; do
+                    case $prefix in
+                    */*) prefix=${prefix%/*} ;;
+                    *) break ;;
+                    esac
+                    printf "%s\n" "$prefix" >>"$allowed"
+                  done
+                done <"$names"
+                { cat "$run_names"; cat "$pass_names"; } | sort -u >"$observed"
+                while IFS= read -r name; do
+                  [ -n "$name" ] || continue
+                  grep -Fqx "$name" "$allowed" || {
+                    echo "required lane $label unexpected terminal $name" >&2
+                    bad=1
+                  }
+                  runs=$(grep -Ec "^[[:space:]]*=== RUN   $name[[:space:]]*$" "$test_log" || true)
+                  passes=$(grep -Ec "^[[:space:]]*--- PASS: $name[[:space:]]*[(]" "$test_log" || true)
+                  if [ "$runs" -ne 1 ] || [ "$passes" -ne 1 ]; then
+                    echo "required lane $label incomplete terminal $name RUN=$runs PASS=$passes, want 1/1" >&2
+                    bad=1
+                  fi
+                done <"$observed"
+                [ "$bad" -eq 0 ]
+              }
+
+              run_required() {
+                label=$1
+                names=$2
+                shift 2
+                log=/evidence/"$label".log
+                if ! "$@" >"$log" 2>&1; then
+                  cat "$log"
+                  return 1
+                fi
+                cat "$log"
+                require_names "$label" "$names" "$log"
+              }
+
+              run_required bridge /evidence/names/bridge \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/publication -run "^TestPipelineFaultBridge$" -v
+              run_required fixture-inputs /evidence/names/fixture-inputs \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineFixtureInputs$" -v
+              run_required fixture /evidence/names/fixture \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineFixture$" -v
+              run_required boundaries /evidence/names/boundaries \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessBoundaries$" -v
+              run_required state /evidence/names/state \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessState$" -v
+              run_required barrier /evidence/names/barrier \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessBarrier$" -v
+              run_required guards /evidence/names/guards \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessGuards$" -v
+              run_required fault /evidence/names/fault \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessFault$" -v
+              run_required cli /evidence/names/cli \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelineHarnessCLI$" -v
+              find "$YAKUORI_PIPELINE_EVIDENCE" -type f -printf "%p %s bytes\n" | sort
+
               TMPDIR=/evidence go test -count=1 -v ./research/publication
-              TMPDIR=/tmp go test -count=1 -v ./research/publication
+              TMPDIR=/tmp GOTMPDIR=/tmp go test -count=1 -v ./research/publication
               TMPDIR=/evidence go test -count=1 -v ./internal/publication ./internal/artifact ./internal/cli
-              TMPDIR=/tmp go test -count=1 -v ./internal/publication -run "^TestUnsupportedFilesystem$"
+              TMPDIR=/tmp GOTMPDIR=/tmp go test -count=1 -v ./internal/publication -run "^TestUnsupportedFilesystem$"
               test -z "$(gofmt -l research/publication)"
               go vet ./research/publication
               go vet ./internal/publication
