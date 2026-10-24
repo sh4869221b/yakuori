@@ -61,6 +61,11 @@ func (c Core) fileWithTM(ctx context.Context, options publication.Options, adapt
 	if err != nil {
 		return result, &Error{Phase: "import", Err: err}
 	}
+	if memory != nil {
+		if err := memory.bindKeys(session, adapter); err != nil {
+			return result, &Error{Phase: "tm_begin", Err: err}
+		}
+	}
 	accepted, err := c.generate(ctx, session, profile, memory)
 	if err != nil {
 		return result, err
