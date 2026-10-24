@@ -29,36 +29,41 @@ import (
 // after the last callback (stage/record descriptor close) are confirmed at the
 // next observable real operation by checking the descriptor reports os.ErrClosed.
 const (
-	pipelineBoundaryGenerateBefore        = "generate.before"
-	pipelineBoundaryGenerateAfter         = "generate.after"
-	pipelineBoundaryStageWriteBefore      = "stage.write.before"
-	pipelineBoundaryStageWriteAfter       = "stage.write.after"
-	pipelineBoundaryStageSyncBefore       = "stage.sync.before"
-	pipelineBoundaryStageSyncAfter        = "stage.sync.after"
-	pipelineBoundaryStageCloseBefore      = "stage.close.before"
-	pipelineBoundaryStageCloseAfter       = "stage.close.after"
-	pipelineBoundaryObserveBefore         = "observe.before"
-	pipelineBoundaryObserveAfter          = "observe.after"
-	pipelineBoundaryCompareFinalAfter     = "compare-final.after"
-	pipelineBoundaryTMCommitBefore        = "tm-commit.before"
-	pipelineBoundaryTMCommitAfter         = "tm-commit.after"
-	pipelineBoundaryRecordWriteBefore     = "record.write.before"
-	pipelineBoundaryRecordWriteAfter      = "record.write.after"
-	pipelineBoundaryRecordSyncBefore      = "record.sync.before"
-	pipelineBoundaryRecordSyncAfter       = "record.sync.after"
-	pipelineBoundaryRecordCloseBefore     = "record.close.before"
-	pipelineBoundaryRecordCloseAfter      = "record.close.after"
-	pipelineBoundaryRecordInstallBefore   = "record.install.before"
-	pipelineBoundaryRecordInstallAfter    = "record.install.after"
-	pipelineBoundaryBackupRenameBefore    = "backup-rename.before"
-	pipelineBoundaryBackupRenameAfter     = "backup-rename.after"
-	pipelineBoundaryPublishRenameBefore   = "publish-rename.before"
-	pipelineBoundaryPublishRenameAfter    = "publish-rename.after"
-	pipelineBoundaryStdoutWriteBefore     = "stdout.write.before"
-	pipelineBoundaryStdoutWriteAfter      = "stdout.write.after"
-	pipelineBoundaryDiagnosticWriteBefore = "diagnostic.write.before"
-	pipelineBoundaryDiagnosticWriteAfter  = "diagnostic.write.after"
-	pipelineBoundaryRunCloseAfter         = "run.close.after"
+	pipelineBoundaryGenerateBefore   = "generate.before"
+	pipelineBoundaryGenerateAfter    = "generate.after"
+	pipelineBoundaryStageWriteBefore = "stage.write.before"
+	pipelineBoundaryStageWriteAfter  = "stage.write.after"
+	pipelineBoundaryStageSyncBefore  = "stage.sync.before"
+	pipelineBoundaryStageSyncAfter   = "stage.sync.after"
+	pipelineBoundaryStageCloseBefore = "stage.close.before"
+	pipelineBoundaryStageCloseAfter  = "stage.close.after"
+	pipelineBoundaryObserveBefore    = "observe.before"
+	pipelineBoundaryObserveAfter     = "observe.after"
+	// pipelineBoundaryObserveEntryWriterClosed is marked only when the
+	// descriptor retained by the stage Close hook already reports os.ErrClosed
+	// at Observe entry. It is a derived marker, not part of the ordered
+	// observation set, so existing boundary orders stay unchanged.
+	pipelineBoundaryObserveEntryWriterClosed = "observe.entry.writer-closed"
+	pipelineBoundaryCompareFinalAfter        = "compare-final.after"
+	pipelineBoundaryTMCommitBefore           = "tm-commit.before"
+	pipelineBoundaryTMCommitAfter            = "tm-commit.after"
+	pipelineBoundaryRecordWriteBefore        = "record.write.before"
+	pipelineBoundaryRecordWriteAfter         = "record.write.after"
+	pipelineBoundaryRecordSyncBefore         = "record.sync.before"
+	pipelineBoundaryRecordSyncAfter          = "record.sync.after"
+	pipelineBoundaryRecordCloseBefore        = "record.close.before"
+	pipelineBoundaryRecordCloseAfter         = "record.close.after"
+	pipelineBoundaryRecordInstallBefore      = "record.install.before"
+	pipelineBoundaryRecordInstallAfter       = "record.install.after"
+	pipelineBoundaryBackupRenameBefore       = "backup-rename.before"
+	pipelineBoundaryBackupRenameAfter        = "backup-rename.after"
+	pipelineBoundaryPublishRenameBefore      = "publish-rename.before"
+	pipelineBoundaryPublishRenameAfter       = "publish-rename.after"
+	pipelineBoundaryStdoutWriteBefore        = "stdout.write.before"
+	pipelineBoundaryStdoutWriteAfter         = "stdout.write.after"
+	pipelineBoundaryDiagnosticWriteBefore    = "diagnostic.write.before"
+	pipelineBoundaryDiagnosticWriteAfter     = "diagnostic.write.after"
+	pipelineBoundaryRunCloseAfter            = "run.close.after"
 )
 
 // pipelineHarnessOldOutput is authored here rather than derived from the
@@ -87,10 +92,11 @@ func (t *pipelineHarnessTrace) mark(name string) {
 // method: wrapping the text adapter must not turn it into a key provider.
 type pipelineHarnessAdapter struct {
 	Adapter
-	trace    *pipelineHarnessTrace
-	imports  int
-	exports  int
-	observes int
+	trace        *pipelineHarnessTrace
+	observeEntry func()
+	imports      int
+	exports      int
+	observes     int
 }
 
 func (a *pipelineHarnessAdapter) Import(raw []byte, profile validate.Profile) (unit.Session, error) {
@@ -105,6 +111,9 @@ func (a *pipelineHarnessAdapter) Export(w io.Writer, session unit.Session, profi
 
 func (a *pipelineHarnessAdapter) Observe(reader io.Reader) (artifact.FinalObservation, error) {
 	a.observes++
+	if a.observeEntry != nil {
+		a.observeEntry()
+	}
 	a.trace.mark(pipelineBoundaryObserveBefore)
 	observed, err := a.Adapter.Observe(reader)
 	if err == nil {
@@ -117,10 +126,11 @@ func (a *pipelineHarnessAdapter) Observe(reader io.Reader) (artifact.FinalObserv
 // methods (including their same-import check) and wraps only Export/Observe.
 type pipelineHarnessW3Adapter struct {
 	*w3strings.Adapter
-	trace    *pipelineHarnessTrace
-	imports  int
-	exports  int
-	observes int
+	trace        *pipelineHarnessTrace
+	observeEntry func()
+	imports      int
+	exports      int
+	observes     int
 }
 
 func (a *pipelineHarnessW3Adapter) Import(raw []byte, profile validate.Profile) (unit.Session, error) {
@@ -135,6 +145,9 @@ func (a *pipelineHarnessW3Adapter) Export(w io.Writer, session unit.Session, pro
 
 func (a *pipelineHarnessW3Adapter) Observe(reader io.Reader) (artifact.FinalObservation, error) {
 	a.observes++
+	if a.observeEntry != nil {
+		a.observeEntry()
+	}
 	a.trace.mark(pipelineBoundaryObserveBefore)
 	observed, err := a.Adapter.Observe(reader)
 	if err == nil {
@@ -279,6 +292,20 @@ func (o *pipelineHarnessOperations) event(phase, operation string) {
 	o.events = append(o.events, pipelineHarnessRecordEvent{Phase: phase, Operation: operation, Occurrence: o.counts[key]})
 }
 
+// observeEntry proves the real stage Close completed before the observer sees
+// the closed artifact. The retained descriptor is the one the Close hook
+// received, so an early or missing Close fails here instead of being inferred
+// later from the publish-time stage.close.after marker.
+func (o *pipelineHarnessOperations) observeEntry() {
+	if o.stageFD == nil {
+		o.t.Fatal("observe entry has no retained stage writer descriptor")
+	}
+	if _, err := o.stageFD.Stat(); !errors.Is(err, os.ErrClosed) {
+		o.t.Fatalf("stage writer descriptor still open at Observe entry: %v", err)
+	}
+	o.trace.mark(pipelineBoundaryObserveEntryWriterClosed)
+}
+
 func (o *pipelineHarnessOperations) hooks() publication.PipelineFaultHooks {
 	return publication.PipelineFaultHooks{
 		SyncStage: func(f *os.File) error {
@@ -410,20 +437,29 @@ type pipelineHarness struct {
 	rowsAfterStage []pipelineFixtureRow
 	rowsAtCommit   []pipelineFixtureRow
 
-	// beforeOutput is captured from the real filesystem before the pipeline
-	// starts. The record's existing-output identity is judged against this
-	// physical pre-run capture, not against authored bytes alone.
+	// beforeOutput and beforeSource are captured from the real filesystem
+	// before the pipeline starts. Preservation is judged against these physical
+	// pre-run captures, not against authored bytes alone.
 	beforeOutput pipelineHarnessFile
+	beforeSource pipelineHarnessFile
 }
 
 func newPipelineHarness(t *testing.T, spec pipelineHarnessCase, wrapped bool) *pipelineHarness {
+	t.Helper()
+	return newPipelineHarnessWith(t, spec, wrapped, nil)
+}
+
+// newPipelineHarnessWith applies setup after the controlled backend exists and
+// before the canonical profile/Core/import, so CPU/CUDA-consistent info and the
+// per-run request builder are fixed before any identity is created.
+func newPipelineHarnessWith(t *testing.T, spec pipelineHarnessCase, wrapped bool, setup func(*pipelineFixture)) *pipelineHarness {
 	t.Helper()
 	input, ok := pipelineHarnessInput(t, spec.kind)
 	if !ok {
 		t.Fatalf("no fixture input for kind %q", spec.kind)
 	}
-	// Given: a fresh real fixture, SQLite store and unrelated D0 row per harness.
-	f := newPipelineFixture(t, input)
+	// Given: a fresh real fixture, SQLite store and authored D0 row per harness.
+	f := newPipelineFixtureWith(t, input, setup)
 	h := &pipelineHarness{t: t, fixture: f, kind: spec.kind, surface: spec.surface, mode: spec.mode, wrapped: wrapped, stimulus: "none"}
 	if wrapped {
 		h.trace = newPipelineHarnessTrace()
@@ -441,10 +477,7 @@ func newPipelineHarness(t *testing.T, spec pipelineHarnessCase, wrapped bool) *p
 	}
 	if wrapped {
 		backend := &pipelineHarnessBackend{pipelineBackend: f.backend, trace: h.trace}
-		info := f.backend.info
-		core, err := NewCoreWithLimits(NewInferenceEngine(backend, func(_ context.Context, _ unit.UnitID, text string) (inference.GenerationRequest, error) {
-			return pipelineRequest(info, text)
-		}), f.limits)
+		core, err := NewCoreWithLimits(NewInferenceEngine(backend, f.requestBuilder()), f.limits)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -472,12 +505,38 @@ func newPipelineHarness(t *testing.T, spec pipelineHarnessCase, wrapped bool) *p
 			t.Fatal(err)
 		}
 		h.beforeOutput = captured
+		if h.beforeSource, err = pipelineHarnessReadFile(h.sourcePath); err != nil {
+			t.Fatal(err)
+		}
 		h.ops = newPipelineHarnessOperations(t, h.trace, h.options.Source)
+		if wrapped {
+			h.wireObserveEntry()
+		}
 	} else {
 		h.stdoutPath = filepath.Join(parent, "stdout.bin")
 	}
 	return h
 }
+
+// wireObserveEntry connects the wrapped adapter's Observe entry to the retained
+// stage writer descriptor, so the real Close completion is observed before the
+// closed artifact is read.
+func (h *pipelineHarness) wireObserveEntry() {
+	if h.ops == nil {
+		return
+	}
+	switch adapter := h.adapter.(type) {
+	case *pipelineHarnessAdapter:
+		adapter.observeEntry = h.ops.observeEntry
+	case *pipelineHarnessW3Adapter:
+		adapter.observeEntry = h.ops.observeEntry
+	}
+}
+
+// useCore substitutes a Core built on this fixture's backend and request
+// builder, for example the existing segmented Core. The product Core is not
+// changed and Engine.Close ownership stays with the caller.
+func (h *pipelineHarness) useCore(core Core) { h.core = core }
 
 func (h *pipelineHarness) execute(ctx context.Context) (Result, error) {
 	h.t.Helper()

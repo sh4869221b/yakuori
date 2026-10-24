@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/publication"
 	"golang.org/x/sys/unix"
 )
@@ -96,9 +97,12 @@ type pipelineHarnessExpectation struct {
 	RecordPhase     string `json:"record_phase,omitempty"`
 	RecordOperation string `json:"record_operation,omitempty"`
 	OutputPresent   bool   `json:"output_present"`
-	StageFDClosed   bool   `json:"stage_fd_closed"`
-	RecordFDClosed  bool   `json:"record_fd_closed"`
-	Cause           string `json:"cause,omitempty"`
+	// OldOutputPresent is the pre-run output state the publication record
+	// must describe. OutputPresent is the final state after the run.
+	OldOutputPresent bool   `json:"old_output_present"`
+	StageFDClosed    bool   `json:"stage_fd_closed"`
+	RecordFDClosed   bool   `json:"record_fd_closed"`
+	Cause            string `json:"cause,omitempty"`
 
 	CommitCertainty  pipelineHarnessCertaintyValue `json:"commit_certainty"`
 	StageCheckpoint  bool                          `json:"stage_checkpoint"`
@@ -107,6 +111,33 @@ type pipelineHarnessExpectation struct {
 
 	BoundaryOrder      []string       `json:"boundary_order"`
 	RequiredBoundaries map[string]int `json:"required_boundaries"`
+
+	// Precommit contract fields. Their zero value means "not applicable to
+	// this observation"; only the precommit contract sets them, so existing
+	// scenarios keep the exact same verdicts.
+	D0Preserved            bool     `json:"d0_preserved,omitempty"`
+	GenerateApplicable     bool     `json:"generate_applicable,omitempty"`
+	GenerateCalls          int      `json:"generate_calls"`
+	Injected               []string `json:"injected"`
+	ErrorPhase             string   `json:"error_phase,omitempty"`
+	ErrorUnit              string   `json:"error_unit,omitempty"`
+	CauseClass             string   `json:"cause_class,omitempty"`
+	EngineCloseApplicable  bool     `json:"engine_close_applicable,omitempty"`
+	EngineCloseCount       int      `json:"engine_close_count"`
+	ExitApplicable         bool     `json:"exit_applicable,omitempty"`
+	ExitObserved           bool     `json:"exit_observed"`
+	CLIExit                int      `json:"cli_exit"`
+	RerunApplicable        bool     `json:"rerun_applicable,omitempty"`
+	RerunOutcome           string   `json:"rerun_outcome,omitempty"`
+	RerunGenerate          int      `json:"rerun_generate"`
+	RerunPhase             string   `json:"rerun_phase,omitempty"`
+	RerunCause             string   `json:"rerun_cause,omitempty"`
+	ObserveEntryApplicable bool     `json:"observe_entry_applicable,omitempty"`
+	WriterClosedAtObserve  bool     `json:"writer_closed_at_observe,omitempty"`
+	StageOrderRequired     bool     `json:"stage_order_required,omitempty"`
+	SourcePreserved        bool     `json:"source_preserved,omitempty"`
+	OutputPreserved        bool     `json:"output_preserved,omitempty"`
+	Lifecycle              string   `json:"lifecycle,omitempty"`
 }
 
 func pipelineHarnessExpectationForFixture(t *testing.T, spec pipelineHarnessCase, f *pipelineFixture) pipelineHarnessExpectation {
@@ -121,8 +152,12 @@ func pipelineHarnessExpectationForFixture(t *testing.T, spec pipelineHarnessCase
 		D0:          slices.Clone(f.d0), D1: slices.Clone(d1), FinalRows: slices.Clone(d1),
 		StageCheckpoint: spec.surface == "file", CommitCheckpoint: true,
 		CommitCertainty: pipelineHarnessCommitted, ResultPresent: true,
-		OutputPresent: spec.outputPresent || spec.mode == publication.InPlace,
-		StageFDClosed: spec.surface == "file", RecordFDClosed: spec.surface == "file",
+		// A successful file publication always leaves the target output in
+		// place; outputPresent describes only the pre-run setup. Precommit
+		// failures set this field from their own preserved state table.
+		OutputPresent:    spec.surface == "file",
+		OldOutputPresent: spec.outputPresent || spec.mode == publication.InPlace,
+		StageFDClosed:    spec.surface == "file", RecordFDClosed: spec.surface == "file",
 		BoundaryOrder: pipelineHarnessOrder(input, spec.surface),
 	}
 	if spec.surface == "file" {
@@ -829,13 +864,33 @@ type pipelineHarnessSnapshot struct {
 	AuthoredD0 []pipelineFixtureRow `json:"authored_d0"`
 	AuthoredD1 []pipelineFixtureRow `json:"authored_d1"`
 
-	// BeforeOutput is the real pre-run capture of the publication output. It is
-	// filled from the filesystem before the pipeline runs and never from it.
+	// BeforeOutput and BeforeSource are the real pre-run captures of the
+	// publication output and source. They are filled from the filesystem before
+	// the pipeline runs and never from it.
 	BeforeOutput *pipelineHarnessFile `json:"before_output,omitempty"`
+	BeforeSource *pipelineHarnessFile `json:"before_source,omitempty"`
 
 	StageFDClosed  bool   `json:"stage_fd_closed"`
 	RecordFDClosed bool   `json:"record_fd_closed"`
 	ErrorPhase     string `json:"error_phase,omitempty"`
+	ErrorUnit      string `json:"error_unit,omitempty"`
+	// CauseClass is the named classification of the actual typed error chain.
+	CauseClass string `json:"cause_class,omitempty"`
+	// WriterClosedAtObserve is true only when the retained stage writer
+	// descriptor already reported os.ErrClosed at Observe entry.
+	WriterClosedAtObserve bool                  `json:"writer_closed_at_observe"`
+	GenerateCalls         int                   `json:"generate_calls"`
+	EngineCloseCount      int                   `json:"engine_close_count"`
+	BackendCalls          []pipelineBackendCall `json:"backend_calls,omitempty"`
+	// ExitObserved distinguishes a real child process exit from an in-process
+	// API return. CLIExit is meaningful only when ExitObserved is true.
+	ExitObserved  bool   `json:"exit_observed"`
+	CLIExit       int    `json:"cli_exit"`
+	RerunOutcome  string `json:"rerun_outcome,omitempty"`
+	RerunGenerate int    `json:"rerun_generate"`
+	RerunPhase    string `json:"rerun_phase,omitempty"`
+	RerunCause    string `json:"rerun_cause,omitempty"`
+	Lifecycle     string `json:"lifecycle,omitempty"`
 
 	RequestedBoundary   string   `json:"requested_boundary,omitempty"`
 	RequestedOccurrence int      `json:"requested_occurrence,omitempty"`
@@ -865,6 +920,8 @@ func (h *pipelineHarness) snapshot(exp pipelineHarnessExpectation) (pipelineHarn
 	if h.surface == "file" {
 		before := h.beforeOutput
 		snapshot.BeforeOutput = &before
+		source := h.beforeSource
+		snapshot.BeforeSource = &source
 	}
 	snapshot.RequestedBoundary = h.requestedBoundary
 	snapshot.RequestedOccurrence = h.requestedOccurrence
@@ -872,11 +929,16 @@ func (h *pipelineHarness) snapshot(exp pipelineHarnessExpectation) (pipelineHarn
 	snapshot.Injected = slices.Clone(h.injected)
 	var typed *Error
 	if errors.As(h.runErr, &typed) {
-		snapshot.ErrorPhase = typed.Phase
+		snapshot.ErrorPhase, snapshot.ErrorUnit = typed.Phase, typed.UnitID.StableID()
 	}
+	snapshot.CauseClass = pipelinePrecommitCauseClass(h.runErr)
 	if h.runErr != nil {
 		snapshot.Error = h.runErr.Error()
 	}
+	snapshot.GenerateCalls = h.fixture.backend.operationCount("generate")
+	snapshot.EngineCloseCount = h.fixture.backend.operationCount("close")
+	snapshot.BackendCalls = slices.Clone(h.fixture.backend.history)
+	snapshot.Lifecycle = "core-only: Engine.Close is owned by the caller"
 	if h.trace != nil {
 		snapshot.Reached = maps.Clone(h.trace.reached)
 		snapshot.Order = slices.Clone(h.trace.order)
@@ -892,6 +954,7 @@ func (h *pipelineHarness) snapshot(exp pipelineHarnessExpectation) (pipelineHarn
 	}
 	snapshot.StageClosed = snapshot.Reached[pipelineBoundaryStageCloseAfter] > 0
 	snapshot.RecordClosed = snapshot.Reached[pipelineBoundaryRecordCloseAfter] > 0
+	snapshot.WriterClosedAtObserve = snapshot.Reached[pipelineBoundaryObserveEntryWriterClosed] > 0
 	if h.ops != nil {
 		snapshot.StageFDClosed = h.ops.stageFDClosed
 		snapshot.RecordFDClosed = h.ops.recordFDClosed
@@ -1018,12 +1081,17 @@ func (s pipelineHarnessSnapshot) clone() pipelineHarnessSnapshot {
 	clone.Order = slices.Clone(s.Order)
 	clone.RecordEvents = slices.Clone(s.RecordEvents)
 	clone.CertaintyBasis = slices.Clone(s.CertaintyBasis)
+	clone.BackendCalls = slices.Clone(s.BackendCalls)
 	clone.AuthoredD0 = slices.Clone(s.AuthoredD0)
 	clone.AuthoredD1 = slices.Clone(s.AuthoredD1)
 	clone.Injected = slices.Clone(s.Injected)
 	if s.BeforeOutput != nil {
 		before := *s.BeforeOutput
 		clone.BeforeOutput = &before
+	}
+	if s.BeforeSource != nil {
+		before := *s.BeforeSource
+		clone.BeforeSource = &before
 	}
 	if s.Record != nil {
 		record := *s.Record
@@ -1200,12 +1268,17 @@ func pipelineHarnessCheckFiles(expectation pipelineHarnessExpectation, snapshot 
 	if snapshot.RecordFDClosed != expectation.RecordFDClosed {
 		problems = append(problems, fmt.Sprintf("record descriptor actually closed = %t, want %t", snapshot.RecordFDClosed, expectation.RecordFDClosed))
 	}
-	if expectation.Mode == string(publication.InPlace) {
-		// InPlace renames the original source to the backup, so the physical
-		// counterpart of S is the backup; the source path holds the target.
+	if expectation.Mode == string(publication.InPlace) && expectation.BackupPresent {
+		// A published InPlace run renamed the original source to the backup,
+		// so the physical counterpart of S is the backup; the source path holds
+		// the target. A precommit InPlace failure never reached that rename, so
+		// the source path still holds S.
 		problems = append(problems, pipelineHarnessCheckLeaf("backup(source)", snapshot.Files["backup"], expectation.SourceBytes)...)
 	} else {
 		problems = append(problems, pipelineHarnessCheckLeaf("source", snapshot.Files["source"], expectation.SourceBytes)...)
+	}
+	if expectation.SourcePreserved {
+		problems = append(problems, pipelineHarnessCheckCaptured("precommit-source-identity", snapshot.Files["source"], snapshot.BeforeSource, expectation.SourceBytes)...)
 	}
 	if expectation.Surface == "stdout" {
 		problems = append(problems, pipelineHarnessCheckLeaf("stdout", snapshot.Files["stdout"], expectation.StdoutBytes)...)
@@ -1216,7 +1289,16 @@ func pipelineHarnessCheckFiles(expectation pipelineHarnessExpectation, snapshot 
 		}
 		return problems
 	}
-	problems = append(problems, pipelineHarnessCheckLeaf("output", snapshot.Files["output"], expectation.OutputBytes)...)
+	output := snapshot.Files["output"]
+	if output.Exists != expectation.OutputPresent {
+		problems = append(problems, fmt.Sprintf("precommit-output-present: output presence = %t, want %t", output.Exists, expectation.OutputPresent))
+	}
+	if expectation.OutputPresent && output.Exists {
+		problems = append(problems, pipelineHarnessCheckLeaf("output", output, expectation.OutputBytes)...)
+	}
+	if expectation.OutputPreserved {
+		problems = append(problems, pipelineHarnessCheckCaptured("precommit-output-preserved", output, snapshot.BeforeOutput, expectation.OutputBytes)...)
+	}
 	stage := snapshot.Files["stage"]
 	if stage.Exists != expectation.StageRetained {
 		problems = append(problems, fmt.Sprintf("stage presence = %t, want %t", stage.Exists, expectation.StageRetained))
@@ -1237,10 +1319,39 @@ func pipelineHarnessCheckFiles(expectation pipelineHarnessExpectation, snapshot 
 	}
 	backup := snapshot.Files["backup"]
 	if backup.Exists != expectation.BackupPresent {
-		problems = append(problems, fmt.Sprintf("backup presence = %t, want %t", backup.Exists, expectation.BackupPresent))
+		problems = append(problems, fmt.Sprintf("precommit-backup-present: backup presence = %t, want %t", backup.Exists, expectation.BackupPresent))
 	}
 	if expectation.RecordInstalled && record.Exists {
 		problems = append(problems, pipelineHarnessCheckRecord(expectation, snapshot)...)
+	}
+	return problems
+}
+
+// pipelineHarnessCheckCaptured compares the current file, including every
+// identity field and the bytes, with the real pre-run capture. A byte-only
+// comparison would accept a replaced file with identical content.
+func pipelineHarnessCheckCaptured(label string, current pipelineHarnessFile, before *pipelineHarnessFile, want []byte) []string {
+	if before == nil {
+		return []string{label + ": no pre-run capture exists"}
+	}
+	if !before.Exists {
+		return []string{label + ": pre-run path was absent"}
+	}
+	if !current.Exists {
+		return []string{label + ": path is missing"}
+	}
+	var problems []string
+	if current.Dev != before.Dev || current.Inode != before.Inode || current.MountID != before.MountID ||
+		current.Mode != before.Mode || current.Nlink != before.Nlink || current.Size != before.Size {
+		problems = append(problems, fmt.Sprintf("%s: identity dev=%d ino=%d mount=%d mode=%#x nlink=%d size=%d differs from the pre-run dev=%d ino=%d mount=%d mode=%#x nlink=%d size=%d",
+			label, current.Dev, current.Inode, current.MountID, current.Mode, current.Nlink, current.Size,
+			before.Dev, before.Inode, before.MountID, before.Mode, before.Nlink, before.Size))
+	}
+	if !bytes.Equal(current.Bytes, before.Bytes) {
+		problems = append(problems, label+": bytes differ from the pre-run capture")
+	}
+	if !bytes.Equal(current.Bytes, want) {
+		problems = append(problems, label+": bytes differ from the authored expectation")
 	}
 	return problems
 }
@@ -1299,7 +1410,7 @@ func pipelineHarnessCheckRecord(expectation pipelineHarnessExpectation, snapshot
 	if expectation.Mode == string(publication.InPlace) {
 		existing = expectation.SourceBytes
 	}
-	if expectation.OutputPresent {
+	if expectation.OldOutputPresent {
 		if record.ExistingOutput.Absent || record.ExistingOutput.File == nil {
 			problems = append(problems, "record reports an absent output, but this mode requires an existing one")
 		} else if snapshot.BeforeOutput == nil {
@@ -1730,4 +1841,797 @@ func pipelineHarnessScenarioSelected(t *testing.T, table []pipelineHarnessExpect
 	}
 	t.Fatalf("scenario %s is not in the state table", name)
 	return pipelineHarnessExpectation{}
+}
+
+// pipelinePrecommitGenerateFault and pipelinePrecommitCloseFault are authored
+// sentinels. The classifier names them before any generic cause, so an
+// injected close fault is never reported as a kernel EIO.
+var (
+	pipelinePrecommitGenerateFault = errors.New("contract generate fault")
+	pipelinePrecommitCloseFault    = errors.New("contract stage close fault")
+)
+
+func pipelinePrecommitCauseClass(err error) string {
+	var recovery *publication.RecoveryError
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, pipelinePrecommitGenerateFault):
+		return "contract-generate-fault"
+	case errors.Is(err, pipelinePrecommitCloseFault):
+		return "contract-close-fault"
+	case errors.As(err, &recovery):
+		return "publication-recovery"
+	case errors.Is(err, context.Canceled):
+		return "context-canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "deadline-exceeded"
+	case errors.Is(err, os.ErrClosed):
+		return "descriptor-closed"
+	case errors.Is(err, unix.EIO):
+		return "eio"
+	default:
+		return "other"
+	}
+}
+
+// pipelinePrecommitCase is one authored state-branch row. Every expected value
+// below is derived from the fixture table and the documented failure contract,
+// never from the observation under test.
+type pipelinePrecommitCase struct {
+	name          string
+	kind          string
+	mode          publication.Mode
+	outputPresent bool
+	seedTargetHit bool
+	fault         string
+	stageRetained bool
+	stageFDClosed bool
+	generate      int
+	errorPhase    string
+	errorUnit     string
+	causeClass    string
+	stageOrder    bool
+	injection     string
+}
+
+func pipelinePrecommitPreservedCases() []pipelinePrecommitCase {
+	return []pipelinePrecommitCase{
+		{
+			name: "create", kind: "text", mode: publication.Create, fault: "generate",
+			generate: 1, errorPhase: "generate", errorUnit: "document",
+			causeClass: "contract-generate-fault", injection: "generation-error",
+		},
+		{
+			name: "replace-absent", kind: "text", mode: publication.Replace, fault: "close",
+			stageRetained: true, stageFDClosed: true, generate: 1,
+			errorPhase: "stage", causeClass: "contract-close-fault", stageOrder: true, injection: "close-stage-eio",
+		},
+		{
+			// The W3 target-hit D0 has the first authored unit as a valid hit
+			// and the two later authored units as misses; a precommit failure
+			// must keep every one of those four columns unchanged.
+			name: "replace-existing", kind: "w3", mode: publication.Replace, outputPresent: true, seedTargetHit: true, fault: "close",
+			stageRetained: true, stageFDClosed: true, generate: 2,
+			errorPhase: "stage", causeClass: "contract-close-fault", stageOrder: true, injection: "close-stage-eio",
+		},
+		{
+			name: "in-place", kind: "text", mode: publication.InPlace, fault: "close",
+			stageRetained: true, stageFDClosed: true, generate: 1,
+			errorPhase: "stage", causeClass: "contract-close-fault", stageOrder: true, injection: "close-stage-eio",
+		},
+	}
+}
+
+type pipelinePrecommitRerunCase struct {
+	outcome  string
+	generate int
+	phase    string
+	cause    string
+}
+
+func pipelinePrecommitPublishedRerun() *pipelinePrecommitRerunCase {
+	return &pipelinePrecommitRerunCase{outcome: "succeeded"}
+}
+
+// pipelinePrecommitFailedRerun is the documented rerun of a target that still
+// holds a prepared run without an installed record: recovery refuses it before
+// import or generation.
+func pipelinePrecommitFailedRerun() *pipelinePrecommitRerunCase {
+	return &pipelinePrecommitRerunCase{outcome: "typed-rejected", phase: "prepare", cause: "publication-recovery"}
+}
+
+func pipelinePrecommitExerciseWith(t *testing.T, spec pipelineHarnessCase, tc pipelinePrecommitCase, rerun *pipelinePrecommitRerunCase, setup func(*pipelineFixture)) (pipelineHarnessExpectation, pipelineHarnessSnapshot) {
+	t.Helper()
+	h := newPipelineHarnessWith(t, spec, true, func(f *pipelineFixture) {
+		if tc.seedTargetHit {
+			f.seedKind = "target-hit"
+		}
+		if setup != nil {
+			setup(f)
+		}
+	})
+	// Given: the expectation is fixed from the authored fixture before the run.
+	var expectation pipelineHarnessExpectation
+	if tc.fault == "" {
+		expectation = pipelinePrecommitPublishedExpectation(t, spec, h.fixture)
+	} else {
+		expectation = pipelinePrecommitFailureExpectation(t, spec, h.fixture, tc)
+	}
+	expectation.RerunApplicable = rerun != nil
+	if rerun != nil {
+		expectation.RerunOutcome, expectation.RerunGenerate = rerun.outcome, rerun.generate
+		expectation.RerunPhase, expectation.RerunCause = rerun.phase, rerun.cause
+	}
+	// When: the real Core runs on the real adapter, SQLite store and qualified
+	// publication Run, with exactly one authored fault.
+	if tc.fault == "" {
+		result, err := h.execute(t.Context())
+		if err != nil || !result.TMCommitted {
+			// The typed refusal stays visible when this selector is pointed at
+			// an unqualified filesystem, so a prepare failure is never accepted
+			// as an anonymous error.
+			t.Fatalf("normal control result=%+v error=%v unsupported_filesystem=%t", result, err, errors.Is(err, publication.ErrUnsupportedFilesystem))
+		}
+	} else {
+		result, err := h.executePrecommitFault(tc.fault)
+		if err == nil || result.TMCommitted {
+			t.Fatalf("precommit fault result=%+v error=%v, want a typed failure", result, err)
+		}
+	}
+	snapshot, err := h.snapshot(expectation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rerun != nil {
+		pipelinePrecommitRerun(t, h, &snapshot)
+	}
+	return expectation, snapshot
+}
+
+func pipelinePrecommitExercise(t *testing.T, spec pipelineHarnessCase, tc pipelinePrecommitCase, rerun *pipelinePrecommitRerunCase) (pipelineHarnessExpectation, pipelineHarnessSnapshot) {
+	t.Helper()
+	return pipelinePrecommitExerciseWith(t, spec, tc, rerun, nil)
+}
+
+// executePrecommitFault injects one authored fault before the TM commit on the
+// same controlled backend or prepared Run. The fault is reported in the
+// injection history separately from the typed cause.
+func (h *pipelineHarness) executePrecommitFault(fault string) (Result, error) {
+	switch fault {
+	case "generate":
+		h.fixture.backend.callbacks.Generate = func(context.Context, inference.GenerationRequest) (inference.GenerationResult, error) {
+			h.injected = append(h.injected, "generation-error")
+			return inference.GenerationResult{}, pipelinePrecommitGenerateFault
+		}
+		return h.execute(h.t.Context())
+	case "close":
+		return h.executeStageCloseFault(h.t.Context(), pipelinePrecommitCloseFault)
+	default:
+		h.t.Fatalf("unknown precommit fault %q", fault)
+		return Result{}, nil
+	}
+}
+
+func pipelinePrecommitPublishedExpectation(t *testing.T, spec pipelineHarnessCase, f *pipelineFixture) pipelineHarnessExpectation {
+	t.Helper()
+	expectation := pipelineHarnessExpectationForFixture(t, spec, f)
+	expectation.Status = pipelineHarnessPass
+	expectation.GenerateApplicable = true
+	expectation.GenerateCalls = pipelineHarnessGenerateCount(f.input)
+	expectation.Injected = []string{}
+	expectation.ExitApplicable = true
+	expectation.ExitObserved = false
+	expectation.EngineCloseApplicable = false
+	expectation.EngineCloseCount = 0
+	expectation.ObserveEntryApplicable = spec.surface == "file"
+	expectation.WriterClosedAtObserve = spec.surface == "file"
+	expectation.StageOrderRequired = spec.surface == "file"
+	expectation.SourcePreserved = spec.surface == "file" && spec.mode != publication.InPlace
+	expectation.Lifecycle = "core-only: Engine.Close is owned by the caller"
+	return expectation
+}
+
+func pipelinePrecommitFailureExpectation(t *testing.T, spec pipelineHarnessCase, f *pipelineFixture, tc pipelinePrecommitCase) pipelineHarnessExpectation {
+	t.Helper()
+	expectation := pipelineHarnessExpectationForFixture(t, spec, f)
+	expectation.Case = spec.name
+	expectation.Status = pipelineHarnessPass
+	expectation.Outcome = "not-published"
+	expectation.StageRetained = tc.stageRetained
+	if tc.stageRetained {
+		expectation.StageBytes = slices.Clone(f.input.target)
+	}
+	expectation.OutputPresent = tc.outputPresent || tc.mode == publication.InPlace
+	switch {
+	case tc.mode == publication.InPlace:
+		expectation.OutputBytes = slices.Clone(f.input.source)
+	case tc.outputPresent:
+		expectation.OutputBytes = slices.Clone(pipelineHarnessOldOutput)
+	default:
+		expectation.OutputBytes = nil
+	}
+	expectation.OutputPreserved = expectation.OutputPresent
+	expectation.SourcePreserved = true
+	expectation.BackupPresent = false
+	expectation.RecordInstalled = false
+	expectation.RecordPhase = ""
+	expectation.RecordOperation = ""
+	expectation.CommitCertainty = pipelineHarnessNotCommitted
+	expectation.StageCheckpoint = false
+	expectation.CommitCheckpoint = false
+	expectation.ResultPresent = true
+	expectation.StageFDClosed = tc.stageFDClosed
+	expectation.RecordFDClosed = false
+	expectation.FinalRows = slices.Clone(f.d0)
+	expectation.D0Preserved = true
+	expectation.GenerateApplicable = true
+	expectation.GenerateCalls = tc.generate
+	expectation.Injected = []string{tc.injection}
+	expectation.ErrorPhase, expectation.ErrorUnit = tc.errorPhase, tc.errorUnit
+	expectation.CauseClass = tc.causeClass
+	expectation.ExitApplicable = true
+	expectation.ExitObserved = false
+	expectation.EngineCloseApplicable = false
+	expectation.EngineCloseCount = 0
+	expectation.ObserveEntryApplicable = false
+	expectation.WriterClosedAtObserve = false
+	expectation.StageOrderRequired = tc.stageOrder
+	expectation.Lifecycle = "core-only: Engine.Close is owned by the caller"
+	if tc.fault == "generate" {
+		expectation.BoundaryOrder = []string{pipelineBoundaryGenerateBefore, pipelineBoundaryRunCloseAfter}
+		expectation.RequiredBoundaries = map[string]int{
+			pipelineBoundaryGenerateBefore: 1,
+			pipelineBoundaryRunCloseAfter:  1,
+		}
+		return expectation
+	}
+	order := make([]string, 0, 2*tc.generate+3)
+	for range tc.generate {
+		order = append(order, pipelineBoundaryGenerateBefore, pipelineBoundaryGenerateAfter)
+	}
+	order = append(order, pipelineBoundaryStageWriteBefore, pipelineBoundaryStageWriteAfter, pipelineBoundaryRunCloseAfter)
+	expectation.BoundaryOrder = order
+	expectation.RequiredBoundaries = map[string]int{
+		pipelineBoundaryGenerateBefore: tc.generate, pipelineBoundaryGenerateAfter: tc.generate,
+		pipelineBoundaryStageWriteBefore: 1, pipelineBoundaryStageWriteAfter: 1,
+		pipelineBoundaryStageSyncBefore: 1, pipelineBoundaryStageSyncAfter: 1,
+		pipelineBoundaryStageCloseBefore: 1,
+		pipelineBoundaryRunCloseAfter:    1,
+	}
+	return expectation
+}
+
+// pipelinePrecommitRerun removes only the injected fault and runs the real
+// public Core again on the same durable root. The earlier run, stage and
+// missing record stay in place, so recovery refuses the target.
+func pipelinePrecommitRerun(t *testing.T, h *pipelineHarness, snapshot *pipelineHarnessSnapshot) {
+	t.Helper()
+	h.fixture.backend.callbacks.Generate = nil
+	before := h.fixture.backend.operationCount("generate")
+	var result Result
+	var err error
+	if h.surface == "stdout" {
+		var out bytes.Buffer
+		result, err = h.fixture.core.TextWithTM(t.Context(), h.fixture.input.source, h.fixture.adapter, h.fixture.profile, h.fixture.store, h.fixture.scope, &out)
+	} else {
+		result, err = h.fixture.core.FileWithTM(t.Context(), h.options, h.fixture.adapter, h.fixture.profile, h.fixture.store, h.fixture.scope)
+	}
+	snapshot.RerunGenerate = h.fixture.backend.operationCount("generate") - before
+	snapshot.RerunCause = pipelinePrecommitCauseClass(err)
+	if err == nil {
+		snapshot.RerunOutcome = "succeeded"
+		if !result.TMCommitted {
+			t.Fatal("rerun returned success without a committed TM result")
+		}
+		return
+	}
+	snapshot.RerunOutcome = "typed-rejected"
+	var typed *Error
+	if !errors.As(err, &typed) {
+		t.Fatalf("rerun error is not a typed localize error: %v", err)
+	}
+	snapshot.RerunPhase = typed.Phase
+}
+
+// pipelinePrecommitJudge is the independent state oracle for the precommit
+// contract. Every new predicate has a stable name so a named negative can prove
+// which predicate rejected it.
+func pipelinePrecommitJudge(expectation pipelineHarnessExpectation, snapshot pipelineHarnessSnapshot) []string {
+	problems := pipelineHarnessJudge(expectation, snapshot)
+	if expectation.D0Preserved {
+		if diff := pipelineFixtureDiff(expectation.D0, snapshot.Rows); len(diff) != 0 {
+			problems = append(problems, "precommit-d0: final rows differ from the authored D0: "+strings.Join(diff, ","))
+		}
+	}
+	if expectation.GenerateApplicable && snapshot.GenerateCalls != expectation.GenerateCalls {
+		problems = append(problems, fmt.Sprintf("precommit-generate: backend Generate calls = %d, want %d", snapshot.GenerateCalls, expectation.GenerateCalls))
+	}
+	if expectation.Injected != nil && !slices.Equal(expectation.Injected, snapshot.Injected) {
+		problems = append(problems, fmt.Sprintf("precommit-injected: injected = %v, want %v", snapshot.Injected, expectation.Injected))
+	}
+	if expectation.ErrorPhase != "" || expectation.ErrorUnit != "" {
+		if snapshot.ErrorPhase != expectation.ErrorPhase {
+			problems = append(problems, fmt.Sprintf("precommit-phase: error phase %q, want %q", snapshot.ErrorPhase, expectation.ErrorPhase))
+		}
+		if snapshot.ErrorUnit != expectation.ErrorUnit {
+			problems = append(problems, fmt.Sprintf("precommit-phase: error unit %q, want %q", snapshot.ErrorUnit, expectation.ErrorUnit))
+		}
+	}
+	if expectation.CauseClass != "" || snapshot.CauseClass != "" {
+		if snapshot.CauseClass != expectation.CauseClass {
+			problems = append(problems, fmt.Sprintf("precommit-cause: typed cause class %q, want %q", snapshot.CauseClass, expectation.CauseClass))
+		}
+	}
+	if expectation.ExitApplicable {
+		if snapshot.ExitObserved != expectation.ExitObserved {
+			problems = append(problems, fmt.Sprintf("precommit-exit: process exit observed = %t, want %t; an in-process API return is not a CLI exit", snapshot.ExitObserved, expectation.ExitObserved))
+		}
+		if expectation.ExitObserved && snapshot.CLIExit != expectation.CLIExit {
+			problems = append(problems, fmt.Sprintf("precommit-exit: CLI exit = %d, want %d", snapshot.CLIExit, expectation.CLIExit))
+		}
+	}
+	if expectation.RerunApplicable {
+		if snapshot.RerunOutcome != expectation.RerunOutcome {
+			problems = append(problems, fmt.Sprintf("precommit-rerun: rerun outcome %q, want %q", snapshot.RerunOutcome, expectation.RerunOutcome))
+		}
+		if snapshot.RerunGenerate != expectation.RerunGenerate {
+			problems = append(problems, fmt.Sprintf("precommit-rerun: rerun backend Generate calls = %d, want %d", snapshot.RerunGenerate, expectation.RerunGenerate))
+		}
+		if snapshot.RerunPhase != expectation.RerunPhase {
+			problems = append(problems, fmt.Sprintf("precommit-rerun: rerun error phase %q, want %q", snapshot.RerunPhase, expectation.RerunPhase))
+		}
+		if snapshot.RerunCause != expectation.RerunCause {
+			problems = append(problems, fmt.Sprintf("precommit-rerun: rerun cause class %q, want %q", snapshot.RerunCause, expectation.RerunCause))
+		}
+	}
+	if expectation.EngineCloseApplicable {
+		if snapshot.EngineCloseCount != expectation.EngineCloseCount {
+			problems = append(problems, fmt.Sprintf("precommit-lifecycle: Engine.Close calls = %d, want %d", snapshot.EngineCloseCount, expectation.EngineCloseCount))
+		}
+	} else if snapshot.EngineCloseCount != 0 {
+		problems = append(problems, fmt.Sprintf("precommit-lifecycle: Core-only observation recorded %d Engine.Close call(s); Core does not own Engine.Close", snapshot.EngineCloseCount))
+	}
+	if expectation.ObserveEntryApplicable {
+		if snapshot.WriterClosedAtObserve != expectation.WriterClosedAtObserve {
+			problems = append(problems, fmt.Sprintf("precommit-early-close: writer descriptor closed at Observe entry = %t, want %t", snapshot.WriterClosedAtObserve, expectation.WriterClosedAtObserve))
+		}
+	}
+	if expectation.StageOrderRequired && expectation.Surface == "file" {
+		// Every applicable edge of the stage sequence is compared, so reversing
+		// any adjacent pair is rejected - including the Sync pair, which the
+		// filtered ordered expectation cannot see. A partial failure prefix
+		// stays valid: an edge is judged only when both events were observed.
+		for _, edge := range pipelinePrecommitStageOrderEdges() {
+			if !slices.Contains(snapshot.Order, edge[0]) || !slices.Contains(snapshot.Order, edge[1]) {
+				continue
+			}
+			if !pipelineHarnessBefore(snapshot.Order, edge[0], edge[1]) {
+				problems = append(problems, fmt.Sprintf("precommit-order: %s does not precede %s", edge[0], edge[1]))
+			}
+		}
+	}
+	return problems
+}
+
+// pipelinePrecommitStageOrderEdges declares the applicable stage event order on
+// the file surface: the stage descriptor is written, synced and closed in that
+// order, and Observe only reads the closed stage. stage.close.after is a
+// publish-time checkpoint - the publish rename re-proves the descriptor is
+// closed - so it is a separate edge instead of the node after stage.close.before.
+func pipelinePrecommitStageOrderEdges() [][2]string {
+	return [][2]string{
+		{pipelineBoundaryStageWriteBefore, pipelineBoundaryStageWriteAfter},
+		{pipelineBoundaryStageWriteAfter, pipelineBoundaryStageSyncBefore},
+		{pipelineBoundaryStageSyncBefore, pipelineBoundaryStageSyncAfter},
+		{pipelineBoundaryStageSyncAfter, pipelineBoundaryStageCloseBefore},
+		{pipelineBoundaryStageCloseBefore, pipelineBoundaryObserveBefore},
+		{pipelineBoundaryStageCloseBefore, pipelineBoundaryStageCloseAfter},
+		{pipelineBoundaryStageCloseAfter, pipelineBoundaryPublishRenameBefore},
+	}
+}
+
+func TestPipelinePrecommitContract(t *testing.T) {
+	t.Run("normal-controls", testPipelinePrecommitNormalControls)
+	t.Run("precommit-preserved", testPipelinePrecommitPreserved)
+	t.Run("reject", testPipelinePrecommitRejects)
+}
+
+// pipelinePrecommitAssertHistory checks the ordinal history recorded by the
+// same backend pointer: backend, request, token IDs, policy, finish, error and
+// ordinal. The expected values are the authored fixture contract, not the run.
+func pipelinePrecommitAssertHistory(t *testing.T, snapshot pipelineHarnessSnapshot, backend, kind string) {
+	t.Helper()
+	if len(snapshot.BackendCalls) == 0 {
+		t.Fatal("backend history is empty")
+	}
+	infos, generates, counts, closes := 0, 0, 0, 0
+	lastOrdinal := 0
+	for _, call := range snapshot.BackendCalls {
+		if call.Ordinal <= lastOrdinal {
+			t.Fatalf("backend history ordinal %d is not increasing after %d", call.Ordinal, lastOrdinal)
+		}
+		lastOrdinal = call.Ordinal
+		if call.Backend != backend {
+			t.Fatalf("backend history %s call records backend %q, want %q", call.Operation, call.Backend, backend)
+		}
+		switch call.Operation {
+		case "info":
+			infos++
+		case "count":
+			counts++
+			if len(call.TokenIDs) != 3 || call.Policy.Schema != 1 {
+				t.Fatalf("count history lacks the authored token IDs/policy: %+v", call)
+			}
+		case "generate":
+			generates++
+			if call.Request == "" || len(call.TokenIDs) != 3 ||
+				call.Policy.Schema != 1 || call.Policy.MaxOutputTokens != 2 ||
+				call.Policy.RequestTimeoutNS <= 0 || !call.Policy.SeedFixed ||
+				!slices.Equal(call.Policy.StopIDs, []int{42}) ||
+				call.Finish != "stop" || call.Error != "" {
+				t.Fatalf("generate history lacks the authored request/policy/finish: %+v", call)
+			}
+		case "close":
+			closes++
+		default:
+			t.Fatalf("backend history has an unknown operation %q", call.Operation)
+		}
+	}
+	if infos != 1 || counts < 1 {
+		t.Fatalf("backend history info/count = %d/%d, want 1/>=1", infos, counts)
+	}
+	if generates != snapshot.GenerateCalls {
+		t.Fatalf("backend history generate calls = %d, snapshot = %d", generates, snapshot.GenerateCalls)
+	}
+	if want := pipelineHarnessGenerateCount(mustPipelineInput(t, kind)); generates != want {
+		t.Fatalf("backend history generate calls = %d, want the %d authored non-empty units", generates, want)
+	}
+	if closes != 0 || snapshot.EngineCloseCount != 0 {
+		t.Fatalf("Core-only run recorded Engine.Close calls = %d/%d", closes, snapshot.EngineCloseCount)
+	}
+}
+
+func mustPipelineInput(t *testing.T, kind string) pipelineFixtureInput {
+	t.Helper()
+	input, ok := pipelineHarnessInput(t, kind)
+	if !ok {
+		t.Fatalf("no fixture input for kind %q", kind)
+	}
+	return input
+}
+
+func testPipelinePrecommitNormalControls(t *testing.T) {
+	cases := []struct {
+		name string
+		spec pipelineHarnessCase
+	}{
+		{"text", pipelineHarnessCase{name: "normal-controls/text", kind: "text", surface: "file", mode: publication.Replace, outputPresent: true}},
+		{"w3", pipelineHarnessCase{name: "normal-controls/w3", kind: "w3", surface: "file", mode: publication.Replace, outputPresent: true}},
+		{"stdout", pipelineHarnessCase{name: "normal-controls/stdout", kind: "text", surface: "stdout", mode: publication.Replace}},
+	}
+	for _, entry := range cases {
+		entry := entry
+		t.Run(entry.name, func(t *testing.T) {
+			expectation, snapshot := pipelinePrecommitExercise(t, entry.spec, pipelinePrecommitCase{}, pipelinePrecommitPublishedRerun())
+			if problems := pipelinePrecommitJudge(expectation, snapshot); len(problems) != 0 {
+				t.Fatalf("state oracle rejected the real normal control: %v", problems)
+			}
+			// The same counters that stay zero on the precommit failures move
+			// here, so a zero below is evidence rather than a dead counter.
+			if entry.spec.surface == "file" {
+				for _, boundary := range []string{
+					pipelineBoundaryStageWriteAfter, pipelineBoundaryObserveAfter,
+					pipelineBoundaryTMCommitBefore, pipelineBoundaryTMCommitAfter,
+					pipelineBoundaryRecordInstallAfter, pipelineBoundaryPublishRenameAfter,
+				} {
+					if snapshot.Reached[boundary] < 1 {
+						t.Fatalf("normal control never reached %s (%d)", boundary, snapshot.Reached[boundary])
+					}
+				}
+			}
+			if !snapshot.WriterClosedAtObserve && entry.spec.surface == "file" {
+				t.Fatal("normal control did not prove the stage writer descriptor Close before Observe")
+			}
+			if diff := pipelineFixtureDiff(expectation.D1, snapshot.Rows); len(diff) != 0 {
+				t.Fatalf("normal control D1 differs: %v", diff)
+			}
+			pipelineHarnessSaveJSON(t, "normal-"+entry.name+".json", map[string]any{
+				"expectation": expectation, "snapshot": snapshot,
+			})
+			pipelineFixtureSaveState(t, "normal-"+entry.name, expectation, snapshot, snapshot.Rows)
+			t.Logf("kind=%s surface=%s GenerateCalls=%d D0=%d D1=%d writer_closed_at_observe=%t engine_close=%d rerun=%s/%d",
+				entry.spec.kind, entry.spec.surface, snapshot.GenerateCalls, len(expectation.D0), len(snapshot.Rows),
+				snapshot.WriterClosedAtObserve, snapshot.EngineCloseCount, snapshot.RerunOutcome, snapshot.RerunGenerate)
+
+			pipelinePrecommitAssertHistory(t, snapshot, "cpu", entry.spec.kind)
+			if entry.name == "text" {
+				// CPU/CUDA-consistent info is set before the canonical profile
+				// exists; the real run then proves the profile and request agree.
+				cudaSpec := pipelineHarnessCase{name: "normal-controls/text-cuda", kind: "text", surface: "file", mode: publication.Replace, outputPresent: true}
+				cudaExpectation, cudaSnapshot := pipelinePrecommitExerciseWith(t, cudaSpec, pipelinePrecommitCase{}, pipelinePrecommitPublishedRerun(), func(f *pipelineFixture) {
+					f.backend.info = pipelineControlledCUDAInfo(f.backend.info)
+				})
+				if problems := pipelinePrecommitJudge(cudaExpectation, cudaSnapshot); len(problems) != 0 {
+					t.Fatalf("CUDA-consistent normal control rejected: %v", problems)
+				}
+				pipelinePrecommitAssertHistory(t, cudaSnapshot, "cuda", "text")
+				pipelineHarnessSaveJSON(t, "normal-text-cuda.json", map[string]any{
+					"expectation": cudaExpectation, "snapshot": cudaSnapshot,
+				})
+				t.Logf("CUDA-consistent info: GenerateCalls=%d backend_calls=%d", cudaSnapshot.GenerateCalls, len(cudaSnapshot.BackendCalls))
+			}
+		})
+	}
+}
+
+func testPipelinePrecommitPreserved(t *testing.T) {
+	for _, tc := range pipelinePrecommitPreservedCases() {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			spec := pipelineHarnessCase{
+				name: "precommit-preserved/" + tc.name, kind: tc.kind, surface: "file",
+				mode: tc.mode, outputPresent: tc.outputPresent,
+			}
+			expectation, snapshot := pipelinePrecommitExercise(t, spec, tc, pipelinePrecommitFailedRerun())
+			if problems := pipelinePrecommitJudge(expectation, snapshot); len(problems) != 0 {
+				t.Fatalf("state oracle rejected the real precommit failure: %v", problems)
+			}
+			for _, boundary := range []string{
+				pipelineBoundaryObserveBefore, pipelineBoundaryCompareFinalAfter,
+				pipelineBoundaryTMCommitBefore, pipelineBoundaryTMCommitAfter,
+				pipelineBoundaryRecordWriteBefore, pipelineBoundaryRecordCloseAfter,
+				pipelineBoundaryRecordInstallAfter, pipelineBoundaryPublishRenameBefore, pipelineBoundaryPublishRenameAfter,
+			} {
+				if snapshot.Reached[boundary] != 0 {
+					t.Fatalf("precommit failure reached %s %d time(s)", boundary, snapshot.Reached[boundary])
+				}
+			}
+			if diff := pipelineFixtureDiff(expectation.D0, snapshot.Rows); len(diff) != 0 {
+				t.Fatalf("precommit failure changed D0: %v", diff)
+			}
+			if tc.seedTargetHit {
+				input := mustPipelineInput(t, tc.kind)
+				hit, misses := "", 0
+				for _, authored := range input.units {
+					if authored.source == "" || authored.translation == "" {
+						continue
+					}
+					if hit == "" {
+						hit = authored.source
+						continue
+					}
+					misses++
+				}
+				for _, call := range snapshot.BackendCalls {
+					if call.Operation == "generate" && call.Request == hit {
+						t.Fatalf("seeded TM hit %q was regenerated during the failure", hit)
+					}
+				}
+				if snapshot.GenerateCalls != misses {
+					t.Fatalf("target-hit failure generated %d unit(s), want the %d authored misses", snapshot.GenerateCalls, misses)
+				}
+				if len(snapshot.Rows) != 1 {
+					t.Fatalf("target-hit D0 has %d rows, want the single authored hit", len(snapshot.Rows))
+				}
+			}
+			pipelineHarnessSaveJSON(t, "precommit-"+tc.name+".json", map[string]any{
+				"expectation": expectation, "snapshot": snapshot,
+			})
+			pipelineFixtureSaveState(t, "precommit-"+tc.name, expectation, snapshot, snapshot.Rows)
+			t.Logf("mode=%s kind=%s fault=%s GenerateCalls=%d phase=%s unit=%q cause=%s D0=%d source_preserved=%t output_present=%t backup=%t stage_fd_closed=%t rerun=%s/%d/%s",
+				tc.mode, tc.kind, tc.fault, snapshot.GenerateCalls, snapshot.ErrorPhase, snapshot.ErrorUnit, snapshot.CauseClass,
+				len(snapshot.Rows), snapshot.Files["source"].Exists, snapshot.Files["output"].Exists, snapshot.Files["backup"].Exists,
+				snapshot.StageFDClosed, snapshot.RerunOutcome, snapshot.RerunGenerate, snapshot.RerunCause)
+		})
+	}
+}
+
+func testPipelinePrecommitRejects(t *testing.T) {
+	publishedSpec := pipelineHarnessCase{name: "reject-base/published-text", kind: "text", surface: "file", mode: publication.Replace, outputPresent: true}
+	publishedExpectation, published := pipelinePrecommitExercise(t, publishedSpec, pipelinePrecommitCase{}, nil)
+	createSpec := pipelineHarnessCase{name: "reject-base/create", kind: "text", surface: "file", mode: publication.Create}
+	createExpectation, create := pipelinePrecommitExercise(t, createSpec, pipelinePrecommitPreservedCases()[0], pipelinePrecommitFailedRerun())
+	absentSpec := pipelineHarnessCase{name: "reject-base/replace-absent", kind: "text", surface: "file", mode: publication.Replace}
+	absentExpectation, absent := pipelinePrecommitExercise(t, absentSpec, pipelinePrecommitPreservedCases()[1], pipelinePrecommitFailedRerun())
+	hitSpec := pipelineHarnessCase{name: "reject-base/replace-existing", kind: "w3", surface: "file", mode: publication.Replace, outputPresent: true}
+	hitExpectation, hit := pipelinePrecommitExercise(t, hitSpec, pipelinePrecommitPreservedCases()[2], pipelinePrecommitFailedRerun())
+	for name, base := range map[string]struct {
+		expectation pipelineHarnessExpectation
+		snapshot    pipelineHarnessSnapshot
+	}{
+		"published":        {publishedExpectation, published},
+		"create":           {createExpectation, create},
+		"replace-absent":   {absentExpectation, absent},
+		"replace-existing": {hitExpectation, hit},
+	} {
+		if problems := pipelinePrecommitJudge(base.expectation, base.snapshot); len(problems) != 0 {
+			t.Fatalf("healthy base %s rejected before mutation: %v", name, problems)
+		}
+	}
+	type pipelineRejectExtra struct {
+		name   string
+		mutate func(*pipelineHarnessSnapshot)
+		want   string
+	}
+	mutations := []struct {
+		name   string
+		expect pipelineHarnessExpectation
+		base   pipelineHarnessSnapshot
+		mutate func(*pipelineHarnessSnapshot)
+		extras []pipelineRejectExtra
+		want   string
+	}{
+		{"d0", hitExpectation, hit, func(s *pipelineHarnessSnapshot) {
+			s.Rows[0].Text = "corrupt D0 text"
+		}, nil, "precommit-d0"},
+		{"output-present", createExpectation, create, func(s *pipelineHarnessSnapshot) {
+			s.Files["output"] = pipelineHarnessFile{Path: s.Files["output"].Path, Exists: true, Bytes: []byte{}, Mode: unix.S_IFREG | 0600, Nlink: 1}
+		}, nil, "precommit-output-present"},
+		{"backup-present", absentExpectation, absent, func(s *pipelineHarnessSnapshot) {
+			s.Files["backup"] = pipelineHarnessFile{Path: filepath.Join(filepath.Dir(s.Files["output"].Path), ".yakuori-backup-mutation"), Exists: true, Bytes: []byte{}, Mode: unix.S_IFREG | 0600, Nlink: 1}
+		}, nil, "precommit-backup-present"},
+		// The source/old-output contract compares every captured identity
+		// field, so each field is corrupted on its own clone. A judge that only
+		// checked inode would accept dev/mount/mode/nlink/size changes.
+		{"source-identity", hitExpectation, hit, func(s *pipelineHarnessSnapshot) {
+			file := s.Files["source"]
+			file.Inode++
+			s.Files["source"] = file
+		}, []pipelineRejectExtra{
+			{"source-dev", func(s *pipelineHarnessSnapshot) { f := s.Files["source"]; f.Dev++; s.Files["source"] = f }, "precommit-source-identity"},
+			{"source-mount", func(s *pipelineHarnessSnapshot) { f := s.Files["source"]; f.MountID++; s.Files["source"] = f }, "precommit-source-identity"},
+			{"source-mode", func(s *pipelineHarnessSnapshot) { f := s.Files["source"]; f.Mode++; s.Files["source"] = f }, "precommit-source-identity"},
+			{"source-nlink", func(s *pipelineHarnessSnapshot) { f := s.Files["source"]; f.Nlink++; s.Files["source"] = f }, "precommit-source-identity"},
+			{"source-size", func(s *pipelineHarnessSnapshot) { f := s.Files["source"]; f.Size++; s.Files["source"] = f }, "precommit-source-identity"},
+			{"output-inode", func(s *pipelineHarnessSnapshot) { f := s.Files["output"]; f.Inode++; s.Files["output"] = f }, "precommit-output-preserved"},
+			{"output-dev", func(s *pipelineHarnessSnapshot) { f := s.Files["output"]; f.Dev++; s.Files["output"] = f }, "precommit-output-preserved"},
+			{"output-mount", func(s *pipelineHarnessSnapshot) { f := s.Files["output"]; f.MountID++; s.Files["output"] = f }, "precommit-output-preserved"},
+			{"output-mode", func(s *pipelineHarnessSnapshot) { f := s.Files["output"]; f.Mode++; s.Files["output"] = f }, "precommit-output-preserved"},
+			{"output-nlink", func(s *pipelineHarnessSnapshot) { f := s.Files["output"]; f.Nlink++; s.Files["output"] = f }, "precommit-output-preserved"},
+			{"output-size", func(s *pipelineHarnessSnapshot) { f := s.Files["output"]; f.Size++; s.Files["output"] = f }, "precommit-output-preserved"},
+		}, "precommit-source-identity"},
+		{"phase", createExpectation, create, func(s *pipelineHarnessSnapshot) {
+			s.ErrorPhase = "publish"
+		}, []pipelineRejectExtra{
+			{"unit", func(s *pipelineHarnessSnapshot) { s.ErrorUnit = "other-unit" }, "precommit-phase"},
+		}, "precommit-phase"},
+		{"cause", createExpectation, create, func(s *pipelineHarnessSnapshot) {
+			s.CauseClass = "eio"
+		}, nil, "precommit-cause"},
+		{"exit", createExpectation, create, func(s *pipelineHarnessSnapshot) {
+			s.ExitObserved, s.CLIExit = true, 1
+		}, nil, "precommit-exit"},
+		{"rerun", createExpectation, create, func(s *pipelineHarnessSnapshot) {
+			s.RerunOutcome = "succeeded"
+		}, nil, "precommit-rerun"},
+		{"extra-generate", publishedExpectation, published, func(s *pipelineHarnessSnapshot) {
+			s.GenerateCalls++
+		}, nil, "precommit-generate"},
+		{"early-close", publishedExpectation, published, func(s *pipelineHarnessSnapshot) {
+			s.WriterClosedAtObserve = false
+		}, nil, "precommit-early-close"},
+		{"unreached", publishedExpectation, published, func(s *pipelineHarnessSnapshot) {
+			s.Reached[pipelineBoundaryObserveBefore] = 0
+		}, nil, "observe.before reached 0 time(s)"},
+		{"wrong-occurrence", publishedExpectation, published, func(s *pipelineHarnessSnapshot) {
+			s.Reached[pipelineBoundaryObserveBefore] = 2
+		}, nil, "observe.before reached 2 time(s)"},
+		{"uninjected", createExpectation, create, func(s *pipelineHarnessSnapshot) {
+			s.Injected = nil
+		}, nil, "precommit-injected"},
+	}
+	observed := make([]map[string]any, 0, len(mutations))
+	for _, mutation := range mutations {
+		mutation := mutation
+		t.Run(mutation.name, func(t *testing.T) {
+			invalid := mutation.base.clone()
+			mutation.mutate(&invalid)
+			problems := pipelinePrecommitJudge(mutation.expect, invalid)
+			if len(problems) == 0 {
+				t.Fatalf("state oracle accepted the %s corruption", mutation.name)
+			}
+			joined := strings.Join(problems, "\n")
+			if !strings.Contains(joined, mutation.want) {
+				t.Fatalf("rejection of %s came from an unrelated check: %v", mutation.name, problems)
+			}
+			for _, extra := range mutation.extras {
+				extraObservation := mutation.base.clone()
+				extra.mutate(&extraObservation)
+				extraProblems := pipelinePrecommitJudge(mutation.expect, extraObservation)
+				if !strings.Contains(strings.Join(extraProblems, "\n"), extra.want) {
+					t.Fatalf("%s/%s corruption was not rejected by %q: %v", mutation.name, extra.name, extra.want, extraProblems)
+				}
+				t.Logf("corrupt observation %s/%s rejected by %s: %v", mutation.name, extra.name, extra.want, extraProblems)
+			}
+			saved := map[string]any{"case": mutation.name, "want": mutation.want, "problems": problems, "mutated": invalid}
+			pipelineHarnessSaveJSON(t, "reject-"+mutation.name+".json", saved)
+			observed = append(observed, saved)
+			t.Logf("corrupt observation %s rejected by %s: %v", mutation.name, mutation.want, problems)
+		})
+	}
+	if len(observed) != 13 {
+		t.Fatalf("reject cases executed = %d, want 13", len(observed))
+	}
+	// One required pure-order leaf: each applicable adjacent stage edge is
+	// reversed on its own against the real published observation. Swapping two
+	// entries of Order changes neither the event multiset nor the reached
+	// counts, so only an order comparison can reject the result.
+	t.Run("stage-order", func(t *testing.T) {
+		// Keep the required contract independent of the judge's edge declaration.
+		edges := [][2]string{
+			{"stage.write.before", "stage.write.after"},
+			{"stage.write.after", "stage.sync.before"},
+			{"stage.sync.before", "stage.sync.after"},
+			{"stage.sync.after", "stage.close.before"},
+			{"stage.close.before", "observe.before"},
+			{"stage.close.before", "stage.close.after"},
+			{"stage.close.after", "publish-rename.before"},
+		}
+		rows := make([]map[string]any, 0, len(edges))
+		for _, edge := range edges {
+			invalid := published.clone()
+			earlier, later := slices.Index(invalid.Order, edge[0]), slices.Index(invalid.Order, edge[1])
+			if earlier < 0 || later < 0 || earlier >= later {
+				t.Fatalf("real published observation does not hold %s -> %s (indexes %d/%d)", edge[0], edge[1], earlier, later)
+			}
+			invalid.Order[earlier], invalid.Order[later] = invalid.Order[later], invalid.Order[earlier]
+			before, after := slices.Clone(published.Order), slices.Clone(invalid.Order)
+			slices.Sort(before)
+			slices.Sort(after)
+			if !slices.Equal(before, after) {
+				t.Fatalf("reversing %s/%s changed the event multiset", edge[0], edge[1])
+			}
+			if !maps.Equal(published.Reached, invalid.Reached) {
+				t.Fatalf("reversing %s/%s changed the reached counts", edge[0], edge[1])
+			}
+			problems := pipelinePrecommitJudge(publishedExpectation, invalid)
+			if !strings.Contains(strings.Join(problems, "\n"), "precommit-order") {
+				t.Fatalf("reversed stage edge %s -> %s was not rejected by precommit-order: %v", edge[0], edge[1], problems)
+			}
+			// An edge whose two events are outside the ordered expectation is
+			// invisible to it, so the stage order guard must be the only
+			// rejecting predicate for that reversal.
+			filteredUnchanged := slices.Equal(pipelineHarnessFilteredOrder(published.Order), pipelineHarnessFilteredOrder(invalid.Order))
+			if filteredUnchanged {
+				for _, problem := range problems {
+					if !strings.HasPrefix(problem, "precommit-order:") {
+						t.Fatalf("reversed stage edge %s -> %s was also rejected by %q: %v", edge[0], edge[1], problem, problems)
+					}
+				}
+			}
+			rows = append(rows, map[string]any{
+				"edge": []string{edge[0], edge[1]}, "multiset_unchanged": true, "reached_unchanged": true,
+				"filtered_order_unchanged": filteredUnchanged, "problems": problems,
+			})
+			t.Logf("reversed stage edge %s -> %s rejected by precommit-order (filtered expectation unchanged=%t): %v", edge[0], edge[1], filteredUnchanged, problems)
+		}
+		pipelineHarnessSaveJSON(t, "reject-stage-order.json", map[string]any{"edges": rows})
+	})
+	// Descriptive fields are not pass predicates: changing them cannot change
+	// either verdict.
+	descriptive := published.clone()
+	descriptiveExpectation := publishedExpectation
+	descriptiveExpectation.Reason += " descriptive note"
+	descriptive.InstallBasis = "explanatory prose is not install or Close evidence"
+	descriptive.Exit = "descriptive exit text"
+	descriptive.Rerun = "descriptive rerun text"
+	descriptive.Lifecycle = "descriptive lifecycle text"
+	if got, want := pipelinePrecommitJudge(descriptiveExpectation, descriptive), pipelinePrecommitJudge(publishedExpectation, published); !slices.Equal(got, want) {
+		t.Fatalf("descriptive fields changed the healthy verdict: %v, want %v", got, want)
+	}
+	failureDescriptive := create.clone()
+	failureExpectation := createExpectation
+	failureExpectation.Cause += " descriptive cause prose"
+	failureDescriptive.Error = "descriptive error text"
+	if got, want := pipelinePrecommitJudge(failureExpectation, failureDescriptive), pipelinePrecommitJudge(createExpectation, create); !slices.Equal(got, want) {
+		t.Fatalf("descriptive fields changed the failure verdict: %v, want %v", got, want)
+	}
+	pipelineHarnessSaveJSON(t, "negative-state.json", map[string]any{
+		"cases": observed,
+		"bases": map[string]any{
+			"published": published, "create": create, "replace-absent": absent, "replace-existing": hit,
+		},
+		"descriptive_invariance": true,
+	})
 }

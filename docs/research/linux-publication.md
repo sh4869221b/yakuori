@@ -611,3 +611,138 @@ The controlled fixture Engine is not native CPU or GPU execution, and no
 translation-quality claim follows. The CPU smoke workflow, its Dockerfile and
 `go.mod`/`go.sum` pins are unchanged; a zero diff there proves preservation
 only, not a native CPU run.
+
+## Issue69 precommit supplement (2026-10-24)
+
+This supplement extends the Issue68 coverage above; its dated research and
+measurement snapshots are unchanged. The six roots use the real Core, text/W3
+Adapters, SQLite Store/Run and publisher with a controlled Engine. CPU/CUDA name
+axes check requested/effective backend, request, profile and lifecycle contracts;
+they do not measure native GPU quality, speed, residency or drain.
+
+### Required selectors and filesystem lanes
+
+The required sets come from the approved case axes and accepted fixture
+contracts, not observed logs. Counts include each root and intermediate group:
+
+| Root | Terminal leaves | RUN/PASS names including parents | Qualified lane |
+| --- | ---: | ---: | --- |
+| TestPipelinePrecommitContract | 21 | 25 | normal controls, preserved modes, 14 rejection classes |
+| TestPipelinePrecommitInference | 178 | 179 | P/Q admission, request, finish and multiunit failures |
+| TestPipelinePrecommitSegmented | 50 | 51 | whole-parent planning and segment failures |
+| TestPipelinePrecommitFinal | 102 | 103 | real stage/reader operations and closed-artifact rejection |
+| TestPipelinePrecommitCLI | 168 | 169 | dispatch and independent direct-execute counterparts |
+| TestPipelinePrecommitSignals | 44 | 45 | 42 process rows and two negative controls |
+
+The total is 563 terminal leaves and 572 names, not 572 fault injections.
+`TestPipelinePrecommitSignalChild` is a child-only entry and is not a required
+fault PASS. Normal controls and expected negative-owner failures retain their
+own meaning. Existing Issue68 normal controls remain required.
+
+`ci/verify.sh` keeps tagged compile/vet for localize, publication and cli.
+Compile-only is not a behavior PASS. Its model-free lane adds only the Core
+stdout selections: contract normal-controls/stdout, and CPU/CUDA
+text-stdout-none rows of inference, segmented and final. These paths seed real
+SQLite but do not call publication.Prepare. Contract rejection setup, all file
+rows and every new CLI/signal fixture (even stdout) need qualified non-root
+storage and stay in the publication workflow.
+
+The workflow retains its non-root ext4 requirement (statfs ef53). Local qualified
+runs may use adopted Btrfs (9123683e), labelled Btrfs rather than ext4. TMPDIR and
+GOTMPDIR must both point to the actual qualified directory. Each new root runs
+through the existing require_names/run_required functions. Every required root,
+group and leaf must have exactly one RUN and PASS; missing, duplicate,
+equal-count replacement, unexpected RUN-only, incomplete, FAIL and SKIP output
+are rejected. The normal helper pipeline_require enforces the same contract.
+The source CPU smoke workflow, Dockerfiles and dependency/model pins are
+preserved; controlled tests do not substitute for the existing native CPU smoke.
+
+Full selectors, with official Go 1.27.1 and CGO_ENABLED=0 GOTOOLCHAIN=local:
+
+```sh
+docker build --progress=plain -f ci/Dockerfile .
+go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run '^(TestPipelinePrecommitContract|TestPipelinePrecommitInference|TestPipelinePrecommitSegmented|TestPipelinePrecommitFinal)$' -v
+go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run '^(TestPipelinePrecommitCLI|TestPipelinePrecommitSignals)$' -v
+```
+
+The workflow separately mounts executable tmpfs at /tmp and sets BOTH TMPDIR and
+GOTMPDIR there for TestPipelineUnsupportedFilesystem (exit 0). The qualified-only
+TestPipelinePrecommitFinal/cpu-text-file-replace-existing-happy must instead exit
+nonzero there with the prepare/unsupported-filesystem signature and no PASS or
+SKIP. Its later fault stages are not-run. This intentional RED and the typed
+refusal are never added to the qualified fault PASS count. A hostname, directory
+name, successful mkdir or compile-only check cannot establish FS qualification.
+
+### Physical state and boundary interpretation
+
+S/O/T/D0/D1 retain their authored-fixture meanings above. Failure expectations
+are independent of actual rows and compare all four SQLite columns; snapshots
+include actual bytes and identities, and consistent real DB copies. Parent
+process checks read physical state after Wait, not merely the child's pre-return
+JSON. The selected cases, not every unselected cartesian product, are covered.
+
+| Case family / selector suffix | Physical outcome and rerun |
+| --- | --- |
+| model/Info/profile error or cancellation in PrecommitCLI | source/old output and D0 retained, stdout Write0/bytes0, no publication run; Engine Close0 before acquisition, Close1 after acquisition. Removing an injected initialization fault with a fresh context recovers; unchanged invalid Registry state repeats model refusal. |
+| builder/count/admission or partial/finish/multiunit failure in PrecommitInference | no accepted subset; D0 and old files retained, no installed record or stdout delivery. After Prepare, the run without a record remains and the same file target rerun refuses missing-record with Generate0. Removable stdout faults recover full T/D1 with a fresh context. |
+| all-admission or second-segment failure in PrecommitSegmented | admission fails before first Generate; second-segment faults reach only the prescribed prefix. Protected-token/parent-validation cases may generate all segments before rejecting the whole parent. No partial TM/output is accepted. |
+| create-collision / write-zero-error / write-prefix-error in PrecommitFinal | real exclusive-create collision or real delegated Write of zero/prefix3 bytes; retained stage is respectively the injected empty collision, empty bytes or authored first three bytes. No installed record, D0 retained; same-target rerun refuses missing-record, including the saved stage-absent representative after removing only the injected collision. |
+| sync-error / close-error / cancellation / Observe read in PrecommitFinal | actual operation and injected return are recorded separately; full or case-specific stage remains, writer FD closure is checked before Observe where reached. Old output/source and D0 remain, record absent; retained-run rerun refuses. |
+| missing-empty-id / duplicate-id / unknown-id / order / foreign artifact or manifest | actual stage bytes or returned manifest are changed at the named seam. Duplicate syntax rejects in Observe; legal unknown/order/content changes reach CompareFinal; foreign session binding rejects ErrInvalidExpected, foreign-input manifest rejects before CompareFinal. Modified closed stage and D0 remain; no publication. |
+| happy controls | full T and authored D1 only after validation/commit; successful file publication installs its record and consumes stage, InPlace retains S in backup; stdout delivers complete T. |
+| PrecommitSignals initial / same-root rerun | initial real exit1, Write0/bytes0, Close1, Wait1/EOF, released descriptors/lock, no normal rescue, D0/old files retained. File reruns preserve the original missing-record run and exit1/Generate0/D0; stdout reruns exit0 with one Write/full 10-byte T and D1. |
+| UnsupportedFilesystem on tmpfs | typed prepare refusal, Generate0, D0/source identity unchanged, no output/run; Import/generation/stage/commit/publication not-run. |
+
+Task3's unchanged intrinsic all-admission stdout rerun is an explicit exception
+to removable-fault recovery: the same `one two unbreakable` input with context7 /
+budget2 repeats plan/segment.ErrContextLimit, Generate0, D0 and stdout0. It does
+not silently relax limits. Other removable stdout faults still recover full
+D1/T. Task4 distinguishes absent, partial and full-corrupt retained-stage reruns.
+
+Write wrappers really delegate raw[:0] or raw[:3] before returning EIO. Sync
+hooks call real Sync before returning boundary EIO; Close injection still
+performs mandatory real Close. Reader wrappers perform real Read before their
+injected error/cancel. These callback/wrapper EIOs are not kernel-origin EIO.
+Exclusive-create collision is a real EEXIST. No Flush layer is invented.
+`tm-commit.before` means Stage succeeded; `tm-commit.after` means real commit
+returned before Publish/stdout Write. Neither is a direct tm.Run.Commit or SQL
+COMMIT entry counter. D0 and unreached post-commit checkpoints are the evidence,
+not a nonexistent direct counter. Compare-after cancellation may reach
+final.commit but its context gate refuses before tm.Commit.
+
+Task6 sends SIGINT/SIGTERM only after ready. Controlled worker/stream events
+prove cancel -> drain release -> tail token -> consumer complete -> Generate
+return -> Close -> Wait. Caller/request deadline rows use actual deadlines in
+synctest; pipe/report I/O stays outside its bubble. The supplied Core/CLI stdout
+writer observes actual delegated calls and bytes; it does not monitor arbitrary
+global os.Stdout writes. Six stdout typed contrasts use fresh direct-execute
+children; they do not turn the paired dispatch return into a typed result.
+Task5 records dispatch_return_code, not os.Exit. Task6 records actual child exit
+and parent WaitStatus. Rescue SIGKILL is cleanup sensitivity, not Issue71
+SIGKILL product coverage or a native GPU drain guarantee.
+
+### Acceptance and ideal-state mapping
+
+| Issue69 acceptance criterion | Ideal states | Selectors and saved proof |
+| --- | --- | --- |
+| 1: failure before commit leaves no partial result | IS-2/3/4/5/7 | Inference partial/finish/multiunit; Segmented second-*; Final stage/wire; expected state versus D0/files/stdout, real DB snapshots |
+| 2: all-unit/segment admission before generation | IS-1/3 | Inference effective-equal/plus-one, later-* and all-hit-later-*; Segmented all-admission; request/token/history and Generate0 |
+| 3: partial or invalid finish is never adopted | IS-2 | Inference partial-plus-error and non-Stop finish; CLI partial-plus-error; full authored rows/bytes and phase/cause |
+| 4: cancellation drains and closes finitely | IS-6 | Signals sigint/sigterm/context-cancel/caller-deadline/request-deadline, early-close-negative/rescue-negative; actual notices/Close/Wait/exit/post-Wait state |
+| 5: original/old output/TM survive with correct diagnostics and rerun | IS-7 | Contract preservation/rejection; all six roots' actual identity/bytes/all-column D0, CLI dispatch/execute and signal reruns |
+| 6: initialization/backend and CGO-free reproducibility | IS-1/8 | CLI model/Info/profile/open/backend rows; clean build, six qualified run_required roots, separate tmpfs refusal/RED and fixed-name guards |
+
+IS-4 is specifically Final's real stage create/Write/Sync/Close/reader proof;
+IS-5 is its closed bytes, ordered metadata and same-import binding proof.
+IS-8 is the separation of normal model-free, qualified positive and unsupported
+refusal lanes described above. All eight IS rows thus map to selectors and
+physical state, not merely node counts. Execution logs, frozen names, per-case
+state/DB/byte snapshots and helper-negative results are retained in the Task7
+producer evidence, with DoneClaim/API linking their exact paths and exits.
+
+Structurally absent Flush, stdout file Stage/Sync/Close/backup/record and W3 CLI
+stdout are N/A. Reachable but unselected W3 Core stdout and strict stdout
+compare-after cancellation are not-run, not N/A. Native GPU quality/speed/drain,
+arm64 runtime and postcommit/Issue71 matrices remain outside this supplement.
+Historical rejected or process-violation records remain historical evidence;
+this supplement does not erase or retroactively waive them.
