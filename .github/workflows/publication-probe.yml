@@ -22,6 +22,7 @@ jobs:
           findmnt -T "$RUNNER_TEMP/publication/tmp" -o TARGET,FSTYPE,OPTIONS
           test -w "$RUNNER_TEMP/publication/tmp"
           docker run --rm --user "$(id -u):$(id -g)" \
+            --tmpfs /tmp:rw,exec,mode=1777 \
             -v "$PWD:/src" -v "$RUNNER_TEMP/publication:/evidence" \
             -e GOCACHE=/evidence/cache -e GOPATH=/evidence/gopath \
             -e TMPDIR=/evidence/tmp -e GOTMPDIR=/evidence/tmp \
@@ -46,6 +47,106 @@ jobs:
               printf "%s\n" "TestPipelineHarnessGuards/cleanup-rescue" "TestPipelineHarnessGuards/early-return" "TestPipelineHarnessGuards/healthy-positive-control" "TestPipelineHarnessGuards/malformed-input" "TestPipelineHarnessGuards/timeout-explicit-cancel" "TestPipelineHarnessGuards/uninjected" "TestPipelineHarnessGuards/unreached" "TestPipelineHarnessGuards/unreaped" "TestPipelineHarnessGuards/wrong-boundary" > /evidence/names/guards
               printf "%s\n" "TestPipelineHarnessFault/cleanup-rescue" "TestPipelineHarnessFault/normal-counterpart/text" "TestPipelineHarnessFault/normal-counterpart/w3" "TestPipelineHarnessFault/process/cancel/text" "TestPipelineHarnessFault/process/error/text" "TestPipelineHarnessFault/process/error/w3" "TestPipelineHarnessFault/stage-close/text" "TestPipelineHarnessFault/stage-close/w3" > /evidence/names/fault
               printf "%s\n" "TestPipelineHarnessCLI/localize-close-error" "TestPipelineHarnessCLI/localize-diagnostic-writer-error" "TestPipelineHarnessCLI/translate-text-stdout" > /evidence/names/cli
+              # Freeze #69 terminal names from the accepted P/Q axes, never logs.
+              for lane in contract inference segmented final cli signals; do
+                : >"/evidence/names/precommit-$lane"
+              done
+              printf "%s\n" TestPipelinePrecommitContract/normal-controls \
+                TestPipelinePrecommitContract/precommit-preserved \
+                TestPipelinePrecommitContract/reject >> /evidence/names/precommit-contract
+              for row in text w3 stdout; do
+                printf "%s\n" "TestPipelinePrecommitContract/normal-controls/$row" >> /evidence/names/precommit-contract
+              done
+              for row in create replace-absent replace-existing in-place; do
+                printf "%s\n" "TestPipelinePrecommitContract/precommit-preserved/$row" >> /evidence/names/precommit-contract
+              done
+              for row in d0 output-present backup-present source-identity phase cause exit rerun \
+                extra-generate early-close unreached wrong-occurrence uninjected stage-order; do
+                printf "%s\n" "TestPipelinePrecommitContract/reject/$row" >> /evidence/names/precommit-contract
+              done
+              for backend in cpu cuda; do
+                for surface in text-file-replace-existing w3-file-replace-existing text-stdout-none; do
+                  for row in happy builder-error builder-cancel count-error count-cancel \
+                    effective-equal effective-plus-one policy-over-limit foreign-request \
+                    partial-plus-error max-tokens context-limit timeout-finish canceled-finish \
+                    decode-error invalid-output unknown-finish prompt-count-mismatch deadline \
+                    cancel-after-stop core-deadline; do
+                    printf "%s\n" "TestPipelinePrecommitInference/$backend-$surface-$row" >> /evidence/names/precommit-inference
+                  done
+                done
+                for row in builder-error builder-cancel count-error count-cancel effective-plus-one; do
+                  for prefix in later all-hit-later; do
+                    printf "%s\n" "TestPipelinePrecommitInference/$backend-w3-file-replace-existing-$prefix-$row" >> /evidence/names/precommit-inference
+                  done
+                done
+                for row in multiunit-first multiunit-middle multiunit-last multiunit-hit-middle; do
+                  printf "%s\n" "TestPipelinePrecommitInference/$backend-w3-file-replace-existing-$row" >> /evidence/names/precommit-inference
+                done
+                for kind in text w3; do
+                  for mode in create replace-absent inplace; do
+                    for row in builder-error partial-plus-error; do
+                      printf "%s\n" "TestPipelinePrecommitInference/$backend-$kind-file-$mode-$row" >> /evidence/names/precommit-inference
+                    done
+                  done
+                done
+                for surface in file-replace-existing stdout-none; do
+                  for row in happy all-admission second-partial second-max second-unknown \
+                    second-decode second-count-mismatch second-cancel second-deadline \
+                    protected-token-invalid parent-validation-invalid; do
+                    printf "%s\n" "TestPipelinePrecommitSegmented/$backend-text-$surface-$row" >> /evidence/names/precommit-segmented
+                  done
+                done
+                for mode in create replace-absent inplace; do
+                  printf "%s\n" "TestPipelinePrecommitSegmented/$backend-text-file-$mode-second-partial" >> /evidence/names/precommit-segmented
+                done
+                for kind in text w3; do
+                  for row in happy create-collision write-zero-error write-prefix-error sync-error \
+                    close-error cancel-write cancel-sync cancel-close observe-read-error \
+                    cancel-observe-read cancel-observe-after cancel-compare-after; do
+                    printf "%s\n" "TestPipelinePrecommitFinal/$backend-$kind-file-replace-existing-$row" >> /evidence/names/precommit-final
+                  done
+                  for mode in create replace-absent inplace; do
+                    for row in sync-error cancel-compare-after; do
+                      printf "%s\n" "TestPipelinePrecommitFinal/$backend-$kind-file-$mode-$row" >> /evidence/names/precommit-final
+                    done
+                  done
+                done
+                for row in happy observe-read-error cancel-observe-read cancel-observe-after; do
+                  printf "%s\n" "TestPipelinePrecommitFinal/$backend-text-stdout-none-$row" >> /evidence/names/precommit-final
+                done
+                for row in missing-empty-id duplicate-id unknown-id foreign-artifact-bytes \
+                  string-order-only key-order-only key-reassigned foreign-session-manifest foreign-artifact-manifest; do
+                  printf "%s\n" "TestPipelinePrecommitFinal/$backend-w3-file-replace-existing-$row" >> /evidence/names/precommit-final
+                done
+                backend_rows=
+                if [ "$backend" = cuda ]; then
+                  backend_rows="unsupported residency-vram-decline"
+                fi
+                for surface in text-file-replace-existing text-stdout-none w3-file-replace-existing; do
+                  for row in happy open-error info-error profile-request-error body-request-error \
+                    count-error partial-plus-error open-cancel info-cancel profile-request-cancel \
+                    model-unselected model-missing model-mismatch $backend_rows; do
+                    for entry in dispatch execute-cause; do
+                      printf "%s\n" "TestPipelinePrecommitCLI/$backend-$surface-$row-$entry" >> /evidence/names/precommit-cli
+                    done
+                  done
+                done
+                for surface in text-translate-stdout text-file-replace-existing w3-file-replace-existing; do
+                  for row in sigint sigterm context-cancel caller-deadline request-deadline; do
+                    printf "%s\n" "TestPipelinePrecommitSignals/$backend-$surface-$row" >> /evidence/names/precommit-signals
+                  done
+                done
+                for kind in text w3; do
+                  for mode in create replace-absent in-place; do
+                    printf "%s\n" "TestPipelinePrecommitSignals/$backend-$kind-file-$mode-sigterm" >> /evidence/names/precommit-signals
+                  done
+                done
+              done
+              for row in early-close-negative rescue-negative; do
+                printf "%s\n" "TestPipelinePrecommitSignals/$row" >> /evidence/names/precommit-signals
+              done
+              printf "%s\n" TestPipelineUnsupportedFilesystem > /evidence/names/precommit-refusal
+
               require_names() {
                 label=$1
                 names=$2
@@ -154,6 +255,43 @@ jobs:
                 go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessFault$" -v
               run_required cli /evidence/names/cli \
                 go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelineHarnessCLI$" -v
+              # Each new root is required separately; the signal child is not a lane.
+              run_required precommit-contract /evidence/names/precommit-contract \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitContract$" -v
+              run_required precommit-inference /evidence/names/precommit-inference \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitInference$" -v
+              run_required precommit-segmented /evidence/names/precommit-segmented \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitSegmented$" -v
+              run_required precommit-final /evidence/names/precommit-final \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitFinal$" -v
+              run_required precommit-cli /evidence/names/precommit-cli \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelinePrecommitCLI$" -v
+              YAKUORI_SIGNAL_STATE=/evidence/pipeline-evidence/precommit-signals-state.json \
+                run_required precommit-signals /evidence/names/precommit-signals \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelinePrecommitSignals$" -v
+
+              test "$(stat -f -c %T /tmp)" = tmpfs
+              echo "unsupported-filesystem lane: TMPDIR=/tmp GOTMPDIR=/tmp filesystem=tmpfs"
+              TMPDIR=/tmp GOTMPDIR=/tmp run_required precommit-refusal /evidence/names/precommit-refusal \
+                go test -count=1 -timeout 180s -tags pipelinefaults ./internal/localize -run "^TestPipelineUnsupportedFilesystem$" -v
+              if TMPDIR=/tmp GOTMPDIR=/tmp \
+                YAKUORI_PIPELINE_EVIDENCE="$YAKUORI_PIPELINE_EVIDENCE/unsupported-positive" \
+                go test -count=1 -timeout 180s -tags pipelinefaults \
+                ./internal/localize -run "^TestPipelinePrecommitFinal$/^cpu-text-file-replace-existing-happy$" -v \
+                > /evidence/precommit-expected-red.log 2>&1; then
+                cat /evidence/precommit-expected-red.log
+                echo "qualified positive unexpectedly passed on tmpfs" >&2
+                exit 1
+              else
+                expected_red_exit=$?
+              fi
+              cat /evidence/precommit-expected-red.log
+              grep -Fq "error=localize prepare failed unsupported_filesystem=true" /evidence/precommit-expected-red.log
+              if grep -Eq "^[[:space:]]*--- (PASS|SKIP)" /evidence/precommit-expected-red.log; then
+                echo "tmpfs positive reported PASS or SKIP" >&2
+                exit 1
+              fi
+              echo "pipeline expected RED: exit=$expected_red_exit; typed prepare refusal; later fault stages not-run; not a fault PASS"
               find "$YAKUORI_PIPELINE_EVIDENCE" -type f -printf "%p %s bytes\n" | sort
 
               TMPDIR=/evidence go test -count=1 -v ./research/publication

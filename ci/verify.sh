@@ -39,7 +39,7 @@ os.execvp(sys.argv[1], sys.argv[1:])
 ' go test -count=1 -timeout 15m -tags offlinesmoke ./internal/cli -run '^TestOfflineCLIMatrix$/^model-free$' -v
 go test -count=1 ./...
 go vet ./...
-# Issue #68 pipeline fault harness. Tagged vet and build check the test-only
+# Issue #68/#69 pipeline fault harness. Tagged vet and build check the test-only
 # surface; they are not a behavior PASS. The filesystem-independent lanes below
 # run real child lifecycles. Qualified publication positives require a non-root
 # ext4/Btrfs mount and run in .github/workflows/publication-probe.yml.
@@ -152,6 +152,36 @@ cat >"$pipeline_tmp/refusal.names" <<'EOF'
 TestPipelineUnsupportedFilesystem
 EOF
 
+# Issue #69 Core stdout paths do not call publication.Prepare. CLI fixtures,
+# including stdout, require qualified storage and stay in the qualified lane.
+cat >"$pipeline_tmp/precommit-contract-stdout.names" <<'EOF'
+TestPipelinePrecommitContract/normal-controls
+TestPipelinePrecommitContract/normal-controls/stdout
+EOF
+for lane in inference segmented final; do
+ : >"$pipeline_tmp/precommit-$lane-stdout.names"
+done
+for backend in cpu cuda; do
+ for row in happy builder-error builder-cancel count-error count-cancel \
+  effective-equal effective-plus-one policy-over-limit foreign-request \
+  partial-plus-error max-tokens context-limit timeout-finish canceled-finish \
+  decode-error invalid-output unknown-finish prompt-count-mismatch deadline \
+  cancel-after-stop core-deadline; do
+  printf '%s\n' "TestPipelinePrecommitInference/$backend-text-stdout-none-$row" \
+   >>"$pipeline_tmp/precommit-inference-stdout.names"
+ done
+ for row in happy all-admission second-partial second-max second-unknown \
+  second-decode second-count-mismatch second-cancel second-deadline \
+  protected-token-invalid parent-validation-invalid; do
+  printf '%s\n' "TestPipelinePrecommitSegmented/$backend-text-stdout-none-$row" \
+   >>"$pipeline_tmp/precommit-segmented-stdout.names"
+ done
+ for row in happy observe-read-error cancel-observe-read cancel-observe-after; do
+  printf '%s\n' "TestPipelinePrecommitFinal/$backend-text-stdout-none-$row" \
+   >>"$pipeline_tmp/precommit-final-stdout.names"
+ done
+done
+
 pipeline_fs_independent() {
  label=$1
  selector=$2
@@ -167,6 +197,10 @@ pipeline_fs_independent() {
 pipeline_fs_independent fixture-inputs '^TestPipelineFixtureInputs$' "$pipeline_tmp/fixture-inputs.names"
 pipeline_fs_independent barrier '^TestPipelineHarnessBarrier$' "$pipeline_tmp/barrier.names"
 pipeline_fs_independent guards '^TestPipelineHarnessGuards$' "$pipeline_tmp/guards.names"
+pipeline_fs_independent precommit-contract-stdout '^TestPipelinePrecommitContract$/^normal-controls$/^stdout$' "$pipeline_tmp/precommit-contract-stdout.names"
+pipeline_fs_independent precommit-inference-stdout '^TestPipelinePrecommitInference$/^(cpu|cuda)-text-stdout-none-' "$pipeline_tmp/precommit-inference-stdout.names"
+pipeline_fs_independent precommit-segmented-stdout '^TestPipelinePrecommitSegmented$/^(cpu|cuda)-text-stdout-none-' "$pipeline_tmp/precommit-segmented-stdout.names"
+pipeline_fs_independent precommit-final-stdout '^TestPipelinePrecommitFinal$/^(cpu|cuda)-text-stdout-none-' "$pipeline_tmp/precommit-final-stdout.names"
 
 # The clean image's /tmp must be a real tmpfs/overlay, so this lane proves the
 # typed unsupported-filesystem refusal rather than passing by accident.
