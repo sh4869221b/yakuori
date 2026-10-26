@@ -194,6 +194,13 @@ func pipelineFaultChild(t *testing.T, request pipelineBarrierChildRequest, send 
 	if h.beforeOutput, err = pipelineHarnessReadFile(h.options.Output); err != nil {
 		t.Fatal(err)
 	}
+	if h.beforeSource, err = pipelineHarnessReadFile(h.sourcePath); err != nil {
+		t.Fatal(err)
+	}
+	h.beforeParents = map[string]pipelineHarnessRecordIdentity{
+		"source": pipelineHarnessReadParent(t, h.sourcePath),
+		"output": pipelineHarnessReadParent(t, h.options.Output),
+	}
 	h.ops.source = h.sourcePath
 	pipelineLocateRunPaths(&h.ops.paths, root)
 
@@ -331,6 +338,9 @@ func pipelineFaultCaptureAfterWait(t *testing.T, root string, child pipelineFaul
 	paths := publication.PipelineFaultPaths{Stage: child.Snapshot.Files["stage"].Path, Record: child.Snapshot.Files["record"].Path}
 	pipelineLocateRunPaths(&paths, root)
 	locations := map[string]string{"source": filepath.Join(root, "source"), "output": filepath.Join(root, "output")}
+	if expectation.Mode == string(publication.InPlace) {
+		locations["output"] = locations["source"]
+	}
 	if paths.Stage != "" {
 		locations["stage"] = paths.Stage
 	}
@@ -362,21 +372,150 @@ func pipelineFaultCaptureAfterWait(t *testing.T, root string, child pipelineFaul
 	pipelineHarnessSaveJSON(t, label+"-files.json", manifest)
 	snapshot.Record = nil
 	if record := snapshot.Files["record"]; record.Exists {
-		if err := json.Unmarshal(record.Bytes, &snapshot.Record); err != nil {
+		decoded, err := pipelineHarnessDecodeRecord(record.Bytes)
+		if err != nil {
 			t.Fatalf("actual installed record: %v", err)
 		}
+		snapshot.Record = &decoded
 	}
 	snapshot.RecordInstalled = snapshot.Files["record"].Exists && snapshot.Record != nil &&
-		snapshot.Record.Phase == "published" && snapshot.Result.Publication.State == publication.Published
+		snapshot.Reached[pipelineBoundaryRecordInstallAfter] > 0
 	if snapshot.RecordInstalled {
-		snapshot.InstallBasis = "postwait physical record and Published result; install callback unobserved"
+		snapshot.InstallBasis = "postwait strict physical record and observed install completion"
 	}
 	snapshot.Rows = pipelineFaultReadRowsAfterWait(t, root, label)
-	snapshot.Filesystem = pipelineHarnessFilesystem(t, filepath.Join(root, "source"))
+	snapshot.Filesystem = pipelineHarnessFilesystem(t, root)
 	snapshot.Certainty, snapshot.CertaintyBasis = pipelineHarnessObserveCertainty(snapshot)
 	snapshot.Outcome = pipelineHarnessObserveOutcome(snapshot)
 	pipelineHarnessSaveJSON(t, label+"-postwait-state.json", snapshot)
 	return snapshot
+}
+
+const pipelineCommitStateChildRoot = "YAKUORI_PIPELINE_COMMIT_STATE_CHILD"
+
+// The parent owns root; ordinary child testing cleanup must close DB handles
+// without deleting the files the parent will independently inspect after Wait.
+func pipelineCommitStateRehome(t *testing.T, h *pipelineHarness, root string) {
+	t.Helper()
+	path := filepath.Join(root, "tm.db")
+	store, err := tm.Create(t.Context(), path, h.fixture.limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	h.fixture.store, h.fixture.db = store, db
+	h.fixture.d0 = h.fixture.seedUnrelated(t)
+	h.sourcePath = filepath.Join(root, "source")
+	if err := os.WriteFile(h.sourcePath, h.fixture.input.source, 0600); err != nil {
+		t.Fatal(err)
+	}
+	h.options = publication.Options{Source: h.sourcePath, Output: h.sourcePath, Mode: publication.InPlace}
+	h.beforeSource, err = pipelineHarnessReadFile(h.sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.beforeOutput = h.beforeSource
+	h.beforeParents = map[string]pipelineHarnessRecordIdentity{
+		"source": pipelineHarnessReadParent(t, h.sourcePath),
+		"output": pipelineHarnessReadParent(t, h.options.Output),
+	}
+	h.ops.source = h.sourcePath
+}
+
+func pipelineCommitStateChild(t *testing.T) {
+	kind, name := os.Getenv("YAKUORI_PIPELINE_COMMIT_KIND"), os.Getenv("YAKUORI_PIPELINE_COMMIT_CASE")
+	for _, row := range pipelineCommitStateCases() {
+		if row.name != name {
+			continue
+		}
+		spec := pipelineFixtureSpec(kind, pipelineFixtureMode{name: "in-place", mode: publication.InPlace})
+		_, snapshot := pipelineCommitStateRun(t, row, spec)
+		root := os.Getenv(pipelineCommitStateChildRoot)
+		state := pipelineFaultChildState{Kind: kind, Mode: "in-place", Root: root, Snapshot: snapshot}
+		if err := os.WriteFile(filepath.Join(root, "child-state.json"), mustJSON(t, state), 0600); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	t.Fatalf("unknown commit state child case %q", name)
+}
+
+func testPipelineCommitStatePostWait(t *testing.T) {
+	for _, row := range pipelineCommitStateCases() {
+		for _, kind := range []string{"text", "w3"} {
+			t.Run(row.name+"/"+kind, func(t *testing.T) {
+				// Given: parent-authored rows/bytes/phase, not the child's snapshot.
+				spec := pipelineFixtureSpec(kind, pipelineFixtureMode{name: "in-place", mode: publication.InPlace})
+				parent := newPipelineHarness(t, spec, true)
+				want := parent.commitStateExpectation(row)
+				pipelineFixtureSaveJSON(t, "commit-expected.json", want)
+				root := t.TempDir()
+				exe, err := os.Executable()
+				if err != nil {
+					t.Fatal(err)
+				}
+				ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, exe, "-test.run=^TestPipelineCommitPublicationState$", "-test.v")
+				cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+				cmd.Env = append(os.Environ(), pipelineCommitStateChildRoot+"="+root,
+					"YAKUORI_PIPELINE_COMMIT_KIND="+kind, "YAKUORI_PIPELINE_COMMIT_CASE="+row.name,
+					"YAKUORI_PIPELINE_EVIDENCE=")
+				// When: a real child performs Core/SQL/publication and is reaped.
+				output, err := cmd.CombinedOutput()
+				pipelineHarnessSave(t, t.Name()+"/child-output.log", output)
+				if err != nil || ctx.Err() != nil || !cmd.ProcessState.Success() {
+					t.Fatalf("child did not exit normally without watchdog rescue: %v context=%v", err, ctx.Err())
+				}
+				pipelineHarnessSaveJSON(t, t.Name()+"/wait.json", struct {
+					ExitCode int                `json:"exit_code"`
+					Status   syscall.WaitStatus `json:"wait_status"`
+				}{cmd.ProcessState.ExitCode(), cmd.ProcessState.Sys().(syscall.WaitStatus)})
+				child := pipelineFaultChildStateAt(t, root)
+				pipelineHarnessSaveJSON(t, t.Name()+"/child-state.json", child)
+				// Then: the parent opens the actual DB and files after Wait.
+				for _, mutation := range []string{"healthy", "stale-file", "stale-rows", "stale-record", "stale-installed"} {
+					t.Run(mutation, func(t *testing.T) {
+						stale := child
+						stale.Snapshot = child.Snapshot.clone()
+						switch mutation {
+						case "stale-file":
+							file := stale.Snapshot.Files["output"]
+							file.Bytes = []byte("stale child bytes")
+							stale.Snapshot.Files["output"] = file
+						case "stale-rows":
+							stale.Snapshot.Rows[0].Text = "stale child text"
+						case "stale-record":
+							stale.Snapshot.Record.Phase = "stale-child-phase"
+						case "stale-installed":
+							stale.Snapshot.RecordInstalled = false
+						}
+						pipelineHarnessSaveJSON(t, t.Name()+"/input-child-snapshot.json", stale.Snapshot)
+						got := pipelineFaultCaptureAfterWait(t, root, stale, want, t.Name()+"/commit")
+						if problems := pipelineHarnessJudge(want, got); len(problems) != 0 {
+							t.Fatalf("post-Wait %s state rejected: %v", mutation, problems)
+						}
+						if !got.RecordInstalled || got.Record.Phase != want.RecordPhase {
+							t.Fatalf("post-Wait physical installed phase=%+v, want %s", got.Record, want.RecordPhase)
+						}
+					})
+				}
+			})
+		}
+	}
 }
 
 func pipelineFaultExpectation(t *testing.T, spec pipelineHarnessCase, f *pipelineFixture) pipelineHarnessExpectation {

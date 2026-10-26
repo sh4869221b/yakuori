@@ -271,8 +271,8 @@ type pipelineHarnessOperations struct {
 	stageFD        *os.File
 	recordFDs      []*os.File
 	stageFDClosed  bool
-	recordFDClosed bool
 	lastPhase      string
+	lastRecordName string
 	counts         map[string]int
 	events         []pipelineHarnessRecordEvent
 }
@@ -283,6 +283,11 @@ func newPipelineHarnessOperations(t *testing.T, trace *pipelineHarnessTrace, sou
 }
 
 func (o *pipelineHarnessOperations) phase(name string) string {
+	if name == o.lastRecordName {
+		return o.lastPhase
+	}
+	// An intercepted Write may never call our observer. Its mandatory Close
+	// still belongs to this descriptor, not to the previous installed phase.
 	return strings.TrimPrefix(name, ".record-")
 }
 
@@ -322,7 +327,11 @@ func (o *pipelineHarnessOperations) hooks() publication.PipelineFaultHooks {
 			return nil // The bridge performs the mandatory real Close.
 		},
 		RecordWrite: func(f *os.File, raw []byte) (int, error) {
-			o.lastPhase = o.phase(f.Name())
+			record, err := pipelineHarnessDecodeRecord(raw)
+			if err != nil {
+				return 0, err
+			}
+			o.lastPhase, o.lastRecordName = record.Phase, f.Name()
 			o.trace.mark(pipelineBoundaryRecordWriteBefore)
 			n, err := f.Write(raw)
 			if err == nil && n == len(raw) {
@@ -364,8 +373,8 @@ func (o *pipelineHarnessOperations) hooks() publication.PipelineFaultHooks {
 				if _, err := closed.Stat(); !errors.Is(err, os.ErrClosed) {
 					o.t.Fatalf("record %s Close-after checkpoint still open: %v", phase, err)
 				}
-				o.recordFDClosed = true
 				o.trace.mark(pipelineBoundaryRecordCloseAfter)
+				o.event(phase, "close-after")
 				o.trace.mark(pipelineBoundaryRecordInstallBefore)
 				o.event(phase, "install-before")
 				err := unix.Renameat2(fromFD, from, toFD, to, flags)
@@ -440,8 +449,9 @@ type pipelineHarness struct {
 	// beforeOutput and beforeSource are captured from the real filesystem
 	// before the pipeline starts. Preservation is judged against these physical
 	// pre-run captures, not against authored bytes alone.
-	beforeOutput pipelineHarnessFile
-	beforeSource pipelineHarnessFile
+	beforeOutput  pipelineHarnessFile
+	beforeSource  pipelineHarnessFile
+	beforeParents map[string]pipelineHarnessRecordIdentity
 }
 
 func newPipelineHarness(t *testing.T, spec pipelineHarnessCase, wrapped bool) *pipelineHarness {
@@ -507,6 +517,10 @@ func newPipelineHarnessWith(t *testing.T, spec pipelineHarnessCase, wrapped bool
 		h.beforeOutput = captured
 		if h.beforeSource, err = pipelineHarnessReadFile(h.sourcePath); err != nil {
 			t.Fatal(err)
+		}
+		h.beforeParents = map[string]pipelineHarnessRecordIdentity{
+			"source": pipelineHarnessReadParent(t, h.sourcePath),
+			"output": pipelineHarnessReadParent(t, h.options.Output),
 		}
 		h.ops = newPipelineHarnessOperations(t, h.trace, h.options.Source)
 		if wrapped {

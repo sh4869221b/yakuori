@@ -359,10 +359,11 @@ func pipelineHarnessScenarioTable(t *testing.T) []pipelineHarnessExpectation {
 	restored.Outcome = "restored"
 	restored.PlanOutcome = "Restored"
 	restored.OutputBytes = slices.Clone(text.source)
-	restored.StageRetained = false
+	restored.StageRetained = true
+	restored.StageBytes = slices.Clone(text.target)
 	restored.RecordInstalled = true
 	restored.RecordPhase = "restored"
-	restored.RecordOperation = "restore"
+	restored.RecordOperation = "restore-rename"
 	restored.StageFDClosed = true
 	restored.RecordFDClosed = true
 	restored.Cause = "an ordinary publish error after the InPlace backup rename is reconciled to the Restored outcome"
@@ -842,9 +843,8 @@ type pipelineHarnessSnapshot struct {
 	Record          *pipelineHarnessRecord `json:"record,omitempty"`
 	RecordClosed    bool                   `json:"record_closed"`
 	RecordInstalled bool                   `json:"record_installed"`
-	// InstallBasis is set only for a public capture where the install callback
-	// is unobserved: the physical installed record and Published result are the
-	// evidence. Wrapped captures leave it empty and keep the hook requirement.
+	// InstallBasis describes a public physical capture. It is never evidence
+	// for the wrapped oracle's mandatory Close or completed install callback.
 	InstallBasis   string                        `json:"install_basis,omitempty"`
 	StageClosed    bool                          `json:"stage_closed"`
 	TMCommitted    bool                          `json:"tm_committed"`
@@ -867,8 +867,9 @@ type pipelineHarnessSnapshot struct {
 	// BeforeOutput and BeforeSource are the real pre-run captures of the
 	// publication output and source. They are filled from the filesystem before
 	// the pipeline runs and never from it.
-	BeforeOutput *pipelineHarnessFile `json:"before_output,omitempty"`
-	BeforeSource *pipelineHarnessFile `json:"before_source,omitempty"`
+	BeforeOutput  *pipelineHarnessFile                     `json:"before_output,omitempty"`
+	BeforeSource  *pipelineHarnessFile                     `json:"before_source,omitempty"`
+	BeforeParents map[string]pipelineHarnessRecordIdentity `json:"before_parents,omitempty"`
 
 	StageFDClosed  bool   `json:"stage_fd_closed"`
 	RecordFDClosed bool   `json:"record_fd_closed"`
@@ -922,6 +923,7 @@ func (h *pipelineHarness) snapshot(exp pipelineHarnessExpectation) (pipelineHarn
 		snapshot.BeforeOutput = &before
 		source := h.beforeSource
 		snapshot.BeforeSource = &source
+		snapshot.BeforeParents = maps.Clone(h.beforeParents)
 	}
 	snapshot.RequestedBoundary = h.requestedBoundary
 	snapshot.RequestedOccurrence = h.requestedOccurrence
@@ -957,18 +959,15 @@ func (h *pipelineHarness) snapshot(exp pipelineHarnessExpectation) (pipelineHarn
 	snapshot.WriterClosedAtObserve = snapshot.Reached[pipelineBoundaryObserveEntryWriterClosed] > 0
 	if h.ops != nil {
 		snapshot.StageFDClosed = h.ops.stageFDClosed
-		snapshot.RecordFDClosed = h.ops.recordFDClosed
+		snapshot.RecordFDClosed = len(h.ops.recordFDs) > 0
 		if !snapshot.StageFDClosed && h.ops.stageFD != nil {
 			if _, err := h.ops.stageFD.Stat(); errors.Is(err, os.ErrClosed) {
 				snapshot.StageFDClosed = true
 			}
 		}
-		if !snapshot.RecordFDClosed {
-			for index := len(h.ops.recordFDs) - 1; index >= 0; index-- {
-				if _, err := h.ops.recordFDs[index].Stat(); errors.Is(err, os.ErrClosed) {
-					snapshot.RecordFDClosed = true
-					break
-				}
+		for _, file := range h.ops.recordFDs {
+			if _, err := file.Stat(); !errors.Is(err, os.ErrClosed) {
+				snapshot.RecordFDClosed = false
 			}
 		}
 	}
@@ -999,23 +998,22 @@ func (h *pipelineHarness) snapshot(exp pipelineHarnessExpectation) (pipelineHarn
 		snapshot.Files[label] = file
 	}
 	if snapshot.Files["record"].Exists {
-		var record pipelineHarnessRecord
-		if err := json.Unmarshal(snapshot.Files["record"].Bytes, &record); err != nil {
+		record, err := pipelineHarnessDecodeRecord(snapshot.Files["record"].Bytes)
+		if err != nil {
 			return pipelineHarnessSnapshot{}, fmt.Errorf("decode publication record: %w", err)
 		}
 		snapshot.Record = &record
 	}
 	if h.trace == nil {
-		// The public path installs no hooks, so a completed install callback is
-		// unobservable. Keep that distinction explicit: the physical record and
-		// the real Published result are the only install evidence here.
-		snapshot.RecordInstalled = snapshot.Files["record"].Exists && snapshot.Record != nil &&
-			snapshot.Record.Phase == "published" && snapshot.Result.Publication.State == publication.Published
+		// Public capture observes the strict record at the actual installation
+		// destination. It does not fabricate Close/install callback evidence.
+		snapshot.RecordInstalled = snapshot.Files["record"].Exists && snapshot.Record != nil
 		if snapshot.RecordInstalled {
-			snapshot.InstallBasis = "physical published record and Published result; install callback unobserved on the public path"
+			snapshot.InstallBasis = "strict physical record at the install destination; callbacks unobserved on the public path"
 		}
 	} else {
-		snapshot.RecordInstalled = snapshot.Files["record"].Exists && snapshot.Reached[pipelineBoundaryRecordInstallAfter] > 0
+		snapshot.RecordInstalled = snapshot.Files["record"].Exists && snapshot.Record != nil &&
+			snapshot.Reached[pipelineBoundaryRecordInstallAfter] > 0
 	}
 	snapshot.StdoutBytes = len(snapshot.Files["stdout"].Bytes)
 	snapshot.Outcome = pipelineHarnessObserveOutcome(snapshot)
@@ -1027,7 +1025,8 @@ func (h *pipelineHarness) stdoutOrSource() string {
 	if h.surface == "stdout" {
 		return h.stdoutPath
 	}
-	return h.options.Source
+	// SourceBackedUp legitimately leaves the original source path absent.
+	return filepath.Dir(h.options.Source)
 }
 
 func pipelineHarnessReadFile(path string) (pipelineHarnessFile, error) {
@@ -1085,6 +1084,7 @@ func (s pipelineHarnessSnapshot) clone() pipelineHarnessSnapshot {
 	clone.AuthoredD0 = slices.Clone(s.AuthoredD0)
 	clone.AuthoredD1 = slices.Clone(s.AuthoredD1)
 	clone.Injected = slices.Clone(s.Injected)
+	clone.BeforeParents = maps.Clone(s.BeforeParents)
 	if s.BeforeOutput != nil {
 		before := *s.BeforeOutput
 		clone.BeforeOutput = &before
@@ -1246,11 +1246,13 @@ func pipelineHarnessCheckBoundaries(expectation pipelineHarnessExpectation, snap
 		if !pipelineHarnessBefore(snapshot.Order, pipelineBoundaryTMCommitAfter, pipelineBoundaryRecordWriteBefore) {
 			problems = append(problems, "boundary order: commit entry does not precede the publication record write")
 		}
-		if !pipelineHarnessBefore(snapshot.Order, pipelineBoundaryTMCommitAfter, pipelineBoundaryPublishRenameBefore) {
-			problems = append(problems, "boundary order: publish rename was observed before the commit entry")
-		}
-		if !pipelineHarnessBefore(snapshot.Order, pipelineBoundaryRecordInstallAfter, pipelineBoundaryPublishRenameBefore) {
-			problems = append(problems, "boundary order: record installation does not precede the publish rename")
+		if snapshot.Reached[pipelineBoundaryPublishRenameBefore] > 0 {
+			if !pipelineHarnessBefore(snapshot.Order, pipelineBoundaryTMCommitAfter, pipelineBoundaryPublishRenameBefore) {
+				problems = append(problems, "boundary order: publish rename was observed before the commit entry")
+			}
+			if !pipelineHarnessBefore(snapshot.Order, pipelineBoundaryRecordInstallAfter, pipelineBoundaryPublishRenameBefore) {
+				problems = append(problems, "boundary order: record installation does not precede the publish rename")
+			}
 		}
 	}
 	return problems
@@ -1310,12 +1312,29 @@ func pipelineHarnessCheckFiles(expectation pipelineHarnessExpectation, snapshot 
 	if record.Exists != expectation.RecordInstalled {
 		problems = append(problems, fmt.Sprintf("record presence = %t, want installed=%t", record.Exists, expectation.RecordInstalled))
 	}
-	installed := record.Exists && snapshot.Reached[pipelineBoundaryRecordInstallAfter] > 0
+	installed := record.Exists && snapshot.Record != nil && snapshot.Reached[pipelineBoundaryRecordInstallAfter] > 0
 	if snapshot.RecordInstalled != installed {
 		problems = append(problems, fmt.Sprintf("record installed claim = %t, physical install evidence = %t", snapshot.RecordInstalled, installed))
 	}
 	if snapshot.RecordInstalled && !snapshot.RecordClosed {
 		problems = append(problems, "record installation was claimed without a completed Close")
+	}
+	if snapshot.RecordInstalled && snapshot.Record != nil {
+		closed, installedPhase := false, false
+		for _, event := range snapshot.RecordEvents {
+			if event.Phase != snapshot.Record.Phase {
+				continue
+			}
+			switch event.Operation {
+			case "close-after":
+				closed = true
+			case "install":
+				installedPhase = closed
+			}
+		}
+		if !installedPhase {
+			problems = append(problems, "persisted record phase lacks observed Close-before-install completion")
+		}
 	}
 	backup := snapshot.Files["backup"]
 	if backup.Exists != expectation.BackupPresent {
@@ -1376,6 +1395,22 @@ func pipelineHarnessCheckRecord(expectation pipelineHarnessExpectation, snapshot
 	if record == nil {
 		return []string{"installed record cannot be decoded"}
 	}
+	physicalRecord := snapshot.Files["record"]
+	decoded, err := pipelineHarnessDecodeRecord(physicalRecord.Bytes)
+	if err != nil {
+		return []string{fmt.Sprintf("installed record strict decode: %v", err)}
+	}
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		return []string{fmt.Sprintf("record observation encoding: %v", err)}
+	}
+	actual, err := json.Marshal(decoded)
+	if err != nil || !bytes.Equal(encoded, actual) {
+		problems = append(problems, "decoded record observation differs from the physical record bytes")
+	}
+	if physicalRecord.Mode != unix.S_IFREG|0600 || physicalRecord.Nlink != 1 || physicalRecord.Size != int64(len(physicalRecord.Bytes)) {
+		problems = append(problems, "installed record physical metadata differs from the private record contract")
+	}
 	if record.SchemaVersion != 1 {
 		problems = append(problems, fmt.Sprintf("record schema version %d, want 1", record.SchemaVersion))
 	}
@@ -1400,12 +1435,22 @@ func pipelineHarnessCheckRecord(expectation pipelineHarnessExpectation, snapshot
 		sourcePhysical = snapshot.Files["backup"]
 	}
 	problems = append(problems, pipelineHarnessCheckRecordedFile("recorded source", record.Source, sourcePhysical, sourcePath, expectation.SourceBytes)...)
-	problems = append(problems, pipelineHarnessCheckRecordedFile("recorded stage", record.Stage, output, snapshot.Files["stage"].Path, expectation.TargetBytes)...)
+	stagePhysical := snapshot.Files["stage"]
+	if snapshot.Result.Publication.State == publication.Published {
+		stagePhysical = output
+	}
+	problems = append(problems, pipelineHarnessCheckRecordedFile("recorded stage", record.Stage, stagePhysical, snapshot.Files["stage"].Path, expectation.TargetBytes)...)
 	if record.Output.Path != output.Path || record.Output.Basename != filepath.Base(output.Path) {
 		problems = append(problems, fmt.Sprintf("recorded output %q/%q does not match the physical output %q", record.Output.Path, record.Output.Basename, output.Path))
 	}
 	problems = append(problems, pipelineHarnessCheckRecordedParent("source parent", record.SourceParent, filepath.Dir(sourcePath))...)
 	problems = append(problems, pipelineHarnessCheckRecordedParent("output parent", record.OutputParent, filepath.Dir(output.Path))...)
+	for label, recorded := range map[string]pipelineHarnessRecordIdentity{"source": record.SourceParent, "output": record.OutputParent} {
+		before, ok := snapshot.BeforeParents[label]
+		if !ok || recorded != before {
+			problems = append(problems, "recorded "+label+" parent differs from the independent pre-run identity")
+		}
+	}
 	existing := expectation.OldOutput
 	if expectation.Mode == string(publication.InPlace) {
 		existing = expectation.SourceBytes
@@ -1430,6 +1475,40 @@ func pipelineHarnessCheckRecord(expectation pipelineHarnessExpectation, snapshot
 		problems = append(problems, "record carries a backup for a mode that never creates one")
 	}
 	return problems
+}
+
+// Publication writes canonical typed JSON, without indentation. Requiring its
+// exact shape after whitespace removal rejects duplicate, missing, unknown,
+// case-folded and null fields that encoding/json alone silently accepts.
+func pipelineHarnessDecodeRecord(raw []byte) (pipelineHarnessRecord, error) {
+	var record pipelineHarnessRecord
+	if len(raw) > 64*1024 {
+		return record, publication.ErrRecordTooLarge
+	}
+	if err := json.Unmarshal(raw, &record); err != nil {
+		return record, publication.ErrInvalidRecord
+	}
+	canonical, err := json.Marshal(record)
+	if err != nil {
+		return record, err
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, raw); err != nil || !bytes.Equal(compact.Bytes(), canonical) {
+		return record, publication.ErrInvalidRecord
+	}
+	return record, nil
+}
+
+func pipelineHarnessReadParent(t *testing.T, path string) pipelineHarnessRecordIdentity {
+	t.Helper()
+	var stat unix.Statx_t
+	if err := unix.Statx(unix.AT_FDCWD, filepath.Dir(path), unix.AT_SYMLINK_NOFOLLOW, unix.STATX_BASIC_STATS|unix.STATX_MNT_ID, &stat); err != nil {
+		t.Fatal(err)
+	}
+	return pipelineHarnessRecordIdentity{
+		Dev: unix.Mkdev(stat.Dev_major, stat.Dev_minor), Ino: stat.Ino, MountID: stat.Mnt_id,
+		Size: int64(stat.Size), Mode: uint32(stat.Mode), Nlink: uint64(stat.Nlink),
+	}
 }
 
 // pipelineHarnessCheckRecordedFile compares an established record entry to the
@@ -1828,6 +1907,254 @@ func testPipelineHarnessStateReject(t *testing.T) {
 func pipelineHarnessScenarioByCase(t *testing.T, name string) pipelineHarnessExpectation {
 	t.Helper()
 	return pipelineHarnessScenarioSelected(t, pipelineHarnessScenarioTable(t), name)
+}
+
+type pipelineCommitStateMutation struct {
+	name   string
+	record bool
+	apply  func(*pipelineHarnessSnapshot)
+}
+
+func testPipelineCommitStateReject(t *testing.T) {
+	t.Run("strict-record-decode", func(t *testing.T) {
+		row := pipelineCommitStateCase{"prepared", publication.NotPublished, "prepared", "none", false}
+		spec := pipelineHarnessCase{name: "strict-record", kind: "text", surface: "file", mode: publication.Replace, outputPresent: true}
+		want, healthy := pipelineCommitStateRun(t, row, spec)
+		if problems := pipelineHarnessJudge(want, healthy); len(problems) != 0 {
+			t.Fatalf("strict-decode healthy counterpart: %v", problems)
+		}
+		raw := string(healthy.Files["record"].Bytes)
+		for _, mutation := range []struct {
+			name string
+			raw  string
+		}{
+			{"duplicate", strings.Replace(raw, `"schema_version":1`, `"schema_version":1,"schema_version":1`, 1)},
+			{"missing", strings.Replace(raw, `"schema_version":1,`, "", 1)},
+			{"unknown", strings.Replace(raw, `"schema_version":1`, `"schema_version":1,"extra":1`, 1)},
+			{"case-folded", strings.Replace(raw, `"schema_version"`, `"SCHEMA_VERSION"`, 1)},
+			{"null", strings.Replace(raw, `"schema_version":1`, `"schema_version":null`, 1)},
+			{"trailing", raw + "{}"},
+			{"truncated", raw[:len(raw)-1]},
+		} {
+			t.Run(mutation.name, func(t *testing.T) {
+				if mutation.raw == raw {
+					t.Fatal("strict record mutation did not change its one field")
+				}
+				invalid := healthy.clone()
+				file := invalid.Files["record"]
+				file.Bytes, file.Size = []byte(mutation.raw), int64(len(mutation.raw))
+				invalid.Files["record"] = file
+				_, err := pipelineHarnessDecodeRecord(file.Bytes)
+				problems := pipelineHarnessJudge(want, invalid)
+				if !errors.Is(err, publication.ErrInvalidRecord) || len(problems) == 0 {
+					t.Fatalf("accepted malformed record: decode=%v judge=%v", err, problems)
+				}
+				pipelineHarnessSave(t, t.Name()+"/record.bin", file.Bytes)
+				pipelineHarnessSaveJSON(t, t.Name()+"/problems.json", problems)
+			})
+		}
+	})
+	for _, row := range pipelineCommitStateCases() {
+		for _, kind := range []string{"text", "w3"} {
+			t.Run(row.name+"/"+kind, func(t *testing.T) {
+				mode := pipelineFixtureMode{name: "replace-existing", mode: publication.Replace, outputPresent: true}
+				if row.inPlace {
+					mode = pipelineFixtureMode{name: "in-place", mode: publication.InPlace}
+				}
+				// Given: a real healthy phase, with an authored expectation.
+				want, healthy := pipelineCommitStateRun(t, row, pipelineFixtureSpec(kind, mode))
+				if problems := pipelineHarnessJudge(want, healthy); len(problems) != 0 {
+					t.Fatalf("healthy rejection counterpart: %v", problems)
+				}
+				for _, mutation := range pipelineCommitStateMutations(healthy) {
+					t.Run(mutation.name, func(t *testing.T) {
+						invalid := healthy.clone()
+						// When: one logical field changes. A record field has two
+						// representations; keep its decoded and serialized values equal.
+						mutation.apply(&invalid)
+						if mutation.record {
+							file := invalid.Files["record"]
+							file.Bytes = mustJSON(t, invalid.Record)
+							file.Size = int64(len(file.Bytes))
+							invalid.Files["record"] = file
+						}
+						// Then: physical identity, full bytes or causal evidence reject it.
+						problems := pipelineHarnessJudge(want, invalid)
+						if len(problems) == 0 {
+							t.Fatalf("accepted %s mutation", mutation.name)
+						}
+						pipelineHarnessSaveJSON(t, t.Name()+"/mutation.json", struct {
+							Observation pipelineHarnessSnapshot `json:"observation"`
+							Problems    []string                `json:"problems"`
+						}{invalid, problems})
+					})
+				}
+				t.Run("same-bytes-different-inode", func(t *testing.T) {
+					label := "stage"
+					if row.state == publication.Published {
+						label = "output"
+					}
+					path := filepath.Join(t.TempDir(), "same-bytes")
+					if err := os.WriteFile(path, healthy.Files[label].Bytes, 0600); err != nil {
+						t.Fatal(err)
+					}
+					copy, err := pipelineHarnessReadFile(path)
+					if err != nil || copy.Inode == healthy.Files[label].Inode || !bytes.Equal(copy.Bytes, healthy.Files[label].Bytes) {
+						t.Fatalf("independent same-byte inode control: %+v %v", copy, err)
+					}
+					invalid := healthy.clone()
+					file := invalid.Files[label]
+					file.Inode = copy.Inode
+					invalid.Files[label] = file
+					problems := pipelineHarnessJudge(want, invalid)
+					if len(problems) == 0 {
+						t.Fatal("same bytes concealed a different physical inode")
+					}
+					pipelineHarnessSaveJSON(t, t.Name()+"/copy.json", copy)
+					pipelineHarnessSaveJSON(t, t.Name()+"/problems.json", problems)
+				})
+				t.Run("prose-only-incomplete", func(t *testing.T) {
+					incomplete := healthy.clone()
+					incomplete.RecordClosed = false
+					before := pipelineHarnessJudge(want, incomplete)
+					incomplete.InstallBasis = "claimed installed and closed"
+					after := pipelineHarnessJudge(want, incomplete)
+					if len(before) == 0 || !slices.Equal(before, after) {
+						t.Fatalf("prose changed an incomplete observation verdict: %v -> %v", before, after)
+					}
+					pipelineHarnessSaveJSON(t, t.Name()+"/problems.json", after)
+				})
+			})
+		}
+	}
+}
+
+func pipelineCommitStateMutations(healthy pipelineHarnessSnapshot) []pipelineCommitStateMutation {
+	mutations := []pipelineCommitStateMutation{
+		{"missing-record", false, func(s *pipelineHarnessSnapshot) {
+			file := s.Files["record"]
+			file.Exists = false
+			s.Files["record"] = file
+		}},
+		{"stale-decoded-record", false, func(s *pipelineHarnessSnapshot) { s.Record.Phase = "stale-decoded-phase" }},
+		{"installed-bit", false, func(s *pipelineHarnessSnapshot) { s.RecordInstalled = !s.RecordInstalled }},
+		{"missing-close", false, func(s *pipelineHarnessSnapshot) { s.RecordClosed = false }},
+		{"missing-close-fd", false, func(s *pipelineHarnessSnapshot) { s.RecordFDClosed = false }},
+		{"missing-install-completion", false, func(s *pipelineHarnessSnapshot) { s.Reached[pipelineBoundaryRecordInstallAfter] = 0 }},
+		{"missing-phase-close", false, func(s *pipelineHarnessSnapshot) {
+			s.RecordEvents = slices.DeleteFunc(s.RecordEvents, func(e pipelineHarnessRecordEvent) bool {
+				return e.Phase == s.Record.Phase && e.Operation == "close-after"
+			})
+		}},
+		{"missing-phase-install", false, func(s *pipelineHarnessSnapshot) {
+			s.RecordEvents = slices.DeleteFunc(s.RecordEvents, func(e pipelineHarnessRecordEvent) bool {
+				return e.Phase == s.Record.Phase && e.Operation == "install"
+			})
+		}},
+		{"wrong-physical-target", false, func(s *pipelineHarnessSnapshot) {
+			label := "stage"
+			if s.Result.Publication.State == publication.Published {
+				label = "output"
+			}
+			s.Files[label] = s.Files["source"]
+		}},
+		{"trimmed-target", false, func(s *pipelineHarnessSnapshot) {
+			label := "stage"
+			if s.Result.Publication.State == publication.Published {
+				label = "output"
+			}
+			file := s.Files[label]
+			file.Bytes = file.Bytes[:len(file.Bytes)-1]
+			s.Files[label] = file
+		}},
+		{"record-schema", true, func(s *pipelineHarnessSnapshot) { s.Record.SchemaVersion++ }},
+		{"record-run-id", true, func(s *pipelineHarnessSnapshot) { s.Record.RunID = strings.Repeat("0", 32) }},
+		{"record-mode", true, func(s *pipelineHarnessSnapshot) { s.Record.Mode = "invalid-mode" }},
+		{"record-phase", true, func(s *pipelineHarnessSnapshot) { s.Record.Phase = "wrong-phase" }},
+		{"record-operation", true, func(s *pipelineHarnessSnapshot) { s.Record.LastCompletedOperation = "wrong-operation" }},
+		{"record-output-path", true, func(s *pipelineHarnessSnapshot) { s.Record.Output.Path += "-wrong" }},
+		{"record-output-basename", true, func(s *pipelineHarnessSnapshot) { s.Record.Output.Basename += "-wrong" }},
+		{"record-existing-absent", true, func(s *pipelineHarnessSnapshot) { s.Record.ExistingOutput.Absent = true }},
+	}
+	identityFields := []struct {
+		name  string
+		apply func(*pipelineHarnessRecordIdentity)
+	}{
+		{"dev", func(i *pipelineHarnessRecordIdentity) { i.Dev++ }},
+		{"inode", func(i *pipelineHarnessRecordIdentity) { i.Ino++ }},
+		{"mount", func(i *pipelineHarnessRecordIdentity) { i.MountID++ }},
+		{"identity-size", func(i *pipelineHarnessRecordIdentity) { i.Size++ }},
+		{"mode", func(i *pipelineHarnessRecordIdentity) { i.Mode++ }},
+		{"nlink", func(i *pipelineHarnessRecordIdentity) { i.Nlink++ }},
+	}
+	for _, role := range []string{"source", "stage", "existing-output", "source-parent", "output-parent"} {
+		for _, field := range identityFields {
+			mutations = append(mutations, pipelineCommitStateMutation{"record-" + role + "-" + field.name, true, func(s *pipelineHarnessSnapshot) {
+				switch role {
+				case "source":
+					field.apply(&s.Record.Source.Identity)
+				case "stage":
+					field.apply(&s.Record.Stage.Identity)
+				case "existing-output":
+					field.apply(&s.Record.ExistingOutput.File.Identity)
+				case "source-parent":
+					field.apply(&s.Record.SourceParent)
+				case "output-parent":
+					field.apply(&s.Record.OutputParent)
+				}
+			}})
+		}
+	}
+	for _, role := range []string{"source", "stage", "existing-output"} {
+		for _, field := range []string{"path", "basename", "size", "hash"} {
+			mutations = append(mutations, pipelineCommitStateMutation{"record-" + role + "-" + field, true, func(s *pipelineHarnessSnapshot) {
+				var file *pipelineHarnessRecordFile
+				switch role {
+				case "source":
+					file = &s.Record.Source
+				case "stage":
+					file = &s.Record.Stage
+				case "existing-output":
+					file = s.Record.ExistingOutput.File
+				}
+				switch field {
+				case "path":
+					file.Path += "-wrong"
+				case "basename":
+					file.Basename += "-wrong"
+				case "size":
+					file.Size++
+				case "hash":
+					file.SHA256 = strings.Repeat("0", 64)
+				}
+			}})
+		}
+	}
+	if healthy.Record.Backup != nil {
+		mutations = append(mutations,
+			pipelineCommitStateMutation{"record-backup-path", true, func(s *pipelineHarnessSnapshot) { s.Record.Backup.Path += "-wrong" }},
+			pipelineCommitStateMutation{"record-backup-basename", true, func(s *pipelineHarnessSnapshot) { s.Record.Backup.Basename += "-wrong" }})
+	}
+	for _, field := range []string{"schema", "source", "profile", "text"} {
+		mutations = append(mutations, pipelineCommitStateMutation{"sentinel-" + field, false, func(s *pipelineHarnessSnapshot) {
+			for index := range s.Rows {
+				if s.Rows[index].Source != healthy.AuthoredD0[0].Source || s.Rows[index].Profile != healthy.AuthoredD0[0].Profile {
+					continue
+				}
+				switch field {
+				case "schema":
+					s.Rows[index].Schema++
+				case "source":
+					s.Rows[index].Source += "00"
+				case "profile":
+					s.Rows[index].Profile += "00"
+				case "text":
+					s.Rows[index].Text += "-wrong"
+				}
+			}
+		}})
+	}
+	return mutations
 }
 
 // pipelineHarnessScenarioSelected returns the table object itself, so a valid

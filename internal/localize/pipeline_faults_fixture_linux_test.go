@@ -86,8 +86,85 @@ func pipelineHarnessOnFixture(t *testing.T, spec pipelineHarnessCase, f *pipelin
 	if h.beforeOutput, err = pipelineHarnessReadFile(h.options.Output); err != nil {
 		t.Fatal(err)
 	}
+	if h.beforeSource, err = pipelineHarnessReadFile(h.sourcePath); err != nil {
+		t.Fatal(err)
+	}
+	h.beforeParents = map[string]pipelineHarnessRecordIdentity{
+		"source": pipelineHarnessReadParent(t, h.sourcePath),
+		"output": pipelineHarnessReadParent(t, h.options.Output),
+	}
 	h.ops = newPipelineHarnessOperations(t, h.trace, h.options.Source)
 	return h
+}
+
+func (h *pipelineHarness) commitStateExpectation(row pipelineCommitStateCase) pipelineHarnessExpectation {
+	t := h.t
+	spec := pipelineHarnessCase{name: row.name, kind: h.kind, surface: h.surface, mode: h.mode, outputPresent: h.beforeOutput.Exists}
+	want := pipelineHarnessExpectationForFixture(t, spec, h.fixture)
+	want.Case = row.name + "/" + h.kind + "/" + string(h.mode)
+	want.RecordPhase, want.RecordOperation = row.phase, row.operation
+	want.StageRetained = row.state != publication.Published
+	want.StageBytes = slices.Clone(h.fixture.input.target)
+	want.BackupPresent = spec.mode == publication.InPlace && (row.state == publication.Published || row.state == publication.SourceBackedUp)
+	want.OutputPresent = row.state == publication.Published || spec.outputPresent || spec.mode == publication.InPlace
+	want.SourcePreserved = !want.BackupPresent
+	want.OutputPreserved = row.name == "prepared" && want.OutputPresent || row.name == "restored"
+	if row.state != publication.Published {
+		want.OutputBytes = slices.Clone(pipelineHarnessOldOutput)
+		if spec.mode == publication.InPlace {
+			want.OutputBytes = slices.Clone(h.fixture.input.source)
+		}
+	}
+	switch row.name {
+	case "prepared":
+		want.Outcome = "not-published"
+	case "restored":
+		want.Outcome = "restored"
+	case "source-backed-up":
+		want.Outcome, want.OutputPresent = "source-backed-up", false
+	case "external-source":
+		want.Outcome = "source-backed-up"
+		want.OutputBytes = slices.Clone(h.fixture.input.target)
+	case "published-stale":
+		if spec.mode == publication.InPlace {
+			want.RecordPhase, want.RecordOperation = "source-backed-up", "backup-rename"
+		}
+	}
+	records, attempted, backups, restored := 2, 2, 0, 0
+	if spec.mode == publication.InPlace {
+		records, attempted, backups = 3, 3, 1
+	}
+	switch row.name {
+	case "prepared":
+		records, attempted, backups = 1, 1, 0
+	case "restored":
+		records, attempted, restored = 3, 3, 1
+	case "source-backed-up", "external-source":
+		records, attempted = 2, 2
+	case "published-stale":
+		records--
+	}
+	for _, name := range []string{pipelineBoundaryRecordWriteBefore, pipelineBoundaryRecordCloseBefore} {
+		want.RequiredBoundaries[name] = attempted
+	}
+	for _, name := range []string{pipelineBoundaryRecordWriteAfter, pipelineBoundaryRecordCloseAfter, pipelineBoundaryRecordInstallBefore, pipelineBoundaryRecordInstallAfter} {
+		want.RequiredBoundaries[name] = records
+	}
+	want.RequiredBoundaries[pipelineBoundaryRecordSyncBefore] = 2 * records
+	want.RequiredBoundaries[pipelineBoundaryRecordSyncAfter] = 2 * records
+	want.RequiredBoundaries[pipelineBoundaryBackupRenameBefore] = backups + restored
+	want.RequiredBoundaries[pipelineBoundaryBackupRenameAfter] = backups + restored
+	if row.name == "source-backed-up" {
+		want.RequiredBoundaries[pipelineBoundaryBackupRenameBefore]++
+	}
+	if row.name == "prepared" {
+		want.RequiredBoundaries[pipelineBoundaryStageCloseAfter] = 0
+		want.RequiredBoundaries[pipelineBoundaryPublishRenameBefore] = 0
+	}
+	if row.state != publication.Published {
+		want.RequiredBoundaries[pipelineBoundaryPublishRenameAfter] = 0
+	}
+	return want
 }
 
 func pipelineFixtureAuthoredCalls(input pipelineFixtureInput) []string {
