@@ -15,6 +15,7 @@ jobs:
         run: docker build --progress=plain -t yakuori-publication-probe -f ci/Dockerfile .
       - name: Non-root host filesystem and separate-mount probes
         run: |
+          set -o pipefail
           mkdir -p "$RUNNER_TEMP/publication" "$RUNNER_TEMP/publication/tmp" \
             "$RUNNER_TEMP/publication/cache" "$RUNNER_TEMP/publication/gopath/pkg" \
             "$RUNNER_TEMP/publication/pipeline-evidence"
@@ -26,8 +27,8 @@ jobs:
           image_gocache=$(printf '%s\n' "$image_env" | python3 -c 'import json,sys; print(json.load(sys.stdin)["GOCACHE"])')
           cache_container=$(docker create yakuori-publication-probe)
           trap 'docker rm "$cache_container"' EXIT
-          docker cp "$cache_container:$image_gopath/pkg/." "$RUNNER_TEMP/publication/gopath/pkg"
-          docker cp "$cache_container:$image_gocache/." "$RUNNER_TEMP/publication/cache"
+          docker cp "$cache_container:$image_gopath/pkg/." - | tar -xf - -C "$RUNNER_TEMP/publication/gopath/pkg"
+          docker cp "$cache_container:$image_gocache/." - | tar -xf - -C "$RUNNER_TEMP/publication/cache"
           docker rm "$cache_container"
           trap - EXIT
           docker run --rm --network none --user "$(id -u):$(id -g)" \
