@@ -1,0 +1,19 @@
+{
+  "version": "criteria-candidates-v2",
+  "manifest_version": "fixture-candidates-v1",
+  "fixture_ids": ["better-keybinds-en", "monster-of-the-week-en"],
+  "values": {
+    "machine_validation": {"value": "All selected units must pass common validation and the final published artifact check.", "rationale": "The existing pipeline only publishes validated complete output.", "impact": "One failing unit prevents acceptance; this does not establish meaning quality."},
+    "mistranslation": {"value": "No material mistranslations in the reviewed set.", "rationale": "A human must determine whether meaning is preserved.", "impact": "A material error blocks candidate acceptance until resolved."},
+    "omission": {"value": "No material omissions in the reviewed set.", "rationale": "Structural validation alone does not establish semantic completeness.", "impact": "A material omission blocks candidate acceptance until resolved."},
+    "readability": {"value": "Each reviewed translation is understandable in context.", "rationale": "The reader needs intelligible Japanese.", "impact": "Unclear text requires human review; context may be insufficient in the current samples."},
+    "terminology": {"value": "Use agreed required terminology consistently in the reviewed set.", "rationale": "Names and terms should be understandable and consistent.", "impact": "The terminology list and treatment of disagreements require confirmation."},
+    "units": {"value": "49", "rationale": "Candidate includes all 19 BetterKeybinds and 30 MonsterOfTheWeek entries.", "impact": "These are small UI samples and do not establish dialogue or large-MOD coverage."},
+    "text_bytes": {"value": "482", "rationale": "The selected 49 entries total 259 + 223 decoded UTF-8 source bytes.", "impact": "This small total is not a maximum supported MOD size."},
+    "artifact_bytes": {"value": "2074", "rationale": "The two selected original binaries total 952 + 1122 bytes.", "impact": "This total describes two separate small files; product limits apply to each artifact."},
+    "duration_seconds": {"value": "60", "rationale": "Candidate ceiling per fresh CUDA fixture run; docs/evidence/cuda-inference/product-wrapper/matrix/02-x4-pair1-cuda.supervisor.json process_wall_seconds=17.3824957649922 for a different 76-label workload, so 60 s is an approximately 3.45x manual margin.", "impact": "Includes model load, production pipeline, independent reader and child reaping; unmeasured v0.23 E2E overhead may exceed it. A failure needs review, not automatic retry or limit expansion; confirm scope and value in #85."},
+    "ram_bytes": {"value": "5368709120", "rationale": "Candidate 5 GiB translation-process RSS high-water; docs/evidence/cuda-inference/product-wrapper/matrix/01-fixture-pair3-cuda.json peak_rss_kib=3761148 (about 3.587 GiB), giving an approximately 1.39x manual margin.", "impact": "Applies per CUDA fixture to the translation process only, excludes runner/oracle and host totals; v0.23 E2E is unmeasured and a breach needs review. Confirm in #85."},
+    "vram_bytes": {"value": "3221225472", "rationale": "Candidate 3 GiB sampled translation-process VRAM maximum; docs/evidence/cuda-inference/product-wrapper/matrix/02-long-pair3-cuda.supervisor.json process_vram_sampled_max_mib=1838 (about 1.795 GiB), giving an approximately 1.67x manual margin.", "impact": "Applies per CUDA fixture to sampled process VRAM, not continuous peak, total device memory or a minimum GPU requirement; missing samples cannot pass. v0.23 E2E is unmeasured; confirm in #85."}
+  },
+  "confirmation": {"status": "pending", "date": "", "reviewer": "", "decision": "", "manifest_version": "", "criteria_version": ""}
+}
