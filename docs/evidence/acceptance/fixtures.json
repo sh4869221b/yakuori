@@ -1,0 +1,85 @@
+{
+  "version": "fixture-candidates-v1",
+  "fixtures": [
+    {
+      "id": "better-keybinds-en",
+      "kind": "mod",
+      "source_url": "https://github.com/mpstark/BetterKeybinds/tree/6fdebda0cb7ba02d52ff7321660a93d74e8cd79f",
+      "revision": "6fdebda0cb7ba02d52ff7321660a93d74e8cd79f (release 1-1.12)",
+      "license": "MIT; retain tools/w3spike/testdata/better-keybinds/LICENSE.txt",
+      "local_path": "tools/w3spike/testdata/better-keybinds/en.w3strings",
+      "sha256": "d3c9e9e51fa666381d3530293e3334de142edf4a32da4227194108933845b57c",
+      "bytes": 952,
+      "units": 19,
+      "text_bytes": 259,
+      "max_text_bytes": 19,
+      "format": "w3strings",
+      "format_version": 162,
+      "language": "en",
+      "categories": []
+    },
+    {
+      "id": "monster-of-the-week-en",
+      "kind": "mod",
+      "source_url": "https://github.com/SpontanCombust/tw3-settings-framework/tree/b9ae964d3d76560c689d6f3b3dbbfd1d5a31af3b",
+      "revision": "b9ae964d3d76560c689d6f3b3dbbfd1d5a31af3b (release 1.0.2)",
+      "license": "MIT; retain tools/w3spike/testdata/monster-of-the-week/LICENSE.txt",
+      "local_path": "tools/w3spike/testdata/monster-of-the-week/en.w3strings",
+      "sha256": "9f0227c983bcdf9d145afc6e614c88e2fb6ad4fc50027adf9efbd4c082b59cb3",
+      "bytes": 1122,
+      "units": 30,
+      "text_bytes": 223,
+      "max_text_bytes": 19,
+      "format": "w3strings",
+      "format_version": 162,
+      "language": "en",
+      "categories": [
+        {"name": "short_names", "unit_ids": ["2119001011"], "evidence": "Single short monster name in the independent expected CSV; name category only, not a quality assessment."}
+      ]
+    },
+    {
+      "id": "authored-en",
+      "kind": "synthetic",
+      "source_url": "https://github.com/sh4869221b/yakuori/tree/9169a6434b7187c5646b4aeeabefd3c6646c8669/tools/w3spike/testdata",
+      "revision": "9169a6434b7187c5646b4aeeabefd3c6646c8669",
+      "license": "Project-authored fixture; see docs/research/w3strings-roundtrip.md",
+      "local_path": "tools/w3spike/testdata/en.w3strings",
+      "sha256": "38876ca59c49b0d313f401f87dd2271f7e51458282dcae36b775dec1f9945599",
+      "bytes": 4256,
+      "units": 4,
+      "text_bytes": 6194,
+      "max_text_bytes": 6144,
+      "format": "w3strings",
+      "format_version": 162,
+      "language": "en",
+      "research_limits": {"artifact_bytes": 65536, "units": 4095, "unit_text_bytes": 16384, "total_text_bytes": 32768, "segments": 4095},
+      "categories": [
+        {"name": "empty_text", "unit_ids": ["1002"], "evidence": "Authored fixture has an empty text."},
+        {"name": "long_text", "unit_ids": ["1003"], "evidence": "Authored fixture contains 2,048 UTF-16 units of repeated Japanese text."},
+        {"name": "tags_placeholders", "unit_ids": ["4294967295"], "evidence": "Authored fixture contains a tag and placeholders."}
+      ]
+    },
+    {
+      "id": "authored-jp",
+      "kind": "synthetic",
+      "source_url": "https://github.com/sh4869221b/yakuori/tree/9169a6434b7187c5646b4aeeabefd3c6646c8669/tools/w3spike/testdata",
+      "revision": "9169a6434b7187c5646b4aeeabefd3c6646c8669",
+      "license": "Project-authored fixture; see docs/research/w3strings-roundtrip.md",
+      "local_path": "tools/w3spike/testdata/jp.w3strings",
+      "sha256": "74f4fc56e86fa008612626e84792c88ef0c33b3111cae37de35284847ad5c282",
+      "bytes": 4256,
+      "units": 4,
+      "text_bytes": 6194,
+      "max_text_bytes": 6144,
+      "format": "w3strings",
+      "format_version": 162,
+      "language": "ja",
+      "research_limits": {"artifact_bytes": 65536, "units": 4095, "unit_text_bytes": 16384, "total_text_bytes": 32768, "segments": 4095},
+      "categories": [
+        {"name": "empty_text", "unit_ids": ["1002"], "evidence": "Authored fixture has an empty text."},
+        {"name": "long_text", "unit_ids": ["1003"], "evidence": "Authored fixture contains 2,048 UTF-16 units of repeated Japanese text."},
+        {"name": "tags_placeholders", "unit_ids": ["4294967295"], "evidence": "Authored fixture contains a tag and placeholders."}
+      ]
+    }
+  ]
+}
