@@ -71,8 +71,9 @@ const (
 var pipelineHarnessOldOutput = []byte("old separate output\n")
 
 type pipelineHarnessTrace struct {
-	order   []string
-	reached map[string]int
+	order      []string
+	reached    map[string]int
+	checkpoint func(string, int)
 }
 
 func newPipelineHarnessTrace() *pipelineHarnessTrace {
@@ -85,6 +86,9 @@ func (t *pipelineHarnessTrace) mark(name string) {
 	}
 	t.reached[name]++
 	t.order = append(t.order, name)
+	if t.checkpoint != nil {
+		t.checkpoint(name, t.reached[name])
+	}
 }
 
 // pipelineHarnessAdapter observes Export/Observe on the fixture's concrete

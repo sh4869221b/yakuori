@@ -130,7 +130,7 @@ func pipelineFaultSaveChildState(t *testing.T, h *pipelineHarness, root string, 
 // the live process, its open descriptor and its directory lock.
 func pipelineFaultChild(t *testing.T, request pipelineBarrierChildRequest, send func(string, string, int), awaitRelease func()) {
 	t.Helper()
-	if request.Boundary != pipelineBoundaryStageCloseBefore || request.Occurrence != 1 {
+	if request.Mode != pipelineBarrierModeCommitProbe && request.Mode != pipelineBarrierModeRecoveryProbe && request.Mode != pipelineBarrierModeInvalidRerun && request.Mode != pipelineBarrierModePreparedRerun && (request.Boundary != pipelineBoundaryStageCloseBefore || request.Occurrence != 1) {
 		t.Fatalf("fault child boundary=%q occurrence=%d, want %s#1", request.Boundary, request.Occurrence, pipelineBoundaryStageCloseBefore)
 	}
 	root := os.Getenv(pipelineTask5RootEnv)
@@ -145,7 +145,16 @@ func pipelineFaultChild(t *testing.T, request pipelineBarrierChildRequest, send 
 		t.Fatalf("no fixture input for kind %q", kind)
 	}
 	spec := pipelineHarnessCase{name: request.Case, kind: kind, surface: "file", mode: publication.Replace, outputPresent: true}
-	h := newPipelineHarness(t, spec, true)
+	h := newPipelineHarnessWith(t, spec, true, func(f *pipelineFixture) {
+		if request.Mode == pipelineBarrierModeCommitProbe {
+			f.limits.DBOperationTimeout = 20 * time.Second
+		}
+		if strings.HasPrefix(request.Case, "text-in-place-same-") {
+			f.input.target = slices.Clone(f.input.source)
+			f.input.units[0].translation = f.input.units[0].source
+			f.backend.texts[f.input.units[0].source] = f.input.units[0].source
+		}
+	})
 	dbPath := filepath.Join(root, "tm.db")
 	_, statErr := os.Lstat(dbPath)
 	existed := statErr == nil
@@ -184,14 +193,35 @@ func pipelineFaultChild(t *testing.T, request pipelineBarrierChildRequest, send 
 		}
 	}
 	h.options = publication.Options{Source: h.sourcePath, Output: filepath.Join(root, "output"), Mode: publication.Replace}
-	if _, err := os.Lstat(h.options.Output); errors.Is(err, os.ErrNotExist) {
-		if err := os.WriteFile(h.options.Output, pipelineHarnessOldOutput, 0600); err != nil {
+	mode := "replace-existing"
+	if request.Mode == pipelineBarrierModeRecoveryProbe || request.Mode == pipelineBarrierModePipelineRerun || request.Mode == pipelineBarrierModeInvalidRerun || request.Mode == pipelineBarrierModePreparedRerun {
+		for _, candidate := range []string{"create", "replace-absent", "in-place"} {
+			if strings.HasPrefix(request.Case, "text-"+candidate+"-") {
+				mode = candidate
+			}
+		}
+	}
+	if mode == "create" {
+		h.options.Mode = publication.Create
+	}
+	if mode == "in-place" {
+		h.options.Mode = publication.InPlace
+		h.options.Output = h.sourcePath
+	}
+	if mode == "replace-existing" && !existed {
+		if _, err := os.Lstat(h.options.Output); errors.Is(err, os.ErrNotExist) {
+			if err := os.WriteFile(h.options.Output, pipelineHarnessOldOutput, 0600); err != nil {
+				t.Fatal(err)
+			}
+		} else if err != nil {
 			t.Fatal(err)
 		}
-	} else if err != nil {
-		t.Fatal(err)
 	}
-	if h.beforeOutput, err = pipelineHarnessReadFile(h.options.Output); err != nil {
+	outputPath := h.options.Output
+	if mode == "in-place" {
+		outputPath = h.sourcePath
+	}
+	if h.beforeOutput, err = pipelineHarnessReadFile(outputPath); err != nil {
 		t.Fatal(err)
 	}
 	if h.beforeSource, err = pipelineHarnessReadFile(h.sourcePath); err != nil {
@@ -199,16 +229,88 @@ func pipelineFaultChild(t *testing.T, request pipelineBarrierChildRequest, send 
 	}
 	h.beforeParents = map[string]pipelineHarnessRecordIdentity{
 		"source": pipelineHarnessReadParent(t, h.sourcePath),
-		"output": pipelineHarnessReadParent(t, h.options.Output),
+		"output": pipelineHarnessReadParent(t, outputPath),
 	}
 	h.ops.source = h.sourcePath
 	pipelineLocateRunPaths(&h.ops.paths, root)
 
+	if request.Mode == pipelineBarrierModeInvalidRerun {
+		_, runErr := h.fixture.core.FileWithTM(t.Context(), h.options, h.fixture.adapter, h.fixture.profile, h.fixture.store, h.fixture.scope)
+		var typed *Error
+		var recovery *publication.RecoveryError
+		if !errors.As(runErr, &typed) || typed.Phase != "prepare" || !errors.As(runErr, &recovery) || len(h.fixture.backend.calls) != 0 {
+			t.Fatalf("invalid evidence refusal: %v", runErr)
+		}
+		send("returned", "", 0)
+		return
+	}
+	if request.Mode == pipelineBarrierModePreparedRerun {
+		if mode == "in-place" {
+			h.fixture.backend.texts[string(h.fixture.input.target)] = string(h.fixture.input.target)
+		}
+		memory := &tmExecution{store: store, scope: h.fixture.scope}
+		prepare := func(ctx context.Context, options publication.Options) (publicationRun, error) {
+			run, err := publication.PrepareWithLimits(ctx, options, h.fixture.limits)
+			if err != nil {
+				return nil, err
+			}
+			send("ready", request.Boundary, request.Occurrence)
+			awaitRelease()
+			return run, nil
+		}
+		h.result, h.runErr = h.fixture.core.fileWithTM(t.Context(), h.options, h.fixture.adapter, h.fixture.profile, nil, memory, prepare)
+		pipelineFaultSaveChildState(t, h, root, request)
+		send("returned", "", 0)
+		return
+	}
 	if request.Mode == pipelineBarrierModePipelineRerun {
+		if mode == "in-place" {
+			h.fixture.backend.texts[string(h.fixture.input.target)] = string(h.fixture.input.target)
+		}
 		// The exact same target in a fresh child: the missing record must be a
 		// typed manual refusal, never an implicit cleanup or old-stage publish.
 		h.result, h.runErr = h.fixture.core.FileWithTM(t.Context(), h.options, h.fixture.adapter, h.fixture.profile, h.fixture.store, h.fixture.scope)
 		pipelineFaultSaveChildState(t, h, root, request)
+		send("returned", "", 0)
+		if strings.Contains(request.Case, "conflict-rerun") {
+			os.Exit(1)
+		}
+		return
+	}
+	if request.Mode == pipelineBarrierModeCommitProbe {
+		store.SetPipelineCommitHooks(tm.PipelineCommitHooks{Before: func(ctx context.Context, c *sql.Conn) error {
+			pipelineTMFaultConnRows(t, c)
+			if _, err := c.ExecContext(ctx, "PRAGMA busy_timeout=15000"); err != nil {
+				return err
+			}
+			send("ready", request.Boundary, request.Occurrence)
+			awaitRelease()
+			return nil
+		}})
+		h.result, h.runErr = h.executeWithHooks(t.Context(), "", request.Boundary, h.ops.hooks)
+		if h.runErr != nil {
+			t.Errorf("commit probe pipeline: %v", h.runErr)
+		}
+		pipelineFaultSaveChildState(t, h, root, request)
+		send("returned", "", 0)
+		return
+	}
+	if request.Mode == pipelineBarrierModeRecoveryProbe {
+		pause := func(name string, occurrence int) {
+			if name == request.Boundary && occurrence == request.Occurrence {
+				send("ready", name, occurrence)
+				awaitRelease()
+			}
+		}
+		h.trace.checkpoint = pause
+		store.SetPipelineCommitHooks(tm.PipelineCommitHooks{
+			Before: func(ctx context.Context, c *sql.Conn) error { pause("sql-commit.before", 1); return nil },
+			After:  func() { pause("sql-commit.after", 1) },
+		})
+		h.result, h.runErr = h.executeWithHooks(t.Context(), "", request.Boundary, h.ops.hooks)
+		if h.runErr != nil {
+			t.Errorf("recovery probe: %v cause=%v", h.runErr, errors.Unwrap(h.runErr))
+		}
 		send("returned", "", 0)
 		return
 	}

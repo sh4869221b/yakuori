@@ -32,6 +32,7 @@ import (
 	"github.com/sh4869221b/yakuori/internal/localize"
 	"github.com/sh4869221b/yakuori/internal/publication"
 	"github.com/sh4869221b/yakuori/internal/tm"
+	"golang.org/x/sys/unix"
 )
 
 const signalChildEnv = "YAKUORI_SIGNAL_CHILD"
@@ -150,12 +151,21 @@ type signalNotice struct {
 // The same writer is supplied to dispatch/execute and delegates to the real
 // process stdout. Calls, including empty writes, are distinct from bytes.
 type signalStdoutWriter struct {
-	writes int
-	bytes  int
+	writes           int
+	bytes            int
+	sink             *signalNoticeSink
+	caseName         string
+	blockBeforeWrite bool
 }
 
 func (w *signalStdoutWriter) Write(raw []byte) (int, error) {
 	w.writes++
+	if w.sink != nil {
+		w.sink.emit(signalNotice{Case: w.caseName, PID: os.Getpid(), PPID: os.Getppid(), Event: "stdout-write", Occurrence: 1})
+	}
+	if w.blockBeforeWrite {
+		select {}
+	}
 	n, err := os.Stdout.Write(raw)
 	w.bytes += n
 	return n, err
@@ -477,7 +487,11 @@ func executeSignalChild(t *testing.T, request signalChildRequest, sink *signalNo
 	if err != nil || help != "" {
 		return fail("parse signal child args: help=%q err=%v", help, err)
 	}
-	base := &translationEngine{info: request.Info, text: cliAuthoredTranslation, finish: inference.Stop}
+	translation := cliAuthoredTranslation
+	if request.Mode == "stdout-probe" {
+		translation = strings.Repeat("訳文。", 4096)
+	}
+	base := &translationEngine{info: request.Info, text: translation, finish: inference.Stop}
 	inner := &cliPrecommitEngine{translationEngine: base}
 	resolve := func() (config.Paths, error) { return request.Paths, nil }
 	var open selectedEngineOpener
@@ -486,6 +500,10 @@ func executeSignalChild(t *testing.T, request signalChildRequest, sink *signalNo
 	var execErr error
 	captured := false
 	stdout := &signalStdoutWriter{}
+	if request.Mode == "stdout-probe" || request.Mode == "before-write" {
+		stdout.sink, stdout.caseName = sink, request.Case
+		stdout.blockBeforeWrite = request.Mode == "before-write"
+	}
 	var callerStarted, callerDeadline time.Time
 	dispatchCtx := context.Background()
 	cancel := context.CancelFunc(func() {})
@@ -506,7 +524,7 @@ func executeSignalChild(t *testing.T, request signalChildRequest, sink *signalNo
 		}
 		return engine.Open, release, releaseOnce
 	}
-	if request.Mode == "rerun" {
+	if request.Mode == "rerun" || request.Mode == "stdout-probe" || request.Mode == "before-write" {
 		open = inner.Open
 	} else if !request.deadline() {
 		var release chan struct{}
@@ -735,6 +753,7 @@ type signalChildRun struct {
 	waits        atomic.Int32
 	stdout       bytes.Buffer
 	stderr       bytes.Buffer
+	stdoutPipe   *os.File
 	observed     []signalNotice
 	occurrences  map[string]int
 	reaped       bool
@@ -778,6 +797,17 @@ func startSignalChild(t *testing.T, request signalChildRequest, watchdog time.Du
 	r.cmd.Env = append(env, signalChildEnv+"="+string(payload))
 	r.cmd.ExtraFiles = []*os.File{noticeWrite, controlRead}
 	r.cmd.Stdout, r.cmd.Stderr = &r.stdout, &r.stderr
+	var pipeWrite *os.File
+	if request.Mode == "stdout-probe" {
+		r.stdoutPipe, pipeWrite, err = os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = unix.FcntlInt(pipeWrite.Fd(), unix.F_SETPIPE_SZ, 4096); err != nil {
+			t.Fatal(err)
+		}
+		r.cmd.Stdout = pipeWrite
+	}
 	r.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	go func() {
 		defer close(r.readDone)
@@ -795,6 +825,11 @@ func startSignalChild(t *testing.T, request signalChildRequest, watchdog time.Du
 	if err := r.cmd.Start(); err != nil {
 		t.Fatal(errors.Join(err, noticeWrite.Close(), controlRead.Close()))
 	}
+	if pipeWrite != nil {
+		if err := pipeWrite.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
 	go func() {
 		r.waits.Add(1)
 		r.waitDone <- r.cmd.Wait()
@@ -811,6 +846,9 @@ func (r *signalChildRun) cleanup() {
 	}
 	_ = r.noticeRead.Close()
 	_ = r.controlWrite.Close()
+	if r.stdoutPipe != nil {
+		_ = r.stdoutPipe.Close()
+	}
 	r.cancel()
 }
 
@@ -847,7 +885,7 @@ func (r *signalChildRun) identity(notice signalNotice) error {
 		limit = 2
 	case "generate-ready", "cancel-observed", "drain-wait", "release-received",
 		"consumer-complete", "generate-return", "close-attempt", "close-complete",
-		"close-guard-failed", "child-error", "final":
+		"close-guard-failed", "child-error", "final", "stdout-write":
 	default:
 		return &signalFailure{Class: "notice-protocol", Detail: "unknown event: " + notice.Event}
 	}
