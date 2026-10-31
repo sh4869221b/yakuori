@@ -39,22 +39,30 @@ os.execvp(sys.argv[1], sys.argv[1:])
 ' go test -count=1 -timeout 15m -tags offlinesmoke ./internal/cli -run '^TestOfflineCLIMatrix$/^model-free$' -v
 go test -count=1 ./...
 go vet ./...
-# Issue #68/#69 pipeline fault harness. Tagged vet and build check the test-only
+# Issue #68/#69/#70 pipeline fault harness. Vet and compilation check the test-only
 # surface; they are not a behavior PASS. The filesystem-independent lanes below
 # run real child lifecycles. Qualified publication positives require a non-root
 # ext4/Btrfs mount and run in .github/workflows/publication-probe.yml.
 pipeline_tmp=$(mktemp -d)
 trap 'rm -rf "$fixture" "$offline_evidence" "$pipeline_tmp"' EXIT
-go vet -tags pipelinefaults ./internal/localize ./internal/publication ./internal/cli
-for pipeline_pkg in localize publication cli; do
+go vet -tags pipelinefaults ./internal/localize ./internal/publication ./internal/cli ./internal/tm
+for pipeline_pkg in localize publication cli tm; do
+ go test -c -o "$pipeline_tmp/$pipeline_pkg-normal.test" "./internal/$pipeline_pkg"
  go test -c -tags pipelinefaults -o "$pipeline_tmp/$pipeline_pkg.test" "./internal/$pipeline_pkg"
 done
-echo 'pipelinefaults compile-only: tagged test binaries built; not a behavior PASS'
+echo 'pipelinefaults compile-only: normal/tagged test binaries built; not a behavior PASS'
 
 pipeline_require() {
  label=$1
  names=$2
  test_log=$3
+ # Only Go's framing is driver output; t.Log may contain child transcripts.
+ event_log="$pipeline_tmp/$label.events"
+ python3 -c "import json, sys; events = list(map(json.loads, sys.stdin)); \
+sys.exit(\"pipeline lane reported FAIL or SKIP\") if any(e[\"Action\"] in (\"fail\", \"skip\") for e in events) else None; \
+sys.stdout.writelines(e[\"Output\"] for e in events if e.get(\"OutputType\") == \"frame\")" \
+  <"$test_log" >"$event_log" || return 1
+ test_log=$event_log
  pass_names="$pipeline_tmp/$label.pass"
  run_names="$pipeline_tmp/$label.run"
  observed="$pipeline_tmp/$label.observed"
@@ -101,15 +109,8 @@ pipeline_require() {
     bad=1
    fi
   fi
-  printf "%s\n" "$name" >>"$allowed"
-  prefix=$name
-  while :; do
-   case $prefix in
-   */*) prefix=${prefix%/*} ;;
-   *) break ;;
-   esac
-   printf "%s\n" "$prefix" >>"$allowed"
-  done
+  # Only actual t.Run parents are required; a slash in a leaf creates no parent.
+  printf "%s\n" "$root" "$name" >>"$allowed"
  done <"$names"
  { cat "$run_names"; cat "$pass_names"; } | sort -u >"$observed"
  while IFS= read -r name; do
@@ -129,8 +130,10 @@ pipeline_require() {
 }
 
 cat >"$pipeline_tmp/fixture-inputs.names" <<'EOF'
+TestPipelineFixtureInputs/valid
 TestPipelineFixtureInputs/valid/text
 TestPipelineFixtureInputs/valid/w3
+TestPipelineFixtureInputs/reject-authored-mismatch
 TestPipelineFixtureInputs/reject-authored-mismatch/text
 TestPipelineFixtureInputs/reject-authored-mismatch/w3
 EOF
@@ -151,6 +154,47 @@ EOF
 cat >"$pipeline_tmp/refusal.names" <<'EOF'
 TestPipelineUnsupportedFilesystem
 EOF
+
+# Real SQLite component cases require no supported publication filesystem.
+cat >"$pipeline_tmp/tm-component.names" <<'EOF'
+TestPipelineTMCommitCheckpoint/error
+TestPipelineTMCommitCheckpoint/cancel
+TestPipelineTMCommitCheckpoint/release
+TestPipelineTMCommitStoppedProcess/before-commit
+TestPipelineTMCommitStoppedProcess/after-commit
+TestCommitConcurrentKey/miss
+TestCommitConcurrentKey/valid_changed
+TestCommitConcurrentKey/invalid_changed
+TestCommitConcurrentKey/invalid_removed
+TestCommitConcurrentKey/valid_removed
+TestCommitBusyAndDeadline/writer
+TestCommitBusyAndDeadline/reader
+TestCommitBusyAndDeadline/expired
+TestCommitBusyAndDeadline/pool_wait
+TestCommitCleanupFailure
+EOF
+cat >"$pipeline_tmp/tm-hooks.names" <<'EOF'
+TestPipelineTMCommitHooks/success
+TestPipelineTMCommitHooks/isolation
+TestPipelineTMCommitHooks/next-run-isolation
+TestPipelineTMCommitHooks/before-error
+TestPipelineTMCommitHooks/before-cancel
+TestPipelineTMCommitHooks/after-cancel
+TestPipelineTMCommitHooks/private-callback
+TestPipelineTMCommitHooks/ineligible-run
+TestPipelineTMCommitHooks/dml-error
+EOF
+if ! go test -count=1 -timeout 10m ./internal/tm \
+ -run '^(TestPipelineTMCommitCheckpoint|TestPipelineTMCommitStoppedProcess|TestCommitConcurrentKey|TestCommitBusyAndDeadline|TestCommitCleanupFailure)$' \
+ -json >"$pipeline_tmp/tm-component.log" 2>&1; then
+ cat "$pipeline_tmp/tm-component.log" >&2; exit 1; fi
+pipeline_require tm-component "$pipeline_tmp/tm-component.names" "$pipeline_tmp/tm-component.log"
+cat "$pipeline_tmp/tm-component.log"
+if ! go test -count=1 -timeout 10m -tags pipelinefaults ./internal/tm \
+ -run '^TestPipelineTMCommitHooks$' -json >"$pipeline_tmp/tm-hooks.log" 2>&1; then
+ cat "$pipeline_tmp/tm-hooks.log" >&2; exit 1; fi
+pipeline_require tm-hooks "$pipeline_tmp/tm-hooks.names" "$pipeline_tmp/tm-hooks.log"
+cat "$pipeline_tmp/tm-hooks.log"
 
 # Issue #69 Core stdout paths do not call publication.Prepare. CLI fixtures,
 # including stdout, require qualified storage and stay in the qualified lane.
@@ -188,7 +232,7 @@ pipeline_fs_independent() {
  names=$3
  log="$pipeline_tmp/$label.log"
  if ! go test -count=1 -timeout 180s -tags pipelinefaults ./internal/localize \
-  -run "$selector" -v >"$log" 2>&1; then
+  -run "$selector" -json >"$log" 2>&1; then
   cat "$log" >&2; echo "pipeline lane $label failed" >&2; exit 1; fi
  pipeline_require "$label" "$names" "$log"
  cat "$log"
@@ -211,7 +255,7 @@ tmpfs|overlayfs) ;;
 esac
 echo "unsupported-filesystem refusal lane filesystem: $tmp_fs"
 if ! TMPDIR=/tmp GOTMPDIR=/tmp go test -count=1 -timeout 180s -tags pipelinefaults \
- ./internal/localize -run '^TestPipelineUnsupportedFilesystem$' -v \
+ ./internal/localize -run '^TestPipelineUnsupportedFilesystem$' -json \
  >"$pipeline_tmp/refusal.log" 2>&1; then
  cat "$pipeline_tmp/refusal.log" >&2; echo 'unsupported-filesystem refusal lane failed' >&2; exit 1; fi
 pipeline_require refusal "$pipeline_tmp/refusal.names" "$pipeline_tmp/refusal.log"
