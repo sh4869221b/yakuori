@@ -445,7 +445,13 @@ func TestPipelinePrecommitSignalChild(t *testing.T) {
 		os.Exit(4)
 	}
 	sink := newSignalNoticeSink(notice, request.deadline())
-	code, failed := executeSignalChild(t, request, sink)
+	var code int
+	var failed bool
+	if request.Mode == "publication-exit" {
+		code, failed = cliPublicationExitChild(t, request, sink)
+	} else {
+		code, failed = executeSignalChild(t, request, sink)
+	}
 	sink.flush()
 	if err := sink.failure(); err != nil {
 		fmt.Fprintf(os.Stderr, "signal child notice: %v\n", err)

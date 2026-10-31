@@ -16,7 +16,11 @@ import (
 
 var ErrConflict = errors.New("translation candidate changed since lookup")
 
-func (r *Run) Commit(ctx context.Context, session unit.Session, profile validate.Profile, accepted []validate.AcceptedTranslation) (err error) {
+func (r *Run) Commit(ctx context.Context, session unit.Session, profile validate.Profile, accepted []validate.AcceptedTranslation) error {
+	return r.commit(ctx, session, profile, accepted, nil)
+}
+
+func (r *Run) commit(ctx context.Context, session unit.Session, profile validate.Profile, accepted []validate.AcceptedTranslation, beforeCommit func(context.Context, *sql.Conn) error) (err error) {
 	if r.finished || r.staged == nil || !r.manifestChecked {
 		return ErrRunState
 	}
@@ -34,6 +38,12 @@ func (r *Run) Commit(ctx context.Context, session unit.Session, profile validate
 			return validate.ErrBindingMismatch
 		}
 	}
+	// Take once before transaction work, including paths that fail before
+	// reaching a checkpoint. Independent runs cannot inherit these hooks.
+	r.store.commitHooksMu.Lock()
+	before, after := r.store.beforeCommit, r.store.afterCommit
+	r.store.beforeCommit, r.store.afterCommit = nil, nil
+	r.store.commitHooksMu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, r.store.limits.DBOperationTimeout)
 	defer cancel()
 	c, err := r.store.db.Conn(ctx)
@@ -61,6 +71,16 @@ func (r *Run) Commit(ctx context.Context, session unit.Session, profile validate
 			return errors.Join(err, ctx.Err())
 		}
 	}
+	if beforeCommit != nil {
+		if err = beforeCommit(ctx, c); err != nil {
+			return errors.Join(err, ctx.Err())
+		}
+	}
+	if before != nil {
+		if err = before(ctx, c); err != nil {
+			return errors.Join(err, ctx.Err())
+		}
+	}
 	if err = ctx.Err(); err != nil {
 		return err
 	}
@@ -68,6 +88,9 @@ func (r *Run) Commit(ctx context.Context, session unit.Session, profile validate
 		return errors.Join(err, ctx.Err())
 	}
 	committed = true
+	if after != nil {
+		after()
+	}
 	return nil
 }
 

@@ -15,15 +15,25 @@ jobs:
         run: docker build --progress=plain -t yakuori-publication-probe -f ci/Dockerfile .
       - name: Non-root host filesystem and separate-mount probes
         run: |
+          set -o pipefail
           mkdir -p "$RUNNER_TEMP/publication" "$RUNNER_TEMP/publication/tmp" \
-            "$RUNNER_TEMP/publication/cache" "$RUNNER_TEMP/publication/gopath" \
+            "$RUNNER_TEMP/publication/cache" "$RUNNER_TEMP/publication/gopath/pkg" \
             "$RUNNER_TEMP/publication/pipeline-evidence"
           findmnt -T "$RUNNER_TEMP/publication" -o TARGET,FSTYPE,OPTIONS
           findmnt -T "$RUNNER_TEMP/publication/tmp" -o TARGET,FSTYPE,OPTIONS
           test -w "$RUNNER_TEMP/publication/tmp"
-          docker run --rm --user "$(id -u):$(id -g)" \
+          image_env=$(docker run --rm --network none yakuori-publication-probe go env -json GOPATH GOCACHE)
+          image_gopath=$(printf '%s\n' "$image_env" | python3 -c 'import json,sys; print(json.load(sys.stdin)["GOPATH"])')
+          image_gocache=$(printf '%s\n' "$image_env" | python3 -c 'import json,sys; print(json.load(sys.stdin)["GOCACHE"])')
+          cache_container=$(docker create yakuori-publication-probe)
+          trap 'docker rm "$cache_container"' EXIT
+          docker cp "$cache_container:$image_gopath/pkg/." - | tar -xf - -C "$RUNNER_TEMP/publication/gopath/pkg"
+          docker cp "$cache_container:$image_gocache/." - | tar -xf - -C "$RUNNER_TEMP/publication/cache"
+          docker rm "$cache_container"
+          trap - EXIT
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
             --tmpfs /tmp:rw,exec,mode=1777 \
-            -v "$PWD:/src" -v "$RUNNER_TEMP/publication:/evidence" \
+            -v "$PWD:/src:ro" -v "$RUNNER_TEMP/publication:/evidence" \
             -e GOCACHE=/evidence/cache -e GOPATH=/evidence/gopath \
             -e TMPDIR=/evidence/tmp -e GOTMPDIR=/evidence/tmp \
             -e YAKUORI_PIPELINE_EVIDENCE=/evidence/pipeline-evidence \
@@ -32,7 +42,10 @@ jobs:
               uname -sr
               go version
               stat -f -c "host filesystem: %T %t" /evidence
-              test "$(stat -f -c %t /evidence)" = ef53
+              case "$(stat -f -c %t /evidence/tmp)" in
+                ef53|9123683e) ;;
+                *) echo "qualified lane requires ext4/Btrfs" >&2; exit 1 ;;
+              esac
               test -w /evidence/tmp
               test -w "$YAKUORI_PIPELINE_EVIDENCE"
               echo "qualified TMPDIR=$(stat -f -c %T /evidence/tmp) GOTMPDIR=/evidence/tmp"
@@ -47,6 +60,13 @@ jobs:
               printf "%s\n" "TestPipelineHarnessGuards/cleanup-rescue" "TestPipelineHarnessGuards/early-return" "TestPipelineHarnessGuards/healthy-positive-control" "TestPipelineHarnessGuards/malformed-input" "TestPipelineHarnessGuards/timeout-explicit-cancel" "TestPipelineHarnessGuards/uninjected" "TestPipelineHarnessGuards/unreached" "TestPipelineHarnessGuards/unreaped" "TestPipelineHarnessGuards/wrong-boundary" > /evidence/names/guards
               printf "%s\n" "TestPipelineHarnessFault/cleanup-rescue" "TestPipelineHarnessFault/normal-counterpart/text" "TestPipelineHarnessFault/normal-counterpart/w3" "TestPipelineHarnessFault/process/cancel/text" "TestPipelineHarnessFault/process/error/text" "TestPipelineHarnessFault/process/error/w3" "TestPipelineHarnessFault/stage-close/text" "TestPipelineHarnessFault/stage-close/w3" > /evidence/names/fault
               printf "%s\n" "TestPipelineHarnessCLI/localize-close-error" "TestPipelineHarnessCLI/localize-diagnostic-writer-error" "TestPipelineHarnessCLI/translate-text-stdout" > /evidence/names/cli
+              # Actual nested t.Run parents, not every slash prefix of a leaf.
+              printf "%s\n" TestPipelineFixtureInputs/valid \
+                TestPipelineFixtureInputs/reject-authored-mismatch >> /evidence/names/fixture-inputs
+              printf "%s\n" TestPipelineHarnessBoundaries/valid \
+                TestPipelineHarnessBoundaries/reject-invalid-observation >> /evidence/names/boundaries
+              printf "%s\n" TestPipelineHarnessState/valid \
+                TestPipelineHarnessState/reject-invalid-observation >> /evidence/names/state
               # Freeze #69 terminal names from the accepted P/Q axes, never logs.
               for lane in contract inference segmented final cli signals; do
                 : >"/evidence/names/precommit-$lane"
@@ -147,10 +167,160 @@ jobs:
               done
               printf "%s\n" TestPipelineUnsupportedFilesystem > /evidence/names/precommit-refusal
 
+              # #70 expectations are literal axes, independent of Go declarations
+              # and observed logs. Include real parents as well as every leaf.
+              printf "%s\n" TestPipelineCommitPublicationState/valid \
+                TestPipelineCommitPublicationState/valid/postwait \
+                TestPipelineCommitPublicationState/reject \
+                TestPipelineCommitPublicationState/reject/strict-record-decode \
+                > /evidence/names/commit-state
+              for field in duplicate missing unknown case-folded null trailing truncated; do
+                printf "%s\n" "TestPipelineCommitPublicationState/reject/strict-record-decode/$field" >> /evidence/names/commit-state
+              done
+              for row in prepared restored source-backed-up external-source published published-stale; do
+                modes="create replace-absent replace-existing in-place"
+                case "$row" in
+                  restored|source-backed-up|external-source) modes=in-place ;;
+                esac
+                for kind in text w3; do
+                  for mode in $modes; do
+                    printf "%s\n" "TestPipelineCommitPublicationState/valid/$row/$kind/$mode" >> /evidence/names/commit-state
+                  done
+                  printf "%s\n" "TestPipelineCommitPublicationState/valid/postwait/$row/$kind" >> /evidence/names/commit-state
+                  for field in healthy stale-file stale-rows stale-record stale-installed; do
+                    printf "%s\n" "TestPipelineCommitPublicationState/valid/postwait/$row/$kind/$field" >> /evidence/names/commit-state
+                  done
+                  prefix="TestPipelineCommitPublicationState/reject/$row/$kind"
+                  printf "%s\n" "$prefix" >> /evidence/names/commit-state
+                  for field in missing-record stale-decoded-record installed-bit missing-close \
+                    missing-close-fd missing-install-completion missing-phase-close missing-phase-install \
+                    wrong-physical-target trimmed-target record-schema record-run-id record-mode \
+                    record-phase record-operation record-output-path record-output-basename \
+                    record-existing-absent same-bytes-different-inode prose-only-incomplete; do
+                    printf "%s\n" "$prefix/$field" >> /evidence/names/commit-state
+                  done
+                  for role in source stage existing-output source-parent output-parent; do
+                    for field in dev inode mount identity-size mode nlink; do
+                      printf "%s\n" "$prefix/record-$role-$field" >> /evidence/names/commit-state
+                    done
+                  done
+                  for role in source stage existing-output; do
+                    for field in path basename size hash; do
+                      printf "%s\n" "$prefix/record-$role-$field" >> /evidence/names/commit-state
+                    done
+                  done
+                  case "$row" in
+                    restored|source-backed-up|external-source)
+                      printf "%s\n" "$prefix/record-backup-path" "$prefix/record-backup-basename" >> /evidence/names/commit-state ;;
+                  esac
+                  for field in schema source profile text; do
+                    printf "%s\n" "$prefix/sentinel-$field" >> /evidence/names/commit-state
+                  done
+                done
+              done
+              printf "%s\n" TestPipelineTMCommitHooksCore \
+                TestPipelineTMCommitHooksCore/before-cancel \
+                TestPipelineTMCommitHooksCore/after-cancel > /evidence/names/tm-core
+              : > /evidence/names/tm-transactions
+              for row in success writer-deadline reader-commit-deadline row-abort row-rollback \
+                rollback-cleanup conflict-miss conflict-valid-changed conflict-valid-removed \
+                conflict-invalid-changed conflict-invalid-removed; do
+                prefix="TestPipelineTMTransactionFailures/$row"
+                printf "%s\n" "$prefix" >> /evidence/names/tm-transactions
+                for kind in text w3; do
+                  printf "%s\n" "$prefix/$kind" >> /evidence/names/tm-transactions
+                  for mode in create replace-absent replace-existing in-place; do
+                    printf "%s\n" "$prefix/$kind/$mode" >> /evidence/names/tm-transactions
+                  done
+                done
+              done
+              : > /evidence/names/tm-cancellation
+              for row in after-stage before-sql-commit after-sql-commit publish-entry; do
+                prefix="TestPipelineTMCommitCancellation/$row"
+                printf "%s\n" "$prefix" >> /evidence/names/tm-cancellation
+                for kind in text w3; do
+                  printf "%s\n" "$prefix/$kind" >> /evidence/names/tm-cancellation
+                  for mode in create replace-absent replace-existing in-place; do
+                    printf "%s\n" "$prefix/$kind/$mode" >> /evidence/names/tm-cancellation
+                  done
+                done
+              done
+              : > /evidence/names/publication-failures
+              for row in healthy \
+                prepared-write-error prepared-write-cancel-before prepared-write-cancel-after prepared-write-short-write \
+                prepared-sync-error prepared-sync-cancel-before prepared-sync-cancel-after \
+                prepared-close-error prepared-close-cancel-before prepared-close-cancel-after \
+                prepared-install-rename-error prepared-install-rename-cancel-before prepared-install-rename-cancel-after \
+                prepared-directory-sync-error prepared-directory-sync-cancel-before prepared-directory-sync-cancel-after \
+                source-backed-up-write-error source-backed-up-write-cancel-before source-backed-up-write-cancel-after source-backed-up-write-short-write \
+                source-backed-up-sync-error source-backed-up-sync-cancel-before source-backed-up-sync-cancel-after \
+                source-backed-up-close-error source-backed-up-close-cancel-before source-backed-up-close-cancel-after \
+                source-backed-up-install-rename-error source-backed-up-install-rename-cancel-before source-backed-up-install-rename-cancel-after \
+                source-backed-up-directory-sync-error source-backed-up-directory-sync-cancel-before source-backed-up-directory-sync-cancel-after \
+                published-write-error published-write-cancel-before published-write-cancel-after published-write-short-write \
+                published-sync-error published-sync-cancel-before published-sync-cancel-after \
+                published-close-error published-close-cancel-before published-close-cancel-after \
+                published-install-rename-error published-install-rename-cancel-before published-install-rename-cancel-after \
+                published-directory-sync-error published-directory-sync-cancel-before published-directory-sync-cancel-after \
+                backup-collision backup-rename-error publish-rename-error cancel-before-backup cancel-after-backup \
+                cancel-before-publish cancel-after-publish restore-success restore-rename-error restore-external-file run-close-error; do
+                modes="create replace-absent replace-existing in-place"
+                case "$row" in
+                  source-backed-up-*|backup-collision|backup-rename-error|cancel-before-backup|cancel-after-backup|restore-*)
+                    modes=in-place ;;
+                esac
+                prefix="TestPipelinePublicationFailures/$row"
+                printf "%s\n" "$prefix" >> /evidence/names/publication-failures
+                for kind in text w3; do
+                  printf "%s\n" "$prefix/$kind" >> /evidence/names/publication-failures
+                  for mode in $modes; do
+                    printf "%s\n" "$prefix/$kind/$mode" >> /evidence/names/publication-failures
+                  done
+                done
+              done
+              : > /evidence/names/cli-publication-exit
+              for row in normal commit-failure postcommit-prepublish published-close-error published-diagnostic-error; do
+                prefix="TestPipelineCLIPublicationExit/$row"
+                printf "%s\n" "$prefix" >> /evidence/names/cli-publication-exit
+                for kind in text w3; do
+                  printf "%s\n" "$prefix/$kind" >> /evidence/names/cli-publication-exit
+                  for mode in create replace-absent replace-existing in-place; do
+                    printf "%s\n" "$prefix/$kind/$mode" >> /evidence/names/cli-publication-exit
+                  done
+                done
+              done
+              : > /evidence/names/failure-rerun
+              for row in D0-unprepared D1-unrecorded D1-prepared Restored SourceBackedUp \
+                Published-recorded Published-stale-record missing-record corrupt-record identity-mismatch \
+                source-backed-up-conflict create-existing invalid-candidate w3-in-place-ja-header; do
+                modes="create replace-absent replace-existing in-place"
+                kinds="text w3"
+                case "$row" in
+                  Restored|SourceBackedUp|source-backed-up-conflict) modes=in-place ;;
+                  create-existing) modes=create ;;
+                  w3-in-place-ja-header) modes=in-place; kinds=w3 ;;
+                esac
+                prefix="TestPipelineFailureRerunAndTMRevalidation/$row"
+                printf "%s\n" "$prefix" >> /evidence/names/failure-rerun
+                for kind in $kinds; do
+                  printf "%s\n" "$prefix/$kind" >> /evidence/names/failure-rerun
+                  for mode in $modes; do
+                    printf "%s\n" "$prefix/$kind/$mode" >> /evidence/names/failure-rerun
+                  done
+                done
+              done
+
               require_names() {
                 label=$1
                 names=$2
                 test_log=$3
+                # Keep child transcripts in the raw JSON, outside driver framing.
+                event_log=/evidence/names/"$label".events
+                python3 -c "import json, sys; events = list(map(json.loads, sys.stdin)); \
+                sys.exit(\"required lane reported FAIL or SKIP\") if any(e[\"Action\"] in (\"fail\", \"skip\") for e in events) else None; \
+                sys.stdout.writelines(e[\"Output\"] for e in events if e.get(\"OutputType\") == \"frame\")" \
+                  <"$test_log" >"$event_log" || return 1
+                test_log=$event_log
                 pass_names=/evidence/names/"$label".pass
                 run_names=/evidence/names/"$label".run
                 observed=/evidence/names/"$label".observed
@@ -197,15 +367,8 @@ jobs:
                       bad=1
                     fi
                   fi
-                  printf "%s\n" "$name" >>"$allowed"
-                  prefix=$name
-                  while :; do
-                    case $prefix in
-                    */*) prefix=${prefix%/*} ;;
-                    *) break ;;
-                    esac
-                    printf "%s\n" "$prefix" >>"$allowed"
-                  done
+                  # Slash-bearing leaf names do not imply intermediate t.Run calls.
+                  printf "%s\n" "$root" "$name" >>"$allowed"
                 done <"$names"
                 { cat "$run_names"; cat "$pass_names"; } | sort -u >"$observed"
                 while IFS= read -r name; do
@@ -229,7 +392,7 @@ jobs:
                 names=$2
                 shift 2
                 log=/evidence/"$label".log
-                if ! "$@" >"$log" 2>&1; then
+                if ! "$@" -json >"$log" 2>&1; then
                   cat "$log"
                   return 1
                 fi
@@ -270,6 +433,21 @@ jobs:
                 run_required precommit-signals /evidence/names/precommit-signals \
                 go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelinePrecommitSignals$" -v
 
+              run_required commit-state /evidence/names/commit-state \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineCommitPublicationState$" -v
+              run_required tm-core /evidence/names/tm-core \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/tm -run "^TestPipelineTMCommitHooksCore$" -v
+              run_required tm-transactions /evidence/names/tm-transactions \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineTMTransactionFailures$" -v
+              run_required tm-cancellation /evidence/names/tm-cancellation \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineTMCommitCancellation$" -v
+              run_required publication-failures /evidence/names/publication-failures \
+                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelinePublicationFailures$" -v
+              run_required cli-publication-exit /evidence/names/cli-publication-exit \
+                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/cli -run "^TestPipelineCLIPublicationExit$" -v
+              run_required failure-rerun /evidence/names/failure-rerun \
+                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineFailureRerunAndTMRevalidation$" -v
+
               test "$(stat -f -c %T /tmp)" = tmpfs
               echo "unsupported-filesystem lane: TMPDIR=/tmp GOTMPDIR=/tmp filesystem=tmpfs"
               TMPDIR=/tmp GOTMPDIR=/tmp run_required precommit-refusal /evidence/names/precommit-refusal \
@@ -277,7 +455,7 @@ jobs:
               if TMPDIR=/tmp GOTMPDIR=/tmp \
                 YAKUORI_PIPELINE_EVIDENCE="$YAKUORI_PIPELINE_EVIDENCE/unsupported-positive" \
                 go test -count=1 -timeout 180s -tags pipelinefaults \
-                ./internal/localize -run "^TestPipelinePrecommitFinal$/^cpu-text-file-replace-existing-happy$" -v \
+                ./internal/localize -run "^TestPipelinePublicationFailures$/^publish-rename-error$/^text$/^create$" -v \
                 > /evidence/precommit-expected-red.log 2>&1; then
                 cat /evidence/precommit-expected-red.log
                 echo "qualified positive unexpectedly passed on tmpfs" >&2
@@ -294,8 +472,12 @@ jobs:
               echo "pipeline expected RED: exit=$expected_red_exit; typed prepare refusal; later fault stages not-run; not a fault PASS"
               find "$YAKUORI_PIPELINE_EVIDENCE" -type f -printf "%p %s bytes\n" | sort
 
-              TMPDIR=/evidence go test -count=1 -v ./research/publication
-              TMPDIR=/tmp GOTMPDIR=/tmp go test -count=1 -v ./research/publication
+              go test -c -o /evidence/publication.test ./research/publication
+              mkdir -p /tmp/publication-cwd /evidence/publication-cwd
+              (cd /tmp/publication-cwd && TMPDIR=/evidence GOTMPDIR=/evidence \
+                /evidence/publication.test -test.count=1 -test.v)
+              (cd /evidence/publication-cwd && TMPDIR=/tmp GOTMPDIR=/tmp \
+                /evidence/publication.test -test.count=1 -test.v)
               TMPDIR=/evidence go test -count=1 -v ./internal/publication ./internal/artifact ./internal/cli
               TMPDIR=/tmp GOTMPDIR=/tmp go test -count=1 -v ./internal/publication -run "^TestUnsupportedFilesystem$"
               test -z "$(gofmt -l research/publication)"

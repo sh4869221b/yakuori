@@ -32,6 +32,10 @@ type Store struct {
 	lock      *os.File
 	closeOnce sync.Once
 	closeErr  error
+
+	commitHooksMu sync.Mutex
+	beforeCommit  func(context.Context, *sql.Conn) error
+	afterCommit   func()
 }
 
 func (s *Store) Close() error {
