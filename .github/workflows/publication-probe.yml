@@ -310,6 +310,65 @@ jobs:
                 done
               done
 
+              : > /evidence/names/concurrent-process
+              printf "%s\n" TestPipelineConcurrentProcess/partial-acquisition >> /evidence/names/concurrent-process
+              for kind in text w3; do
+                printf "%s\n" "TestPipelineConcurrentProcess/partial-acquisition/$kind" >> /evidence/names/concurrent-process
+                for contention in same-tm shared-parent opposite-parents; do
+                  for action in release error cancel sigint sigterm sigkill; do
+                    printf "%s\n" "TestPipelineConcurrentProcess/$kind/$contention/$action" >> /evidence/names/concurrent-process
+                  done
+                done
+              done
+
+              : > /evidence/names/filesystem-safety
+              printf "%s\n" TestPipelineFilesystem/source-across-mount TestPipelineFilesystem/path-refusals \
+                TestPipelineFilesystem/drift TestPipelineFilesystem/unvalidated-stage TestPipelineFilesystem/physical-errno >> /evidence/names/filesystem-safety
+              for kind in text w3; do
+                printf "%s\n" "TestPipelineFilesystem/unvalidated-stage/$kind" >> /evidence/names/filesystem-safety
+                for mode in create replace-absent replace-existing; do
+                  printf "%s\n" "TestPipelineFilesystem/source-across-mount/$kind/$mode" >> /evidence/names/filesystem-safety
+                done
+                for row in source-symlink output-symlink dangling-source dangling-output source-component output-component \
+                  source-dotdot output-dotdot source-hardlink output-hardlink same-path dot-alias in-place-different \
+                  in-place-symlink directory-source directory-output fifo-source fifo-output existing-create; do
+                  printf "%s\n" "TestPipelineFilesystem/path-refusals/$kind/$row" >> /evidence/names/filesystem-safety
+                done
+                for spelling in exact dot; do
+                  printf "%s\n" "TestPipelineFilesystem/path-refusals/$kind/explicit-same-path/$spelling" >> /evidence/names/filesystem-safety
+                done
+                for mode in create replace-absent replace-existing in-place; do
+                  for row in publish-eacces publish-exdev; do
+                    printf "%s\n" "TestPipelineFilesystem/physical-errno/$kind/$mode/$row" >> /evidence/names/filesystem-safety
+                  done
+                  if [ "$mode" = in-place ]; then
+                    for row in backup-eacces restore-eacces; do
+                      printf "%s\n" "TestPipelineFilesystem/physical-errno/$kind/$mode/$row" >> /evidence/names/filesystem-safety
+                    done
+                  fi
+                  rows="source-bytes source-inode source-link source-mode source-symlink source-absent stage-bytes stage-inode stage-link stage-mode parent-inode parent-mode run-inode run-mode dotdot-component"
+                  if [ "$mode" != in-place ]; then
+                    rows="$rows source-parent-inode source-parent-mode output-parent-inode output-parent-mode"
+                  fi
+                  if [ "$mode" = replace-existing ]; then
+                    rows="$rows output-bytes output-inode output-link output-mode output-alias"
+                  elif [ "$mode" != in-place ]; then
+                    rows="$rows output-arrival"
+                  fi
+                  for row in $rows; do
+                    printf "%s\n" "TestPipelineFilesystem/drift/$kind/$mode/$row" >> /evidence/names/filesystem-safety
+                  done
+                done
+              done
+
+              : > /evidence/names/no-clobber
+              for kind in text w3; do
+                for row in create-arrival replace-absent-arrival in-place-publish-arrival after-backup-error \
+                  after-backup-cancel restore-arrival backup-existing backup-generated; do
+                  printf "%s\n" "TestPipelineNoClobber/$kind/$row" >> /evidence/names/no-clobber
+                done
+              done
+
               require_names() {
                 label=$1
                 names=$2
@@ -447,6 +506,12 @@ jobs:
                 go test -count=1 -timeout 15m -tags pipelinefaults ./internal/cli -run "^TestPipelineCLIPublicationExit$" -v
               run_required failure-rerun /evidence/names/failure-rerun \
                 go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineFailureRerunAndTMRevalidation$" -v
+              run_required concurrent-process /evidence/names/concurrent-process \
+                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineConcurrentProcess$" -v
+              run_required filesystem-safety /evidence/names/filesystem-safety \
+                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineFilesystem$" -v
+              run_required no-clobber /evidence/names/no-clobber \
+                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineNoClobber$" -v
 
               test "$(stat -f -c %T /tmp)" = tmpfs
               echo "unsupported-filesystem lane: TMPDIR=/tmp GOTMPDIR=/tmp filesystem=tmpfs"
