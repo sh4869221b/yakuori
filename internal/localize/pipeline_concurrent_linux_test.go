@@ -35,7 +35,7 @@ type pipelineConcurrentNotice struct {
 	Canceled                 bool
 	Recovery                 bool
 	Phase                    string
-	Rows                     []pipelineTMRow
+	Rows                     []pipelineFixtureRow
 	Paths                    publication.PipelineFaultPaths
 	Result                   *Result
 }
@@ -111,7 +111,7 @@ func startPipelineConcurrent(t *testing.T, input pipelineConcurrentInput) *pipel
 		if err := errors.Join(noticeRead.Close(), releaseWrite.Close()); err != nil {
 			t.Error(err)
 		}
-		pipelineSave(t, fmt.Sprintf("process-%d.log", cmd.Process.Pid), output.Bytes())
+		pipelineFixtureSave(t, fmt.Sprintf("process-%d.log", cmd.Process.Pid), output.Bytes())
 		pipelineJSON(t, fmt.Sprintf("process-%d-cleanup.json", cmd.Process.Pid), struct {
 			PID         int
 			Waited      bool
@@ -171,7 +171,7 @@ func (c *pipelineConcurrentChild) waitExit(t *testing.T, wantSignal syscall.Sign
 	pipelineEqual(t, pipelineImage(t, fmt.Sprintf("/proc/%d", c.cmd.Process.Pid)).Present, false)
 	if c.trace != "" {
 		pipelineEqual(t, pipelineImage(t, fmt.Sprintf("/proc/%d", c.target)).Present, false)
-		pipelineSave(t, fmt.Sprintf("ordered-%d-flock.log", c.target), fileBytes(t, c.trace))
+		pipelineFixtureSave(t, fmt.Sprintf("ordered-%d-flock.log", c.target), fileBytes(t, c.trace))
 	}
 	pipelineJSON(t, fmt.Sprintf("process-%d-wait.json", c.cmd.Process.Pid), struct {
 		PID, RawStatus, ExitCode int
@@ -246,7 +246,7 @@ func TestPipelineConcurrentHelper(t *testing.T) {
 		send(pipelineConcurrentNotice{Checkpoint: "final"})
 		return
 	}
-	f := newPipelineFixture(t, input.Kind)
+	f := pipeline72NewFixture(t, input.Kind)
 	if err := errors.Join(f.store.Close(), f.db.Close()); err != nil {
 		t.Fatal(err)
 	}
@@ -286,8 +286,8 @@ func TestPipelineConcurrentHelper(t *testing.T) {
 	if input.Boundary == "public-rerun" {
 		result, err = f.core.FileWithTM(signalCtx, input.Options, f.adapter, f.profile, f.store, f.scope)
 		if result.Publication.RecordPath != "" {
-			f.paths.Record, f.paths.Backup = result.Publication.RecordPath, result.Publication.BackupPath
-			f.paths.Stage = filepath.Join(filepath.Dir(f.paths.Record), "stage")
+			f.record, f.backup = result.Publication.RecordPath, result.Publication.BackupPath
+			f.stage = filepath.Join(filepath.Dir(f.record), "stage")
 		}
 	} else {
 		result, err = f.core.fileWithTM(signalCtx, input.Options, f.adapter, f.profile, nil,
@@ -297,10 +297,10 @@ func TestPipelineConcurrentHelper(t *testing.T) {
 					return nil, err
 				}
 				prepared = run
-				f.paths = run.SetPipelineFaultHooks(publication.PipelineFaultHooks{})
-				runFD = pipelineRunFD(t, filepath.Dir(f.paths.Stage))
+				pipeline72SetPaths(f, run.SetPipelineFaultHooks(publication.PipelineFaultHooks{}))
+				runFD = pipelineRunFD(t, filepath.Dir(f.stage))
 				if input.Boundary == "parents-owned" {
-					if err := pause(f.paths); err != nil {
+					if err := pause(pipeline72Paths(f)); err != nil {
 						return nil, errors.Join(err, run.Close())
 					}
 				}
@@ -310,7 +310,7 @@ func TestPipelineConcurrentHelper(t *testing.T) {
 	if prepared != nil {
 		pipelineRunClosed(t, prepared, runFD)
 	}
-	final := pipelineConcurrentNotice{Checkpoint: "final", Result: &result, Paths: f.paths, Generated: len(f.backend.calls), Rows: pipelineReadRows(t, f.db)}
+	final := pipelineConcurrentNotice{Checkpoint: "final", Result: &result, Paths: pipeline72Paths(f), Generated: len(f.backend.calls), Rows: pipelineFixtureReadRows(t, f.db)}
 	if err != nil {
 		final.Error = err.Error()
 		var phase *Error
@@ -353,7 +353,7 @@ func pipelinePublicRerun(t *testing.T, f *pipelineFixture, options publication.O
 	if final.PID == os.Getpid() {
 		t.Fatal("public Core rerun did not use a new PID")
 	}
-	pipelineEqual(t, final.Rows, f.expectedRows(t))
+	pipelineEqual(t, final.Rows, f.expectedRows(t, f.input.units))
 	return final
 }
 
@@ -378,11 +378,11 @@ func TestPipelineConcurrentProcess(t *testing.T) {
 			for _, action := range []string{"release", "error", "cancel", "sigint", "sigterm", "sigkill"} {
 				t.Run(kind+"/"+contention+"/"+action, func(t *testing.T) {
 					// Given: distinct real processes, dedicated ready/release pipes.
-					f := newPipelineFixture(t, kind)
-					second := newPipelineFixture(t, kind)
+					f := pipeline72NewFixture(t, kind)
+					second := pipeline72NewFixture(t, kind)
 					// This parent owns a distinct adapter instance from the child's.
 					// Bind its observer to the same authored input before readback.
-					if _, err := f.adapter.Import(f.raw, f.profile); err != nil {
+					if _, err := f.adapter.Import(f.input.source, f.profile); err != nil {
 						t.Fatal(err)
 					}
 					options := pipelineOptions(t, f, "create")
@@ -391,7 +391,7 @@ func TestPipelineConcurrentProcess(t *testing.T) {
 					parents := []string{filepath.Dir(options.Source)}
 					if contention == "opposite-parents" {
 						other := t.TempDir()
-						writeFile(t, filepath.Join(other, "source"), f.raw)
+						writeFile(t, filepath.Join(other, "source"), f.input.source)
 						options.Output = filepath.Join(other, "output")
 						secondOptions.Source = filepath.Join(other, "source")
 						secondOptions.Output = filepath.Join(parents[0], "opposite-output")
@@ -410,7 +410,7 @@ func TestPipelineConcurrentProcess(t *testing.T) {
 					}
 					owner := startPipelineConcurrent(t, pipelineConcurrentInput{Kind: kind, DB: db, Options: options, Boundary: boundary, Action: action})
 					ready := owner.notice(t, "ready")
-					f.paths = ready.Paths
+					pipeline72SetPaths(f, ready.Paths)
 					beforeRuns := make([][]string, 0, len(parents))
 					for _, parent := range parents {
 						beforeRuns = append(beforeRuns, pipelineRunNames(t, parent))
@@ -430,8 +430,8 @@ func TestPipelineConcurrentProcess(t *testing.T) {
 						pipelineEqual(t, pipelineRunNames(t, parent), beforeRuns[i])
 					}
 					pipelineEqual(t, pipelineImages(t, files), before)
-					pipelineEqual(t, pipelineReadRows(t, f.db), f.initial)
-					pipelineEqual(t, pipelineReadRows(t, second.db), second.initial)
+					pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.d0)
+					pipelineEqual(t, pipelineFixtureReadRows(t, second.db), second.d0)
 					pipelineJSON(t, "before-release-files.json", before)
 					switch action {
 					case "sigkill":
@@ -441,8 +441,8 @@ func TestPipelineConcurrentProcess(t *testing.T) {
 						owner.waitExit(t, syscall.SIGKILL)
 						// No final notice or Result exists for the killed process.
 						pipelineEqual(t, pipelineImages(t, files), before)
-						pipelineEqual(t, pipelineReadRows(t, f.db), f.initial)
-						pipelineJSON(t, "expected-rows.json", f.initial)
+						pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.d0)
+						pipelineJSON(t, "expected-rows.json", f.d0)
 					case "release", "error", "cancel", "sigint", "sigterm":
 						if action == "sigint" || action == "sigterm" {
 							sig := syscall.SIGINT
@@ -472,9 +472,9 @@ func TestPipelineConcurrentProcess(t *testing.T) {
 							pipelineEqual(t, pipelineImage(t, secondOptions.Source), before[2])
 							pipelineEqual(t, pipelineImage(t, secondOptions.Output), before[3])
 							pipelineWantTranslated(t, f, options.Output)
-							pipelineEqual(t, pipelineReadRows(t, f.db), f.expectedRows(t))
-							pipelineJSON(t, "expected-rows.json", f.expectedRows(t))
-							f.paths = final.Paths
+							pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.expectedRows(t, f.input.units))
+							pipelineJSON(t, "expected-rows.json", f.expectedRows(t, f.input.units))
+							pipeline72SetPaths(f, final.Paths)
 							pipelineBoundaryState(t, f, options, *final.Result, nil)
 						} else {
 							wantClass := "context.Canceled"
@@ -488,17 +488,17 @@ func TestPipelineConcurrentProcess(t *testing.T) {
 								t.Fatalf("stopped owner returned incorrect state: %+v", final)
 							}
 							pipelineEqual(t, pipelineImages(t, files), before)
-							pipelineEqual(t, pipelineReadRows(t, f.db), f.initial)
-							pipelineJSON(t, "expected-rows.json", f.initial)
+							pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.d0)
+							pipelineJSON(t, "expected-rows.json", f.d0)
 						}
 					}
 					// Fresh OS descriptions and a fresh Store prove release in every outcome.
 					pipelineLocksFree(t, parents...)
 					pipelineStoreFree(t, f)
 					pipelineStoreFree(t, second)
-					pipelineJSON(t, "actual-rows.json", pipelineReadRows(t, f.db))
-					pipelineJSON(t, "second-store-rows.json", pipelineReadRows(t, second.db))
-					pipelineJSON(t, "second-store-expected-rows.json", second.initial)
+					pipelineJSON(t, "actual-rows.json", pipelineFixtureReadRows(t, f.db))
+					pipelineJSON(t, "second-store-rows.json", pipelineFixtureReadRows(t, second.db))
+					pipelineJSON(t, "second-store-expected-rows.json", second.d0)
 					pipelineJSON(t, "actual-files.json", pipelineImages(t, files))
 					t.Logf("whole Core contenders, controlled %s; actual typed %s; terminal stimulus=%s", kind, expectedClass, action)
 				})
@@ -512,7 +512,7 @@ func testPipelinePartialAcquisition(t *testing.T) {
 	for _, kind := range []string{"text", "w3"} {
 		t.Run(kind, func(t *testing.T) {
 			// Given: only the high (dev,ino) parent is held by an owned OS process.
-			f := newPipelineFixture(t, kind)
+			f := pipeline72NewFixture(t, kind)
 			a, b := t.TempDir(), t.TempDir()
 			ai, bi := pipelineImage(t, a), pipelineImage(t, b)
 			if ai.ID.Major > bi.ID.Major || (ai.ID.Major == bi.ID.Major && ai.ID.Minor > bi.ID.Minor) ||
@@ -520,7 +520,7 @@ func testPipelinePartialAcquisition(t *testing.T) {
 				a, b = b, a
 			}
 			for _, parent := range []string{a, b} {
-				writeFile(t, filepath.Join(parent, "source"), f.raw)
+				writeFile(t, filepath.Join(parent, "source"), f.input.source)
 			}
 			files := []string{filepath.Join(a, "source"), filepath.Join(b, "source"), filepath.Join(a, "output"), filepath.Join(b, "output")}
 			before := pipelineImages(t, files)
@@ -567,14 +567,14 @@ func testPipelinePartialAcquisition(t *testing.T) {
 				}
 				pipelineEqual(t, len(pipelineRunNames(t, a)), 0)
 				pipelineEqual(t, len(pipelineRunNames(t, b)), 0)
-				pipelineEqual(t, pipelineReadRows(t, f.db), f.initial)
+				pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.d0)
 			}
 			blocker.releaseAndWait(t)
 			pipelineLocksFree(t, a, b)
 			pipelineEqual(t, pipelineImages(t, files), before)
 			pipelineStoreFree(t, f)
-			pipelineJSON(t, "actual-rows.json", pipelineReadRows(t, f.db))
-			pipelineJSON(t, "expected-rows.json", f.initial)
+			pipelineJSON(t, "actual-rows.json", pipelineFixtureReadRows(t, f.db))
+			pipelineJSON(t, "expected-rows.json", f.d0)
 			pipelineJSON(t, "actual-files.json", pipelineImages(t, files))
 		})
 	}

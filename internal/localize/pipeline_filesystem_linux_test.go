@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
@@ -22,6 +23,42 @@ import (
 	"github.com/sh4869221b/yakuori/internal/tm"
 	"golang.org/x/sys/unix"
 )
+
+func pipeline72NewFixture(t *testing.T, kind string) *pipelineFixture {
+	t.Helper()
+	input, ok := pipelineHarnessInput(t, kind)
+	if !ok {
+		t.Fatalf("unknown fixture kind %q", kind)
+	}
+	return newPipelineFixture(t, input)
+}
+
+func pipelineEqual(t *testing.T, got, want any) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("values differ: got %#v, want %#v", got, want)
+	}
+}
+
+func pipeline72SetPaths(f *pipelineFixture, paths publication.PipelineFaultPaths) {
+	f.stage, f.record, f.backup = paths.Stage, paths.Record, paths.Backup
+}
+
+func pipeline72Paths(f *pipelineFixture) publication.PipelineFaultPaths {
+	return publication.PipelineFaultPaths{Stage: f.stage, Record: f.record, Backup: f.backup}
+}
+
+func pipeline72Execute(f *pipelineFixture, ctx context.Context, options publication.Options, hooks publication.PipelineFaultHooks) (Result, error) {
+	return f.core.fileWithTM(ctx, options, f.adapter, f.profile, nil, &tmExecution{store: f.store, scope: f.scope},
+		func(ctx context.Context, options publication.Options) (publicationRun, error) {
+			run, err := publication.PrepareWithLimits(ctx, options, f.limits)
+			if err != nil {
+				return nil, err
+			}
+			pipeline72SetPaths(f, run.SetPipelineFaultHooks(hooks))
+			return run, nil
+		})
+}
 
 var pipelineFileModes = []struct {
 	name string
@@ -206,7 +243,7 @@ func pipelineJSON(t *testing.T, name string, value any) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pipelineSave(t, name, raw)
+	pipelineFixtureSave(t, name, raw)
 }
 
 func pipelineBoundaryState(t *testing.T, f *pipelineFixture, options publication.Options, result Result, err error) {
@@ -215,11 +252,11 @@ func pipelineBoundaryState(t *testing.T, f *pipelineFixture, options publication
 	if err != nil {
 		message = err.Error()
 	}
-	paths := []string{options.Source, options.Output, f.paths.Stage, f.paths.Record, f.paths.Backup}
+	paths := []string{options.Source, options.Output, f.stage, f.record, f.backup}
 	images := pipelineImages(t, paths)
 	for i, image := range images {
 		if image.Present && image.ID.Mode&unix.S_IFMT == unix.S_IFREG {
-			pipelineSave(t, fmt.Sprintf("actual-%d.bin", i), image.Bytes)
+			pipelineFixtureSave(t, fmt.Sprintf("actual-%d.bin", i), image.Bytes)
 		}
 	}
 	pipelineJSON(t, "state.json", struct {
@@ -229,15 +266,21 @@ func pipelineBoundaryState(t *testing.T, f *pipelineFixture, options publication
 		Result   Result
 		Error    string
 		Files    []pipelineFileImage
-		Rows     []pipelineTMRow
-	}{os.Getpid(), os.Geteuid(), "whole Core; real Adapter/SQLite; controlled common Engine", options, result, message, images, pipelineReadRows(t, f.db)})
+		Rows     []pipelineFixtureRow
+	}{os.Getpid(), os.Geteuid(), "whole Core; real Adapter/SQLite; controlled common Engine", options, result, message, images, pipelineFixtureReadRows(t, f.db)})
 }
 
 func pipelineOptions(t *testing.T, f *pipelineFixture, name string) publication.Options {
 	t.Helper()
 	for _, mode := range pipelineFileModes {
 		if mode.name == name {
-			options := f.options(t, mode.mode)
+			pipeline72SetPaths(f, publication.PipelineFaultPaths{})
+			parent := t.TempDir()
+			options := publication.Options{Source: filepath.Join(parent, "source"), Output: filepath.Join(parent, "output"), Mode: mode.mode}
+			if mode.mode == publication.InPlace {
+				options.Output = options.Source
+			}
+			writeFile(t, options.Source, f.input.source)
 			if name == "replace-existing" {
 				writeFile(t, options.Output, []byte("Old output O.\n"))
 			}
@@ -259,18 +302,18 @@ func pipelineWantTranslated(t *testing.T, f *pipelineFixture, path string) {
 	for _, u := range observed.Units {
 		got[u.ID.StableID()] = u.Text
 	}
-	pipelineEqual(t, got, f.texts)
+	pipelineEqual(t, got, f.targets)
 	// W3 retains the authored binary table order, while the independent CSV
 	// expectations use a different order. Compare the complete multiset.
 	gotKeys, wantKeys := make(map[artifact.KeyRelation]int), make(map[artifact.KeyRelation]int)
 	for _, key := range observed.Keys {
 		gotKeys[key]++
 	}
-	for _, key := range f.scope.Keys {
+	for _, key := range f.relations {
 		wantKeys[key]++
 	}
 	pipelineEqual(t, gotKeys, wantKeys)
-	pipelineSave(t, "validated-artifact.bin", raw)
+	pipelineFixtureSave(t, "validated-artifact.bin", raw)
 }
 
 func pipelineLocksFree(t *testing.T, parents ...string) {
@@ -342,14 +385,14 @@ func TestPipelineFilesystem(t *testing.T) {
 			for _, mode := range pipelineFileModes[:3] {
 				t.Run(kind+"/"+mode.name, func(t *testing.T) {
 					// Given: a real source on a different mount, qualified output.
-					f := newPipelineFixture(t, kind)
+					f := pipeline72NewFixture(t, kind)
 					options := pipelineOptions(t, f, mode.name)
 					localSource := pipelineImage(t, options.Source)
 					other := pipelineOtherMount(t, filepath.Dir(options.Output))
 					options.Source = filepath.Join(other, "source")
-					writeFile(t, options.Source, f.raw)
+					writeFile(t, options.Source, f.input.source)
 					source := pipelineImage(t, options.Source)
-					want := f.expectedRows(t)
+					want := f.expectedRows(t, f.input.units)
 					pipelineJSON(t, "expected-rows.json", want)
 					// When: ordinary real FileWithTM publishes without a rename redirect.
 					result, err := f.core.FileWithTM(t.Context(), options, f.adapter, f.profile, f.store, f.scope)
@@ -360,10 +403,10 @@ func TestPipelineFilesystem(t *testing.T) {
 					pipelineEqual(t, pipelineImage(t, options.Source), source)
 					pipelineEqual(t, pipelineImage(t, localSource.Path), localSource)
 					pipelineWantTranslated(t, f, options.Output)
-					pipelineEqual(t, pipelineReadRows(t, f.db), want)
-					f.paths.Record = result.Publication.RecordPath
-					f.paths.Stage = filepath.Join(filepath.Dir(f.paths.Record), "stage")
-					pipelineEqual(t, pipelineImage(t, f.paths.Stage).Present, false)
+					pipelineEqual(t, pipelineFixtureReadRows(t, f.db), want)
+					f.record = result.Publication.RecordPath
+					f.stage = filepath.Join(filepath.Dir(f.record), "stage")
+					pipelineEqual(t, pipelineImage(t, f.stage).Present, false)
 					pipelineBoundaryState(t, f, options, result, err)
 					pipelineLocksFree(t, filepath.Dir(options.Source), filepath.Dir(options.Output))
 					pipelineStoreFree(t, f)
@@ -377,25 +420,25 @@ func TestPipelineFilesystem(t *testing.T) {
 		for _, kind := range []string{"text", "w3"} {
 			t.Run(kind, func(t *testing.T) {
 				// Given: stage is changed on disk before the real Observe acceptance.
-				f := newPipelineFixture(t, kind)
+				f := pipeline72NewFixture(t, kind)
 				options := pipelineOptions(t, f, "replace-existing")
 				before := pipelineImages(t, []string{options.Source, options.Output})
 				reached := 0
 				hooks := publication.PipelineFaultHooks{CloseStage: func(file *os.File) error {
 					reached++
-					writeFile(t, f.paths.Stage, []byte("Unvalidated stage X.\n"))
+					writeFile(t, f.stage, []byte("Unvalidated stage X.\n"))
 					return nil
 				}}
 				// When: the real closed-stage check reads the altered bytes.
-				result, err := f.execute(t.Context(), options, hooks)
+				result, err := pipeline72Execute(f, t.Context(), options, hooks)
 				// Then: no accepted new TM row, no publication, retained X.
 				if err == nil || result.TMCommitted || result.Publication.State != publication.NotPublished || reached != 1 {
 					t.Fatalf("result=%+v error=%v reached=%d", result, err, reached)
 				}
 				pipelineEqual(t, pipelineImages(t, []string{options.Source, options.Output}), before)
-				pipelineEqual(t, fileBytes(t, f.paths.Stage), []byte("Unvalidated stage X.\n"))
-				pipelineEqual(t, pipelineReadRows(t, f.db), f.initial)
-				pipelineJSON(t, "expected-rows.json", f.initial)
+				pipelineEqual(t, fileBytes(t, f.stage), []byte("Unvalidated stage X.\n"))
+				pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.d0)
+				pipelineJSON(t, "expected-rows.json", f.d0)
 				pipelineBoundaryState(t, f, options, result, err)
 				pipelineLocksFree(t, filepath.Dir(options.Output))
 				pipelineStoreFree(t, f)
@@ -418,7 +461,7 @@ func testPipelinePhysicalErrno(t *testing.T) {
 			for _, name := range cases {
 				t.Run(kind+"/"+mode.name+"/"+name, func(t *testing.T) {
 					// Given: completed validation/commit and a real destination FD.
-					f := newPipelineFixture(t, kind)
+					f := pipeline72NewFixture(t, kind)
 					options := pipelineOptions(t, f, mode.name)
 					original := pipelineImage(t, options.Source)
 					oldOutput := pipelineImage(t, options.Output)
@@ -459,7 +502,7 @@ func testPipelinePhysicalErrno(t *testing.T) {
 						if to == "record.json" {
 							err := unix.Renameat2(a, from, b, to, flags)
 							if err == nil {
-								retainedRecord = pipelineImage(t, f.paths.Record)
+								retainedRecord = pipelineImage(t, f.record)
 								if !retainedRecord.Present {
 									t.Fatal("successful record install did not retain the operation record")
 								}
@@ -469,10 +512,10 @@ func testPipelinePhysicalErrno(t *testing.T) {
 							return err
 						}
 						publish := from == "stage"
-						backup := f.paths.Backup != "" && to == filepath.Base(f.paths.Backup)
-						restore := f.paths.Backup != "" && from == filepath.Base(f.paths.Backup)
+						backup := f.backup != "" && to == filepath.Base(f.backup)
+						restore := f.backup != "" && from == filepath.Base(f.backup)
 						if publish || backup || restore {
-							pipelineEqual(t, pipelineReadRows(t, f.db), f.expectedRows(t))
+							pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.expectedRows(t, f.input.units))
 						}
 						if publish && name == "publish-exdev" {
 							reached["redirected-publish"]++
@@ -517,10 +560,10 @@ func testPipelinePhysicalErrno(t *testing.T) {
 						// Build all expected fields from authored S/O, observed validated T
 						// and the independently reached operation, never the saved record.
 						expectedRecord = pipelineOperationRecord{
-							SchemaVersion: 1, RunID: strings.TrimPrefix(filepath.Base(filepath.Dir(f.paths.Record)), ".yakuori-run-"),
+							SchemaVersion: 1, RunID: strings.TrimPrefix(filepath.Base(filepath.Dir(f.record)), ".yakuori-run-"),
 							Mode: options.Mode, Source: pipelineRecordedFile(original),
 							Output:       pipelineRecordPath{options.Output, filepath.Base(options.Output)},
-							Stage:        pipelineRecordedFile(pipelineImage(t, f.paths.Stage)),
+							Stage:        pipelineRecordedFile(pipelineImage(t, f.stage)),
 							SourceParent: pipelineRecordedID(parentBefore), OutputParent: pipelineRecordedID(parentBefore),
 							Phase: phase, LastCompletedOperation: operation,
 						}
@@ -530,7 +573,7 @@ func testPipelinePhysicalErrno(t *testing.T) {
 							expectedRecord.ExistingOutput.File = &output
 						}
 						if options.Mode == publication.InPlace {
-							expectedRecord.Backup = &pipelineRecordPath{f.paths.Backup, filepath.Base(f.paths.Backup)}
+							expectedRecord.Backup = &pipelineRecordPath{f.backup, filepath.Base(f.backup)}
 						}
 						var err error
 						expectedRecordBytes, err = json.Marshal(expectedRecord)
@@ -538,7 +581,7 @@ func testPipelinePhysicalErrno(t *testing.T) {
 							t.Fatal(err)
 						}
 						pipelineJSON(t, "expected-record-fields.json", expectedRecord)
-						pipelineSave(t, "supplied-record.json", raw)
+						pipelineFixtureSave(t, "supplied-record.json", raw)
 						switch phase {
 						case "restored":
 							if !strings.HasPrefix(file.Name(), ".record-recovery-") {
@@ -562,8 +605,8 @@ func testPipelinePhysicalErrno(t *testing.T) {
 								return nil, err
 							}
 							prepared = run
-							f.paths = run.SetPipelineFaultHooks(hooks)
-							runFD = pipelineRunFD(t, filepath.Dir(f.paths.Stage))
+							pipeline72SetPaths(f, run.SetPipelineFaultHooks(hooks))
+							runFD = pipelineRunFD(t, filepath.Dir(f.stage))
 							return run, nil
 						})
 					if prepared == nil {
@@ -573,7 +616,7 @@ func testPipelinePhysicalErrno(t *testing.T) {
 					if !retainedRecord.Present {
 						t.Fatal("required operation record was never observed installed")
 					}
-					if actual := pipelineImage(t, f.paths.Record); !bytes.Equal(actual.Bytes, expectedRecordBytes) || actual.ID != retainedRecord.ID || !actual.Present {
+					if actual := pipelineImage(t, f.record); !bytes.Equal(actual.Bytes, expectedRecordBytes) || actual.ID != retainedRecord.ID || !actual.Present {
 						t.Fatalf("retained operation record lost or changed at Core return: actual=%+v expected=%+v", actual, retainedRecord)
 					}
 					pipelineBoundaryState(t, f, options, result, err)
@@ -612,23 +655,23 @@ func testPipelinePhysicalErrno(t *testing.T) {
 							t.Fatalf("missing typed recovery error: %v", err)
 						}
 						pipelineEqual(t, pipelineImage(t, options.Source).Present, false)
-						backup := pipelineImage(t, f.paths.Backup)
+						backup := pipelineImage(t, f.backup)
 						pipelineEqual(t, backup.ID, original.ID)
 						pipelineEqual(t, backup.Bytes, original.Bytes)
 					} else {
 						pipelineEqual(t, pipelineImage(t, options.Source), original)
 						if mode.mode == publication.InPlace {
-							pipelineEqual(t, pipelineImage(t, f.paths.Backup).Present, false)
+							pipelineEqual(t, pipelineImage(t, f.backup).Present, false)
 						} else {
 							pipelineEqual(t, pipelineImage(t, options.Output), oldOutput)
 						}
 					}
-					pipelineWantTranslated(t, f, f.paths.Stage)
-					pipelineEqual(t, pipelineReadRows(t, f.db), f.expectedRows(t))
-					pipelineJSON(t, "expected-rows.json", f.expectedRows(t))
+					pipelineWantTranslated(t, f, f.stage)
+					pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.expectedRows(t, f.input.units))
+					pipelineJSON(t, "expected-rows.json", f.expectedRows(t, f.input.units))
 					pipelineLocksFree(t, parent)
 					t.Logf("physical, not injected errno: %v; result=%s; EXDEV uses redirected destination FD, not natural stage placement", physical, wantState)
-					oldStage := pipelineImage(t, f.paths.Stage)
+					oldStage := pipelineImage(t, f.stage)
 					rerun := pipelinePublicRerun(t, f, options)
 					if rerun.Error != "" || rerun.Result == nil || !rerun.Result.TMCommitted ||
 						rerun.Result.Publication.State != publication.Published || rerun.Generated != 0 {
@@ -638,7 +681,7 @@ func testPipelinePhysicalErrno(t *testing.T) {
 						t.Fatal("public rerun reused the old publication run")
 					}
 					pipelineWantTranslated(t, f, options.Output)
-					pipelineEqual(t, pipelineImage(t, f.paths.Stage), oldStage)
+					pipelineEqual(t, pipelineImage(t, f.stage), oldStage)
 					if pipelineImage(t, options.Output).ID.Inode == oldStage.ID.Inode {
 						t.Fatal("public rerun published the old retained stage")
 					}
@@ -646,7 +689,7 @@ func testPipelinePhysicalErrno(t *testing.T) {
 						backup := pipelineImage(t, rerun.Result.Publication.BackupPath)
 						pipelineEqual(t, backup.ID, original.ID)
 						pipelineEqual(t, backup.Bytes, original.Bytes)
-						pipelineEqual(t, pipelineImage(t, f.paths.Backup).Present, false)
+						pipelineEqual(t, pipelineImage(t, f.backup).Present, false)
 					} else {
 						pipelineEqual(t, pipelineImage(t, options.Source), original)
 					}
@@ -659,16 +702,16 @@ func testPipelinePhysicalErrno(t *testing.T) {
 					case publication.SourceBackedUp:
 						expectedRecord.Phase, expectedRecord.LastCompletedOperation = "restored", "restore-rename"
 					case publication.Restored:
-						pipelineEqual(t, pipelineImage(t, f.paths.Record), retainedRecord)
+						pipelineEqual(t, pipelineImage(t, f.record), retainedRecord)
 					}
 					expectedAfterRecovery, marshalErr := json.Marshal(expectedRecord)
 					if marshalErr != nil {
 						t.Fatal(marshalErr)
 					}
-					pipelineEqual(t, fileBytes(t, f.paths.Record), expectedAfterRecovery)
-					pipelineJSON(t, "rerun-old-assets.json", pipelineImages(t, []string{f.paths.Record, f.paths.Stage, f.paths.Backup}))
+					pipelineEqual(t, fileBytes(t, f.record), expectedAfterRecovery)
+					pipelineJSON(t, "rerun-old-assets.json", pipelineImages(t, []string{f.record, f.stage, f.backup}))
 					pipelineJSON(t, "rerun-new-assets.json", pipelineImages(t, []string{options.Source, options.Output, rerun.Paths.Record, rerun.Paths.Backup}))
-					pipelineEqual(t, pipelineReadRows(t, f.db), f.expectedRows(t))
+					pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.expectedRows(t, f.input.units))
 					pipelineLocksFree(t, parent)
 					pipelineStoreFree(t, f)
 				})
@@ -683,7 +726,7 @@ func TestPipelineNoClobber(t *testing.T) {
 			"after-backup-error", "after-backup-cancel", "restore-arrival", "backup-existing", "backup-generated"} {
 			t.Run(kind+"/"+name, func(t *testing.T) {
 				// Given: real Core/TM, owned S and T, independently authored external X.
-				f := newPipelineFixture(t, kind)
+				f := pipeline72NewFixture(t, kind)
 				mode := "in-place"
 				switch name {
 				case "create-arrival":
@@ -714,21 +757,21 @@ func TestPipelineNoClobber(t *testing.T) {
 				hooks.RecordWrite = func(file *os.File, raw []byte) (int, error) {
 					if name == "backup-generated" && file.Name() == ".record-prepared" {
 						reached = append(reached, "after-backupAvailable-before-backup-rename")
-						arrive(f.paths.Backup)
+						arrive(f.backup)
 					}
 					return file.Write(raw)
 				}
 				hooks.SyncStage = func(file *os.File) error {
 					if name == "backup-existing" {
 						reached = append(reached, "stage-sync-before-backupAvailable")
-						arrive(f.paths.Backup)
+						arrive(f.backup)
 					}
 					return file.Sync()
 				}
 				hooks.Rename = func(a int, from string, b int, to string, flags uint) error {
 					if from == "stage" {
 						reached = append(reached, "publish-rename")
-						pipelineWantTranslated(t, f, f.paths.Stage)
+						pipelineWantTranslated(t, f, f.stage)
 						switch name {
 						case "create-arrival", "replace-absent-arrival", "in-place-publish-arrival":
 							arrive(options.Output)
@@ -741,14 +784,14 @@ func TestPipelineNoClobber(t *testing.T) {
 							return unix.EIO // Explicit injected publish error, not physical EIO.
 						}
 					}
-					if name == "restore-arrival" && from == filepath.Base(f.paths.Backup) {
+					if name == "restore-arrival" && from == filepath.Base(f.backup) {
 						reached = append(reached, "restore-rename")
 						arrive(options.Source)
 						pipelineEqual(t, flags, uint(unix.RENAME_NOREPLACE))
 						nativeErr = unix.Renameat2(a, from, b, to, flags)
 						return nativeErr
 					}
-					if name == "backup-generated" && to == filepath.Base(f.paths.Backup) {
+					if name == "backup-generated" && to == filepath.Base(f.backup) {
 						reached = append(reached, "backup-rename")
 						pipelineEqual(t, flags, uint(unix.RENAME_NOREPLACE))
 						nativeErr = unix.Renameat2(a, from, b, to, flags)
@@ -765,9 +808,9 @@ func TestPipelineNoClobber(t *testing.T) {
 					}
 					return err
 				}
-				pipelineJSON(t, "expected-rows.json", f.expectedRows(t))
+				pipelineJSON(t, "expected-rows.json", f.expectedRows(t, f.input.units))
 				// When: the external file arrives at the named actual boundary.
-				result, err := f.execute(ctx, options, hooks)
+				result, err := pipeline72Execute(f, ctx, options, hooks)
 				// Then: no-clobber preserves X's inode/bytes and S or its original backup.
 				wantState, wantErr := publication.NotPublished, error(unix.EEXIST)
 				switch name {
@@ -777,7 +820,7 @@ func TestPipelineNoClobber(t *testing.T) {
 					if !errors.As(err, &recovery) || !errors.Is(err, publication.ErrRecoveryConflict) {
 						t.Fatalf("missing recovery conflict: %v", err)
 					}
-					backup := pipelineImage(t, f.paths.Backup)
+					backup := pipelineImage(t, f.backup)
 					pipelineEqual(t, backup.ID, source.ID)
 					pipelineEqual(t, backup.Bytes, source.Bytes)
 				}
@@ -799,8 +842,8 @@ func TestPipelineNoClobber(t *testing.T) {
 				if wantState == publication.NotPublished {
 					pipelineEqual(t, pipelineImage(t, options.Source), source)
 				}
-				pipelineWantTranslated(t, f, f.paths.Stage)
-				pipelineEqual(t, pipelineReadRows(t, f.db), f.expectedRows(t))
+				pipelineWantTranslated(t, f, f.stage)
+				pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.expectedRows(t, f.input.units))
 				pipelineJSON(t, "external.json", external)
 				pipelineJSON(t, "operations.json", struct {
 					Checkpoints   []string
@@ -810,7 +853,7 @@ func TestPipelineNoClobber(t *testing.T) {
 				pipelineLocksFree(t, filepath.Dir(options.Source))
 				pipelineStoreFree(t, f)
 				t.Logf("checkpoints=%v physical rename errno=%v; stimulus=%s result=%s", reached, nativeErr, name, wantState)
-				preservedPaths := []string{options.Source, options.Output, f.paths.Stage, f.paths.Record, f.paths.Backup, external.Path}
+				preservedPaths := []string{options.Source, options.Output, f.stage, f.record, f.backup, external.Path}
 				beforeRerun := pipelineImages(t, preservedPaths)
 				rerun := pipelinePublicRerun(t, f, options)
 				wantClass := "ErrRecoveryConflict"
@@ -837,7 +880,7 @@ func testPipelinePathRefusals(t *testing.T) {
 			"same-path", "dot-alias", "in-place-different", "in-place-symlink", "directory-source", "directory-output", "fifo-source", "fifo-output", "existing-create"} {
 			t.Run(kind+"/"+name, func(t *testing.T) {
 				// Given: an unsafe real leaf/path and preserved independent originals.
-				f := newPipelineFixture(t, kind)
+				f := pipeline72NewFixture(t, kind)
 				options := pipelineOptions(t, f, "replace-existing")
 				source, output := options.Source, options.Output
 				parent := filepath.Dir(source)
@@ -923,7 +966,7 @@ func testPipelinePathRefusals(t *testing.T) {
 					t.Fatal(err)
 				}
 				// When: real Core preflight examines the authored unsafe request.
-				result, err := f.execute(t.Context(), options, publication.PipelineFaultHooks{})
+				result, err := pipeline72Execute(f, t.Context(), options, publication.PipelineFaultHooks{})
 				// Then: exact typed refusal before generation/run creation and D0.
 				var phase *Error
 				if !errors.Is(err, want) || !errors.As(err, &phase) || phase.Phase != "prepare" ||
@@ -937,10 +980,10 @@ func testPipelinePathRefusals(t *testing.T) {
 				pipelineEqual(t, len(afterEntries), len(entries))
 				actual := pipelineImages(t, paths)
 				pipelineEqual(t, actual, before)
-				pipelineEqual(t, pipelineReadRows(t, f.db), f.initial)
+				pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.d0)
 				pipelineJSON(t, "preserved.json", before)
 				pipelineJSON(t, "actual-files.json", actual)
-				pipelineJSON(t, "expected-rows.json", f.initial)
+				pipelineJSON(t, "expected-rows.json", f.d0)
 				pipelineBoundaryState(t, f, options, result, err)
 				pipelineJSON(t, "result.json", struct {
 					Error  string
@@ -953,14 +996,14 @@ func testPipelinePathRefusals(t *testing.T) {
 		for _, spelling := range []string{"exact", "dot"} {
 			t.Run(kind+"/explicit-same-path/"+spelling, func(t *testing.T) {
 				// Given: explicit InPlace, not an ordinary-output alias request.
-				f := newPipelineFixture(t, kind)
+				f := pipeline72NewFixture(t, kind)
 				options := pipelineOptions(t, f, "in-place")
 				if spelling == "dot" {
 					options.Output = filepath.Dir(options.Source) + "/./source"
 				}
 				source := pipelineImage(t, options.Source)
 				// When: execute the explicit same validated parent/basename.
-				result, err := f.execute(t.Context(), options, publication.PipelineFaultHooks{})
+				result, err := pipeline72Execute(f, t.Context(), options, publication.PipelineFaultHooks{})
 				// Then: stage replaces source and the original inode survives as backup.
 				if err != nil || !result.TMCommitted || result.Publication.State != publication.Published {
 					t.Fatalf("result=%+v error=%v", result, err)
@@ -969,7 +1012,7 @@ func testPipelinePathRefusals(t *testing.T) {
 				pipelineEqual(t, backup.ID, source.ID)
 				pipelineEqual(t, backup.Bytes, source.Bytes)
 				pipelineWantTranslated(t, f, options.Output)
-				pipelineEqual(t, pipelineReadRows(t, f.db), f.expectedRows(t))
+				pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.expectedRows(t, f.input.units))
 				pipelineBoundaryState(t, f, options, result, err)
 				pipelineLocksFree(t, filepath.Dir(options.Source))
 				pipelineStoreFree(t, f)
@@ -995,11 +1038,11 @@ func testPipelineFilesystemDrift(t *testing.T) {
 			for _, name := range cases {
 				t.Run(kind+"/"+mode.name+"/"+name, func(t *testing.T) {
 					// Given: a validated T and confirmed D1, then observed drift X.
-					f := newPipelineFixture(t, kind)
+					f := pipeline72NewFixture(t, kind)
 					options := pipelineOptions(t, f, mode.name)
 					if strings.HasPrefix(name, "source-parent") || strings.HasPrefix(name, "output-parent") {
 						options.Source = filepath.Join(t.TempDir(), "source")
-						writeFile(t, options.Source, f.raw)
+						writeFile(t, options.Source, f.input.source)
 					}
 					parent := filepath.Dir(options.Source)
 					if name == "dotdot-component" {
@@ -1017,12 +1060,12 @@ func testPipelineFilesystemDrift(t *testing.T) {
 							return err
 						}
 						reached++
-						pipelineWantTranslated(t, f, f.paths.Stage)
-						pipelineEqual(t, pipelineReadRows(t, f.db), f.expectedRows(t))
-						paths = append(paths, f.paths.Stage, f.paths.Record, f.paths.Backup)
+						pipelineWantTranslated(t, f, f.stage)
+						pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.expectedRows(t, f.input.units))
+						paths = append(paths, f.stage, f.record, f.backup)
 						target := options.Source
 						if strings.HasPrefix(name, "stage") {
-							target = f.paths.Stage
+							target = f.stage
 						} else if strings.HasPrefix(name, "output") {
 							target = options.Output
 						}
@@ -1085,9 +1128,9 @@ func testPipelineFilesystemDrift(t *testing.T) {
 									paths = append(paths, path)
 								}
 							}
-							if strings.HasPrefix(f.paths.Stage, driftParent+"/") {
-								f.paths.Stage = moved + strings.TrimPrefix(f.paths.Stage, driftParent)
-								f.paths.Record = moved + strings.TrimPrefix(f.paths.Record, driftParent)
+							if strings.HasPrefix(f.stage, driftParent+"/") {
+								f.stage = moved + strings.TrimPrefix(f.stage, driftParent)
+								f.record = moved + strings.TrimPrefix(f.record, driftParent)
 							}
 							if driftParent == parent {
 								writeFile(t, filepath.Join(parent, "source"), []byte("External source X.\n"))
@@ -1106,16 +1149,16 @@ func testPipelineFilesystemDrift(t *testing.T) {
 								t.Fatal(err)
 							}
 						case "run-inode":
-							run := filepath.Dir(f.paths.Stage)
+							run := filepath.Dir(f.stage)
 							moved := run + "-moved"
 							rename(run, moved)
 							if err := os.Mkdir(run, 0700); err != nil {
 								t.Fatal(err)
 							}
-							f.paths.Stage, f.paths.Record = filepath.Join(moved, "stage"), filepath.Join(moved, "record.json")
-							paths = append(paths, f.paths.Stage, f.paths.Record)
+							f.stage, f.record = filepath.Join(moved, "stage"), filepath.Join(moved, "record.json")
+							paths = append(paths, f.stage, f.record)
 						case "run-mode":
-							if err := os.Chmod(filepath.Dir(f.paths.Stage), 0750); err != nil {
+							if err := os.Chmod(filepath.Dir(f.stage), 0750); err != nil {
 								t.Fatal(err)
 							}
 						case "dotdot-component":
@@ -1131,7 +1174,7 @@ func testPipelineFilesystemDrift(t *testing.T) {
 						return nil // The record rename actually succeeded.
 					}}
 					// When: the second real revalidate observes drift before file renames.
-					result, err := f.execute(t.Context(), options, hooks)
+					result, err := pipeline72Execute(f, t.Context(), options, hooks)
 					// Then: all X/original/stage/record assets survive exactly, D1 stays T.
 					if !errors.Is(err, publication.ErrChanged) || !result.TMCommitted ||
 						result.Publication.State != publication.NotPublished || reached != 1 {
@@ -1140,8 +1183,8 @@ func testPipelineFilesystemDrift(t *testing.T) {
 					actual := pipelineImages(t, paths)
 					pipelineEqual(t, actual, checkpoint)
 					pipelineJSON(t, "actual-files.json", actual)
-					pipelineEqual(t, pipelineReadRows(t, f.db), f.expectedRows(t))
-					pipelineJSON(t, "expected-rows.json", f.expectedRows(t))
+					pipelineEqual(t, pipelineFixtureReadRows(t, f.db), f.expectedRows(t, f.input.units))
+					pipelineJSON(t, "expected-rows.json", f.expectedRows(t, f.input.units))
 					pipelineBoundaryState(t, f, options, result, err)
 					lockedParents := map[string]bool{}
 					for _, path := range paths {
