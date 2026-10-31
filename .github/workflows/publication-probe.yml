@@ -31,7 +31,7 @@ jobs:
           docker cp "$cache_container:$image_gocache/." - | tar -xf - -C "$RUNNER_TEMP/publication/cache"
           docker rm "$cache_container"
           trap - EXIT
-          docker run --rm --network none --user "$(id -u):$(id -g)" \
+          docker run --rm --init --network none --user "$(id -u):$(id -g)" \
             --tmpfs /tmp:rw,exec,mode=1777 \
             -v "$PWD:/src:ro" -v "$RUNNER_TEMP/publication:/evidence" \
             -e GOCACHE=/evidence/cache -e GOPATH=/evidence/gopath \
@@ -166,6 +166,29 @@ jobs:
                 printf "%s\n" "TestPipelinePrecommitSignals/$row" >> /evidence/names/precommit-signals
               done
               printf "%s\n" TestPipelineUnsupportedFilesystem > /evidence/names/precommit-refusal
+
+              printf "%s\n" TestPipelineProcessRecovery > /evidence/names/process-recovery
+              for boundary in generate.before generate.after stage.write.before stage.write.after \
+                stage.sync.before stage.sync.after stage.close.before observe.entry.writer-closed \
+                observe.after compare-final.after tm-commit.before sql-commit.before sql-commit.after tm-commit.after \
+                w3/sql-commit.before w3/sql-commit.after commit-reader-lock publication publication-conflict publication-invalid; do
+                printf "%s\n" "TestPipelineProcessRecovery/$boundary" >> /evidence/names/process-recovery
+              done
+              for mode in create replace-absent replace-existing in-place; do
+                for boundary in publish-rename.before publish-rename.after; do
+                  printf "%s\n" "TestPipelineProcessRecovery/publication/$mode/$boundary" >> /evidence/names/process-recovery
+                done
+              done
+              for boundary in backup-rename.before backup-rename.after; do
+                printf "%s\n" "TestPipelineProcessRecovery/publication/in-place/$boundary" >> /evidence/names/process-recovery
+              done
+              printf "%s\n" TestPipelineProcessRecovery/publication/in-place-same/publish-rename.after >> /evidence/names/process-recovery
+              for row in missing-record corrupt-record stage-mismatch; do
+                printf "%s\n" "TestPipelineProcessRecovery/publication-invalid/$row" >> /evidence/names/process-recovery
+              done
+              printf "%s\n" TestPipelineCLIProcessRecovery \
+                TestPipelineCLIProcessRecovery/before-commit TestPipelineCLIProcessRecovery/before-write \
+                TestPipelineCLIProcessRecovery/partial-write > /evidence/names/cli-process-recovery
 
               # #70 expectations are literal axes, independent of Go declarations
               # and observed logs. Include real parents as well as every leaf.
@@ -491,6 +514,11 @@ jobs:
               YAKUORI_SIGNAL_STATE=/evidence/pipeline-evidence/precommit-signals-state.json \
                 run_required precommit-signals /evidence/names/precommit-signals \
                 go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelinePrecommitSignals$" -v
+
+              run_required process-recovery /evidence/names/process-recovery \
+                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineProcessRecovery$" -v
+              run_required cli-process-recovery /evidence/names/cli-process-recovery \
+                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/cli -run "^TestPipelineCLIProcessRecovery$" -v
 
               run_required commit-state /evidence/names/commit-state \
                 go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineCommitPublicationState$" -v

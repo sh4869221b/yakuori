@@ -45,6 +45,10 @@ const (
 	pipelineBarrierModePipelineError  = "pipeline-error"
 	pipelineBarrierModePipelineCancel = "pipeline-cancel"
 	pipelineBarrierModePipelineRerun  = "pipeline-rerun"
+	pipelineBarrierModeCommitProbe    = "commit-probe"
+	pipelineBarrierModeRecoveryProbe  = "recovery-probe"
+	pipelineBarrierModeInvalidRerun   = "invalid-rerun"
+	pipelineBarrierModePreparedRerun  = "prepared-rerun"
 	// pipelineBarrierModeRescue schedules a case whose owning test stops after
 	// ready and never releases: only the registered cleanup can end the child.
 	pipelineBarrierModeRescue = "cleanup-rescue"
@@ -238,7 +242,16 @@ func startPipelineBarrierRaw(t *testing.T, plan pipelineBarrierPlan, mode string
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.cmd = exec.CommandContext(ctx, executable, "-test.run=^TestPipelineHarnessChild$", "-test.v")
+	command := executable
+	args := []string{"-test.run=^TestPipelineHarnessChild$", "-test.v"}
+	if mode == pipelineBarrierModeCommitProbe {
+		command, err = exec.LookPath("strace")
+		if err != nil {
+			t.Fatal(err)
+		}
+		args = append([]string{"-DD", "-f", "-qq", "-yy", "-e", "trace=fcntl", "-o", filepath.Join(os.Getenv(pipelineTask5RootEnv), "commit.trace"), executable}, args...)
+	}
+	p.cmd = exec.CommandContext(ctx, command, args...)
 	env := os.Environ()
 	for i := 0; i < len(env); i++ {
 		if strings.HasPrefix(env[i], pipelineBarrierChildEnv+"=") {
@@ -732,7 +745,7 @@ func TestPipelineHarnessChild(t *testing.T) {
 	case pipelineBarrierModeEarlyExit:
 	case pipelineBarrierModeHang:
 		awaitRelease()
-	case pipelineBarrierModePipelineError, pipelineBarrierModePipelineCancel, pipelineBarrierModePipelineRerun:
+	case pipelineBarrierModePipelineError, pipelineBarrierModePipelineCancel, pipelineBarrierModePipelineRerun, pipelineBarrierModeCommitProbe, pipelineBarrierModeRecoveryProbe, pipelineBarrierModeInvalidRerun, pipelineBarrierModePreparedRerun:
 		pipelineFaultChild(t, request, send, awaitRelease)
 	default:
 		t.Fatalf("unknown child mode %q", request.Mode)
