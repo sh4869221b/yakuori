@@ -15,21 +15,471 @@ jobs:
         run: docker build --progress=plain -t yakuori-publication-probe -f ci/Dockerfile .
       - name: Non-root host filesystem and separate-mount probes
         run: |
-          mkdir -p "$RUNNER_TEMP/publication"
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/publication" "$RUNNER_TEMP/publication/tmp" \
+            "$RUNNER_TEMP/publication/cache" "$RUNNER_TEMP/publication/gopath/pkg" \
+            "$RUNNER_TEMP/publication/pipeline-evidence"
           findmnt -T "$RUNNER_TEMP/publication" -o TARGET,FSTYPE,OPTIONS
-          docker run --rm --user "$(id -u):$(id -g)" \
-            -v "$PWD:/src" -v "$RUNNER_TEMP/publication:/evidence" \
+          findmnt -T "$RUNNER_TEMP/publication/tmp" -o TARGET,FSTYPE,OPTIONS
+          test -w "$RUNNER_TEMP/publication/tmp"
+          image_env=$(docker run --rm --network none yakuori-publication-probe go env -json GOPATH GOCACHE)
+          image_gopath=$(printf '%s\n' "$image_env" | python3 -c 'import json,sys; print(json.load(sys.stdin)["GOPATH"])')
+          image_gocache=$(printf '%s\n' "$image_env" | python3 -c 'import json,sys; print(json.load(sys.stdin)["GOCACHE"])')
+          cache_container=$(docker create yakuori-publication-probe)
+          trap 'docker rm "$cache_container"' EXIT
+          docker cp "$cache_container:$image_gopath/pkg/." - | tar -xf - -C "$RUNNER_TEMP/publication/gopath/pkg"
+          docker cp "$cache_container:$image_gocache/." - | tar -xf - -C "$RUNNER_TEMP/publication/cache"
+          docker rm "$cache_container"
+          trap - EXIT
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            --tmpfs /tmp:rw,exec,mode=1777 \
+            -v "$PWD:/src:ro" -v "$RUNNER_TEMP/publication:/evidence" \
             -e GOCACHE=/evidence/cache -e GOPATH=/evidence/gopath \
+            -e TMPDIR=/evidence/tmp -e GOTMPDIR=/evidence/tmp \
+            -e YAKUORI_PIPELINE_EVIDENCE=/evidence/pipeline-evidence \
             yakuori-publication-probe sh -ec '
               test "$(id -u)" != 0
               uname -sr
               go version
               stat -f -c "host filesystem: %T %t" /evidence
-              test "$(stat -f -c %t /evidence)" = ef53
-              TMPDIR=/evidence go test -count=1 -v ./research/publication
-              TMPDIR=/tmp go test -count=1 -v ./research/publication
+              case "$(stat -f -c %t /evidence/tmp)" in
+                ef53|9123683e) ;;
+                *) echo "qualified lane requires ext4/Btrfs" >&2; exit 1 ;;
+              esac
+              test -w /evidence/tmp
+              test -w "$YAKUORI_PIPELINE_EVIDENCE"
+              echo "qualified TMPDIR=$(stat -f -c %T /evidence/tmp) GOTMPDIR=/evidence/tmp"
+
+              mkdir -p /evidence/names
+              printf "%s\n" "TestPipelineFaultBridge/close-error" "TestPipelineFaultBridge/delegates" > /evidence/names/bridge
+              printf "%s\n" "TestPipelineFixtureInputs/reject-authored-mismatch/text" "TestPipelineFixtureInputs/reject-authored-mismatch/w3" "TestPipelineFixtureInputs/valid/text" "TestPipelineFixtureInputs/valid/w3" > /evidence/names/fixture-inputs
+              printf "%s\n" "TestPipelineFixture/invalid-candidate/text" "TestPipelineFixture/invalid-candidate/w3" "TestPipelineFixture/repeat/stdout-text" "TestPipelineFixture/repeat/text" "TestPipelineFixture/repeat/w3" "TestPipelineFixture/rerun/create-refuses-existing" "TestPipelineFixture/rerun/replace-same-target" "TestPipelineFixture/rerun/text-in-place" "TestPipelineFixture/rerun/w3-in-place-ja-header" "TestPipelineFixture/stdout/text" "TestPipelineFixture/text/create" "TestPipelineFixture/text/in-place" "TestPipelineFixture/text/replace-absent" "TestPipelineFixture/text/replace-existing" "TestPipelineFixture/w3/create" "TestPipelineFixture/w3/in-place" "TestPipelineFixture/w3/replace-absent" "TestPipelineFixture/w3/replace-existing" > /evidence/names/fixture
+              printf "%s\n" "TestPipelineHarnessBoundaries/reject-invalid-observation/missing-stage-write" "TestPipelineHarnessBoundaries/reject-invalid-observation/observe-after-before-commit" "TestPipelineHarnessBoundaries/reject-invalid-observation/publish-before-commit" "TestPipelineHarnessBoundaries/reject-invalid-observation/stdout-boundary-on-file" "TestPipelineHarnessBoundaries/valid/file-replace-existing/text" "TestPipelineHarnessBoundaries/valid/file-replace-existing/w3" "TestPipelineHarnessBoundaries/valid/stdout/text" > /evidence/names/boundaries
+              printf "%s\n" "TestPipelineHarnessState/reject-invalid-observation/ambiguous-commit-is-unknown" "TestPipelineHarnessState/reject-invalid-observation/certainty-from-flag" "TestPipelineHarnessState/reject-invalid-observation/d0-wrong-row" "TestPipelineHarnessState/reject-invalid-observation/d1-wrong-row" "TestPipelineHarnessState/reject-invalid-observation/historical-precommit-rows-cannot-prove-rollback" "TestPipelineHarnessState/reject-invalid-observation/record-close-missing-with-prose-basis" "TestPipelineHarnessState/reject-invalid-observation/record-existing-output-hash" "TestPipelineHarnessState/reject-invalid-observation/record-installed-misread" "TestPipelineHarnessState/reject-invalid-observation/record-source-dev" "TestPipelineHarnessState/reject-invalid-observation/record-source-hash" "TestPipelineHarnessState/reject-invalid-observation/record-source-inode" "TestPipelineHarnessState/reject-invalid-observation/record-source-mode" "TestPipelineHarnessState/reject-invalid-observation/record-source-mount" "TestPipelineHarnessState/reject-invalid-observation/record-source-nlink" "TestPipelineHarnessState/reject-invalid-observation/record-source-path" "TestPipelineHarnessState/reject-invalid-observation/record-source-size" "TestPipelineHarnessState/reject-invalid-observation/record-stage-hash" "TestPipelineHarnessState/reject-invalid-observation/record-stage-inode" "TestPipelineHarnessState/reject-invalid-observation/record-stage-mode" "TestPipelineHarnessState/reject-invalid-observation/record-stage-mount" "TestPipelineHarnessState/reject-invalid-observation/record-stage-nlink" "TestPipelineHarnessState/reject-invalid-observation/record-stage-size" "TestPipelineHarnessState/reject-invalid-observation/stage-missing" "TestPipelineHarnessState/valid/file-replace-existing/text" "TestPipelineHarnessState/valid/file-replace-existing/w3" "TestPipelineHarnessState/valid/stdout/text" > /evidence/names/state
+              printf "%s\n" "TestPipelineHarnessBarrier" > /evidence/names/barrier
+              printf "%s\n" "TestPipelineHarnessGuards/cleanup-rescue" "TestPipelineHarnessGuards/early-return" "TestPipelineHarnessGuards/healthy-positive-control" "TestPipelineHarnessGuards/malformed-input" "TestPipelineHarnessGuards/timeout-explicit-cancel" "TestPipelineHarnessGuards/uninjected" "TestPipelineHarnessGuards/unreached" "TestPipelineHarnessGuards/unreaped" "TestPipelineHarnessGuards/wrong-boundary" > /evidence/names/guards
+              printf "%s\n" "TestPipelineHarnessFault/cleanup-rescue" "TestPipelineHarnessFault/normal-counterpart/text" "TestPipelineHarnessFault/normal-counterpart/w3" "TestPipelineHarnessFault/process/cancel/text" "TestPipelineHarnessFault/process/error/text" "TestPipelineHarnessFault/process/error/w3" "TestPipelineHarnessFault/stage-close/text" "TestPipelineHarnessFault/stage-close/w3" > /evidence/names/fault
+              printf "%s\n" "TestPipelineHarnessCLI/localize-close-error" "TestPipelineHarnessCLI/localize-diagnostic-writer-error" "TestPipelineHarnessCLI/translate-text-stdout" > /evidence/names/cli
+              # Actual nested t.Run parents, not every slash prefix of a leaf.
+              printf "%s\n" TestPipelineFixtureInputs/valid \
+                TestPipelineFixtureInputs/reject-authored-mismatch >> /evidence/names/fixture-inputs
+              printf "%s\n" TestPipelineHarnessBoundaries/valid \
+                TestPipelineHarnessBoundaries/reject-invalid-observation >> /evidence/names/boundaries
+              printf "%s\n" TestPipelineHarnessState/valid \
+                TestPipelineHarnessState/reject-invalid-observation >> /evidence/names/state
+              # Freeze #69 terminal names from the accepted P/Q axes, never logs.
+              for lane in contract inference segmented final cli signals; do
+                : >"/evidence/names/precommit-$lane"
+              done
+              printf "%s\n" TestPipelinePrecommitContract/normal-controls \
+                TestPipelinePrecommitContract/precommit-preserved \
+                TestPipelinePrecommitContract/reject >> /evidence/names/precommit-contract
+              for row in text w3 stdout; do
+                printf "%s\n" "TestPipelinePrecommitContract/normal-controls/$row" >> /evidence/names/precommit-contract
+              done
+              for row in create replace-absent replace-existing in-place; do
+                printf "%s\n" "TestPipelinePrecommitContract/precommit-preserved/$row" >> /evidence/names/precommit-contract
+              done
+              for row in d0 output-present backup-present source-identity phase cause exit rerun \
+                extra-generate early-close unreached wrong-occurrence uninjected stage-order; do
+                printf "%s\n" "TestPipelinePrecommitContract/reject/$row" >> /evidence/names/precommit-contract
+              done
+              for backend in cpu cuda; do
+                for surface in text-file-replace-existing w3-file-replace-existing text-stdout-none; do
+                  for row in happy builder-error builder-cancel count-error count-cancel \
+                    effective-equal effective-plus-one policy-over-limit foreign-request \
+                    partial-plus-error max-tokens context-limit timeout-finish canceled-finish \
+                    decode-error invalid-output unknown-finish prompt-count-mismatch deadline \
+                    cancel-after-stop core-deadline; do
+                    printf "%s\n" "TestPipelinePrecommitInference/$backend-$surface-$row" >> /evidence/names/precommit-inference
+                  done
+                done
+                for row in builder-error builder-cancel count-error count-cancel effective-plus-one; do
+                  for prefix in later all-hit-later; do
+                    printf "%s\n" "TestPipelinePrecommitInference/$backend-w3-file-replace-existing-$prefix-$row" >> /evidence/names/precommit-inference
+                  done
+                done
+                for row in multiunit-first multiunit-middle multiunit-last multiunit-hit-middle; do
+                  printf "%s\n" "TestPipelinePrecommitInference/$backend-w3-file-replace-existing-$row" >> /evidence/names/precommit-inference
+                done
+                for kind in text w3; do
+                  for mode in create replace-absent inplace; do
+                    for row in builder-error partial-plus-error; do
+                      printf "%s\n" "TestPipelinePrecommitInference/$backend-$kind-file-$mode-$row" >> /evidence/names/precommit-inference
+                    done
+                  done
+                done
+                for surface in file-replace-existing stdout-none; do
+                  for row in happy all-admission second-partial second-max second-unknown \
+                    second-decode second-count-mismatch second-cancel second-deadline \
+                    protected-token-invalid parent-validation-invalid; do
+                    printf "%s\n" "TestPipelinePrecommitSegmented/$backend-text-$surface-$row" >> /evidence/names/precommit-segmented
+                  done
+                done
+                for mode in create replace-absent inplace; do
+                  printf "%s\n" "TestPipelinePrecommitSegmented/$backend-text-file-$mode-second-partial" >> /evidence/names/precommit-segmented
+                done
+                for kind in text w3; do
+                  for row in happy create-collision write-zero-error write-prefix-error sync-error \
+                    close-error cancel-write cancel-sync cancel-close observe-read-error \
+                    cancel-observe-read cancel-observe-after cancel-compare-after; do
+                    printf "%s\n" "TestPipelinePrecommitFinal/$backend-$kind-file-replace-existing-$row" >> /evidence/names/precommit-final
+                  done
+                  for mode in create replace-absent inplace; do
+                    for row in sync-error cancel-compare-after; do
+                      printf "%s\n" "TestPipelinePrecommitFinal/$backend-$kind-file-$mode-$row" >> /evidence/names/precommit-final
+                    done
+                  done
+                done
+                for row in happy observe-read-error cancel-observe-read cancel-observe-after; do
+                  printf "%s\n" "TestPipelinePrecommitFinal/$backend-text-stdout-none-$row" >> /evidence/names/precommit-final
+                done
+                for row in missing-empty-id duplicate-id unknown-id foreign-artifact-bytes \
+                  string-order-only key-order-only key-reassigned foreign-session-manifest foreign-artifact-manifest; do
+                  printf "%s\n" "TestPipelinePrecommitFinal/$backend-w3-file-replace-existing-$row" >> /evidence/names/precommit-final
+                done
+                backend_rows=
+                if [ "$backend" = cuda ]; then
+                  backend_rows="unsupported residency-vram-decline"
+                fi
+                for surface in text-file-replace-existing text-stdout-none w3-file-replace-existing; do
+                  for row in happy open-error info-error profile-request-error body-request-error \
+                    count-error partial-plus-error open-cancel info-cancel profile-request-cancel \
+                    model-unselected model-missing model-mismatch $backend_rows; do
+                    for entry in dispatch execute-cause; do
+                      printf "%s\n" "TestPipelinePrecommitCLI/$backend-$surface-$row-$entry" >> /evidence/names/precommit-cli
+                    done
+                  done
+                done
+                for surface in text-translate-stdout text-file-replace-existing w3-file-replace-existing; do
+                  for row in sigint sigterm context-cancel caller-deadline request-deadline; do
+                    printf "%s\n" "TestPipelinePrecommitSignals/$backend-$surface-$row" >> /evidence/names/precommit-signals
+                  done
+                done
+                for kind in text w3; do
+                  for mode in create replace-absent in-place; do
+                    printf "%s\n" "TestPipelinePrecommitSignals/$backend-$kind-file-$mode-sigterm" >> /evidence/names/precommit-signals
+                  done
+                done
+              done
+              for row in early-close-negative rescue-negative; do
+                printf "%s\n" "TestPipelinePrecommitSignals/$row" >> /evidence/names/precommit-signals
+              done
+              printf "%s\n" TestPipelineUnsupportedFilesystem > /evidence/names/precommit-refusal
+
+              # #70 expectations are literal axes, independent of Go declarations
+              # and observed logs. Include real parents as well as every leaf.
+              printf "%s\n" TestPipelineCommitPublicationState/valid \
+                TestPipelineCommitPublicationState/valid/postwait \
+                TestPipelineCommitPublicationState/reject \
+                TestPipelineCommitPublicationState/reject/strict-record-decode \
+                > /evidence/names/commit-state
+              for field in duplicate missing unknown case-folded null trailing truncated; do
+                printf "%s\n" "TestPipelineCommitPublicationState/reject/strict-record-decode/$field" >> /evidence/names/commit-state
+              done
+              for row in prepared restored source-backed-up external-source published published-stale; do
+                modes="create replace-absent replace-existing in-place"
+                case "$row" in
+                  restored|source-backed-up|external-source) modes=in-place ;;
+                esac
+                for kind in text w3; do
+                  for mode in $modes; do
+                    printf "%s\n" "TestPipelineCommitPublicationState/valid/$row/$kind/$mode" >> /evidence/names/commit-state
+                  done
+                  printf "%s\n" "TestPipelineCommitPublicationState/valid/postwait/$row/$kind" >> /evidence/names/commit-state
+                  for field in healthy stale-file stale-rows stale-record stale-installed; do
+                    printf "%s\n" "TestPipelineCommitPublicationState/valid/postwait/$row/$kind/$field" >> /evidence/names/commit-state
+                  done
+                  prefix="TestPipelineCommitPublicationState/reject/$row/$kind"
+                  printf "%s\n" "$prefix" >> /evidence/names/commit-state
+                  for field in missing-record stale-decoded-record installed-bit missing-close \
+                    missing-close-fd missing-install-completion missing-phase-close missing-phase-install \
+                    wrong-physical-target trimmed-target record-schema record-run-id record-mode \
+                    record-phase record-operation record-output-path record-output-basename \
+                    record-existing-absent same-bytes-different-inode prose-only-incomplete; do
+                    printf "%s\n" "$prefix/$field" >> /evidence/names/commit-state
+                  done
+                  for role in source stage existing-output source-parent output-parent; do
+                    for field in dev inode mount identity-size mode nlink; do
+                      printf "%s\n" "$prefix/record-$role-$field" >> /evidence/names/commit-state
+                    done
+                  done
+                  for role in source stage existing-output; do
+                    for field in path basename size hash; do
+                      printf "%s\n" "$prefix/record-$role-$field" >> /evidence/names/commit-state
+                    done
+                  done
+                  case "$row" in
+                    restored|source-backed-up|external-source)
+                      printf "%s\n" "$prefix/record-backup-path" "$prefix/record-backup-basename" >> /evidence/names/commit-state ;;
+                  esac
+                  for field in schema source profile text; do
+                    printf "%s\n" "$prefix/sentinel-$field" >> /evidence/names/commit-state
+                  done
+                done
+              done
+              printf "%s\n" TestPipelineTMCommitHooksCore \
+                TestPipelineTMCommitHooksCore/before-cancel \
+                TestPipelineTMCommitHooksCore/after-cancel > /evidence/names/tm-core
+              : > /evidence/names/tm-transactions
+              for row in success writer-deadline reader-commit-deadline row-abort row-rollback \
+                rollback-cleanup conflict-miss conflict-valid-changed conflict-valid-removed \
+                conflict-invalid-changed conflict-invalid-removed; do
+                prefix="TestPipelineTMTransactionFailures/$row"
+                printf "%s\n" "$prefix" >> /evidence/names/tm-transactions
+                for kind in text w3; do
+                  printf "%s\n" "$prefix/$kind" >> /evidence/names/tm-transactions
+                  for mode in create replace-absent replace-existing in-place; do
+                    printf "%s\n" "$prefix/$kind/$mode" >> /evidence/names/tm-transactions
+                  done
+                done
+              done
+              : > /evidence/names/tm-cancellation
+              for row in after-stage before-sql-commit after-sql-commit publish-entry; do
+                prefix="TestPipelineTMCommitCancellation/$row"
+                printf "%s\n" "$prefix" >> /evidence/names/tm-cancellation
+                for kind in text w3; do
+                  printf "%s\n" "$prefix/$kind" >> /evidence/names/tm-cancellation
+                  for mode in create replace-absent replace-existing in-place; do
+                    printf "%s\n" "$prefix/$kind/$mode" >> /evidence/names/tm-cancellation
+                  done
+                done
+              done
+              : > /evidence/names/publication-failures
+              for row in healthy \
+                prepared-write-error prepared-write-cancel-before prepared-write-cancel-after prepared-write-short-write \
+                prepared-sync-error prepared-sync-cancel-before prepared-sync-cancel-after \
+                prepared-close-error prepared-close-cancel-before prepared-close-cancel-after \
+                prepared-install-rename-error prepared-install-rename-cancel-before prepared-install-rename-cancel-after \
+                prepared-directory-sync-error prepared-directory-sync-cancel-before prepared-directory-sync-cancel-after \
+                source-backed-up-write-error source-backed-up-write-cancel-before source-backed-up-write-cancel-after source-backed-up-write-short-write \
+                source-backed-up-sync-error source-backed-up-sync-cancel-before source-backed-up-sync-cancel-after \
+                source-backed-up-close-error source-backed-up-close-cancel-before source-backed-up-close-cancel-after \
+                source-backed-up-install-rename-error source-backed-up-install-rename-cancel-before source-backed-up-install-rename-cancel-after \
+                source-backed-up-directory-sync-error source-backed-up-directory-sync-cancel-before source-backed-up-directory-sync-cancel-after \
+                published-write-error published-write-cancel-before published-write-cancel-after published-write-short-write \
+                published-sync-error published-sync-cancel-before published-sync-cancel-after \
+                published-close-error published-close-cancel-before published-close-cancel-after \
+                published-install-rename-error published-install-rename-cancel-before published-install-rename-cancel-after \
+                published-directory-sync-error published-directory-sync-cancel-before published-directory-sync-cancel-after \
+                backup-collision backup-rename-error publish-rename-error cancel-before-backup cancel-after-backup \
+                cancel-before-publish cancel-after-publish restore-success restore-rename-error restore-external-file run-close-error; do
+                modes="create replace-absent replace-existing in-place"
+                case "$row" in
+                  source-backed-up-*|backup-collision|backup-rename-error|cancel-before-backup|cancel-after-backup|restore-*)
+                    modes=in-place ;;
+                esac
+                prefix="TestPipelinePublicationFailures/$row"
+                printf "%s\n" "$prefix" >> /evidence/names/publication-failures
+                for kind in text w3; do
+                  printf "%s\n" "$prefix/$kind" >> /evidence/names/publication-failures
+                  for mode in $modes; do
+                    printf "%s\n" "$prefix/$kind/$mode" >> /evidence/names/publication-failures
+                  done
+                done
+              done
+              : > /evidence/names/cli-publication-exit
+              for row in normal commit-failure postcommit-prepublish published-close-error published-diagnostic-error; do
+                prefix="TestPipelineCLIPublicationExit/$row"
+                printf "%s\n" "$prefix" >> /evidence/names/cli-publication-exit
+                for kind in text w3; do
+                  printf "%s\n" "$prefix/$kind" >> /evidence/names/cli-publication-exit
+                  for mode in create replace-absent replace-existing in-place; do
+                    printf "%s\n" "$prefix/$kind/$mode" >> /evidence/names/cli-publication-exit
+                  done
+                done
+              done
+              : > /evidence/names/failure-rerun
+              for row in D0-unprepared D1-unrecorded D1-prepared Restored SourceBackedUp \
+                Published-recorded Published-stale-record missing-record corrupt-record identity-mismatch \
+                source-backed-up-conflict create-existing invalid-candidate w3-in-place-ja-header; do
+                modes="create replace-absent replace-existing in-place"
+                kinds="text w3"
+                case "$row" in
+                  Restored|SourceBackedUp|source-backed-up-conflict) modes=in-place ;;
+                  create-existing) modes=create ;;
+                  w3-in-place-ja-header) modes=in-place; kinds=w3 ;;
+                esac
+                prefix="TestPipelineFailureRerunAndTMRevalidation/$row"
+                printf "%s\n" "$prefix" >> /evidence/names/failure-rerun
+                for kind in $kinds; do
+                  printf "%s\n" "$prefix/$kind" >> /evidence/names/failure-rerun
+                  for mode in $modes; do
+                    printf "%s\n" "$prefix/$kind/$mode" >> /evidence/names/failure-rerun
+                  done
+                done
+              done
+
+              require_names() {
+                label=$1
+                names=$2
+                test_log=$3
+                # Keep child transcripts in the raw JSON, outside driver framing.
+                event_log=/evidence/names/"$label".events
+                python3 -c "import json, sys; events = list(map(json.loads, sys.stdin)); \
+                sys.exit(\"required lane reported FAIL or SKIP\") if any(e[\"Action\"] in (\"fail\", \"skip\") for e in events) else None; \
+                sys.stdout.writelines(e[\"Output\"] for e in events if e.get(\"OutputType\") == \"frame\")" \
+                  <"$test_log" >"$event_log" || return 1
+                test_log=$event_log
+                pass_names=/evidence/names/"$label".pass
+                run_names=/evidence/names/"$label".run
+                observed=/evidence/names/"$label".observed
+                allowed=/evidence/names/"$label".allowed
+                roots=/evidence/names/"$label".roots
+                bad=0
+                if grep -Eq "^[[:space:]]*--- (FAIL|SKIP)" "$test_log"; then
+                  echo "required lane reported FAIL or SKIP" >&2
+                  return 1
+                fi
+                grep -E "^[[:space:]]*--- PASS: " "$test_log" \
+                  | sed -E "s/^[[:space:]]*--- PASS: //; s/ [(].*//" | sort >"$pass_names"
+                if [ ! -s "$pass_names" ]; then
+                  echo "required lane $label selected no PASS output" >&2
+                  return 1
+                fi
+                if [ -n "$(uniq -d "$pass_names")" ]; then
+                  echo "required lane $label duplicated a PASS name" >&2
+                  return 1
+                fi
+                grep -E "^[[:space:]]*=== RUN   " "$test_log" \
+                  | sed -E "s/^[[:space:]]*=== RUN   //" | sort >"$run_names"
+                if [ -n "$(uniq -d "$run_names")" ]; then
+                  echo "required lane $label duplicated a RUN name" >&2
+                  return 1
+                fi
+                : >"$allowed"
+                : >"$roots"
+                while IFS= read -r name; do
+                  [ -n "$name" ] || continue
+                  runs=$(grep -Ec "^[[:space:]]*=== RUN   $name[[:space:]]*$" "$test_log" || true)
+                  passes=$(grep -Ec "^[[:space:]]*--- PASS: $name[[:space:]]*[(]" "$test_log" || true)
+                  if [ "$runs" -ne 1 ] || [ "$passes" -ne 1 ]; then
+                    echo "required lane $label terminal $name RUN=$runs PASS=$passes, want 1/1" >&2
+                    bad=1
+                  fi
+                  root=${name%%/*}
+                  if ! grep -Fqx "$root" "$roots"; then
+                    printf "%s\n" "$root" >>"$roots"
+                    root_runs=$(grep -Ec "^[[:space:]]*=== RUN   $root[[:space:]]*$" "$test_log" || true)
+                    root_passes=$(grep -Ec "^[[:space:]]*--- PASS: $root[[:space:]]*[(]" "$test_log" || true)
+                    if [ "$root_runs" -ne 1 ] || [ "$root_passes" -ne 1 ]; then
+                      echo "required lane $label root $root RUN=$root_runs PASS=$root_passes, want 1/1" >&2
+                      bad=1
+                    fi
+                  fi
+                  # Slash-bearing leaf names do not imply intermediate t.Run calls.
+                  printf "%s\n" "$root" "$name" >>"$allowed"
+                done <"$names"
+                { cat "$run_names"; cat "$pass_names"; } | sort -u >"$observed"
+                while IFS= read -r name; do
+                  [ -n "$name" ] || continue
+                  grep -Fqx "$name" "$allowed" || {
+                    echo "required lane $label unexpected terminal $name" >&2
+                    bad=1
+                  }
+                  runs=$(grep -Ec "^[[:space:]]*=== RUN   $name[[:space:]]*$" "$test_log" || true)
+                  passes=$(grep -Ec "^[[:space:]]*--- PASS: $name[[:space:]]*[(]" "$test_log" || true)
+                  if [ "$runs" -ne 1 ] || [ "$passes" -ne 1 ]; then
+                    echo "required lane $label incomplete terminal $name RUN=$runs PASS=$passes, want 1/1" >&2
+                    bad=1
+                  fi
+                done <"$observed"
+                [ "$bad" -eq 0 ]
+              }
+
+              run_required() {
+                label=$1
+                names=$2
+                shift 2
+                log=/evidence/"$label".log
+                if ! "$@" -json >"$log" 2>&1; then
+                  cat "$log"
+                  return 1
+                fi
+                cat "$log"
+                require_names "$label" "$names" "$log"
+              }
+
+              run_required bridge /evidence/names/bridge \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/publication -run "^TestPipelineFaultBridge$" -v
+              run_required fixture-inputs /evidence/names/fixture-inputs \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineFixtureInputs$" -v
+              run_required fixture /evidence/names/fixture \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineFixture$" -v
+              run_required boundaries /evidence/names/boundaries \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessBoundaries$" -v
+              run_required state /evidence/names/state \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessState$" -v
+              run_required barrier /evidence/names/barrier \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessBarrier$" -v
+              run_required guards /evidence/names/guards \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessGuards$" -v
+              run_required fault /evidence/names/fault \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessFault$" -v
+              run_required cli /evidence/names/cli \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelineHarnessCLI$" -v
+              # Each new root is required separately; the signal child is not a lane.
+              run_required precommit-contract /evidence/names/precommit-contract \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitContract$" -v
+              run_required precommit-inference /evidence/names/precommit-inference \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitInference$" -v
+              run_required precommit-segmented /evidence/names/precommit-segmented \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitSegmented$" -v
+              run_required precommit-final /evidence/names/precommit-final \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitFinal$" -v
+              run_required precommit-cli /evidence/names/precommit-cli \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelinePrecommitCLI$" -v
+              YAKUORI_SIGNAL_STATE=/evidence/pipeline-evidence/precommit-signals-state.json \
+                run_required precommit-signals /evidence/names/precommit-signals \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelinePrecommitSignals$" -v
+
+              run_required commit-state /evidence/names/commit-state \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineCommitPublicationState$" -v
+              run_required tm-core /evidence/names/tm-core \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/tm -run "^TestPipelineTMCommitHooksCore$" -v
+              run_required tm-transactions /evidence/names/tm-transactions \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineTMTransactionFailures$" -v
+              run_required tm-cancellation /evidence/names/tm-cancellation \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineTMCommitCancellation$" -v
+              run_required publication-failures /evidence/names/publication-failures \
+                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelinePublicationFailures$" -v
+              run_required cli-publication-exit /evidence/names/cli-publication-exit \
+                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/cli -run "^TestPipelineCLIPublicationExit$" -v
+              run_required failure-rerun /evidence/names/failure-rerun \
+                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineFailureRerunAndTMRevalidation$" -v
+
+              test "$(stat -f -c %T /tmp)" = tmpfs
+              echo "unsupported-filesystem lane: TMPDIR=/tmp GOTMPDIR=/tmp filesystem=tmpfs"
+              TMPDIR=/tmp GOTMPDIR=/tmp run_required precommit-refusal /evidence/names/precommit-refusal \
+                go test -count=1 -timeout 180s -tags pipelinefaults ./internal/localize -run "^TestPipelineUnsupportedFilesystem$" -v
+              if TMPDIR=/tmp GOTMPDIR=/tmp \
+                YAKUORI_PIPELINE_EVIDENCE="$YAKUORI_PIPELINE_EVIDENCE/unsupported-positive" \
+                go test -count=1 -timeout 180s -tags pipelinefaults \
+                ./internal/localize -run "^TestPipelinePublicationFailures$/^publish-rename-error$/^text$/^create$" -v \
+                > /evidence/precommit-expected-red.log 2>&1; then
+                cat /evidence/precommit-expected-red.log
+                echo "qualified positive unexpectedly passed on tmpfs" >&2
+                exit 1
+              else
+                expected_red_exit=$?
+              fi
+              cat /evidence/precommit-expected-red.log
+              grep -Fq "error=localize prepare failed unsupported_filesystem=true" /evidence/precommit-expected-red.log
+              if grep -Eq "^[[:space:]]*--- (PASS|SKIP)" /evidence/precommit-expected-red.log; then
+                echo "tmpfs positive reported PASS or SKIP" >&2
+                exit 1
+              fi
+              echo "pipeline expected RED: exit=$expected_red_exit; typed prepare refusal; later fault stages not-run; not a fault PASS"
+              find "$YAKUORI_PIPELINE_EVIDENCE" -type f -printf "%p %s bytes\n" | sort
+
+              go test -c -o /evidence/publication.test ./research/publication
+              mkdir -p /tmp/publication-cwd /evidence/publication-cwd
+              (cd /tmp/publication-cwd && TMPDIR=/evidence GOTMPDIR=/evidence \
+                /evidence/publication.test -test.count=1 -test.v)
+              (cd /evidence/publication-cwd && TMPDIR=/tmp GOTMPDIR=/tmp \
+                /evidence/publication.test -test.count=1 -test.v)
               TMPDIR=/evidence go test -count=1 -v ./internal/publication ./internal/artifact ./internal/cli
-              TMPDIR=/tmp go test -count=1 -v ./internal/publication -run "^TestUnsupportedFilesystem$"
+              TMPDIR=/tmp GOTMPDIR=/tmp go test -count=1 -v ./internal/publication -run "^TestUnsupportedFilesystem$"
               test -z "$(gofmt -l research/publication)"
               go vet ./research/publication
               go vet ./internal/publication

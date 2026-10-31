@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	textadapter "github.com/sh4869221b/yakuori/internal/adapter/text"
+	"github.com/sh4869221b/yakuori/internal/adapter/w3strings"
 	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/identity"
 	"github.com/sh4869221b/yakuori/internal/inference"
@@ -30,6 +31,14 @@ var errRequestFactory = errors.New("selected engine cannot construct requests")
 // The opener is the only test seam; Store and Core are always the real implementations.
 // Context, output, resolved storage and the selected-model loader have independent lifetimes.
 func (command translationCommand) execute(ctx context.Context, stdout io.Writer, paths config.Paths, open selectedEngineOpener) (result localize.Result, err error) {
+	var adapter localize.Adapter = textadapter.New(command.sourceLanguage, command.targetLanguage)
+	if command.format == "w3strings" {
+		table, err := w3strings.NewForSource(command.sourceLanguage, config.DefaultLimits())
+		if err != nil {
+			return result, &localize.Error{Phase: "import", Err: err}
+		}
+		adapter = table
+	}
 	id, engine, err := open(ctx, command.backend)
 	if err != nil {
 		return result, &localize.Error{Phase: "model", Err: err}
@@ -85,7 +94,6 @@ func (command translationCommand) execute(ctx context.Context, stdout io.Writer,
 		}
 	}()
 	core := localize.NewCore(localize.NewInferenceEngine(engine, build))
-	adapter := textadapter.New(command.sourceLanguage, command.targetLanguage)
 	if command.action == "localize" {
 		return core.FileWithTM(ctx, command.options, adapter, profile, store, command.scope)
 	}
