@@ -31,6 +31,10 @@ var errRequestFactory = errors.New("selected engine cannot construct requests")
 // The opener is the only test seam; Store and Core are always the real implementations.
 // Context, output, resolved storage and the selected-model loader have independent lifetimes.
 func (command translationCommand) execute(ctx context.Context, stdout io.Writer, paths config.Paths, open selectedEngineOpener) (result localize.Result, err error) {
+	return command.executeObserved(ctx, stdout, paths, open, nil, nil)
+}
+
+func (command translationCommand) executeObserved(ctx context.Context, stdout io.Writer, paths config.Paths, open selectedEngineOpener, observation *localize.AcceptanceObservation, details *AcceptanceDetails) (result localize.Result, err error) {
 	var adapter localize.Adapter = textadapter.New(command.sourceLanguage, command.targetLanguage)
 	if command.format == "w3strings" {
 		table, err := w3strings.NewForSource(command.sourceLanguage, config.DefaultLimits())
@@ -56,6 +60,12 @@ func (command translationCommand) execute(ctx context.Context, stdout io.Writer,
 	if err != nil {
 		return result, &localize.Error{Phase: "profile", Err: err}
 	}
+	if details != nil {
+		details.ModelID, details.Info = id, info
+		if id != details.ExpectedModelID || info.ModelSHA256 != details.ExpectedModelSHA256 || info.RequestedBackend != command.backend || info.Backend != command.backend || (command.backend == "cuda" && (!info.ResidentActive || info.ResidentContextCap <= 0)) {
+			return result, &localize.Error{Phase: "profile", Err: errors.New("acceptance model or backend mismatch")}
+		}
+	}
 	limits := config.DefaultLimits()
 	policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, limits.MaxOutputTokens, limits.RequestTimeout)
 	if err != nil {
@@ -73,6 +83,10 @@ func (command translationCommand) execute(ctx context.Context, stdout io.Writer,
 	})
 	if err != nil {
 		return result, &localize.Error{Phase: "profile", Err: err}
+	}
+	if details != nil {
+		details.Profile = profile.Digest()
+		details.Policy = request.Policy()
 	}
 	path := config.ResolveStoragePaths(paths).TMFile
 	var store *tm.Store
@@ -94,6 +108,9 @@ func (command translationCommand) execute(ctx context.Context, stdout io.Writer,
 		}
 	}()
 	core := localize.NewCore(localize.NewInferenceEngine(engine, build))
+	if observation != nil {
+		core = core.WithAcceptanceObservation(observation)
+	}
 	if command.action == "localize" {
 		return core.FileWithTM(ctx, command.options, adapter, profile, store, command.scope)
 	}

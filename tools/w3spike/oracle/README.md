@@ -13,3 +13,9 @@ Cargo registry publication; it does not itself fulfill license obligations.
 
 See [third-party notices](../../../THIRD_PARTY_NOTICES.md), the locked versions
 in Cargo.lock, and `licenses/research-oracle/` at the repository root.
+
+The `records INPUT OUTPUT` command uses the crate's public `W3StringFile::read`
+and writes private, length-delimited binary output for acceptance comparison.
+It contains a magic/version, language, the decoded ID and UTF-8 text records,
+and the complete decoded ID/key relations. This preserves text boundaries,
+multiple keys and zero-valued keys; it does not change `encode` or `decode`.

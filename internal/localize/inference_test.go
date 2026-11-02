@@ -23,6 +23,24 @@ type commonEngine struct {
 	generate func(context.Context, inference.GenerationRequest) (inference.GenerationResult, error)
 }
 
+func TestAcceptanceGenerateCountOnlyCountsBackendCalls(t *testing.T) {
+	calls := 0
+	backend := commonEngine{generate: func(context.Context, inference.GenerationRequest) (inference.GenerationResult, error) {
+		calls++
+		return inference.GenerationResult{Text: "訳", Finish: inference.Stop}, nil
+	}}
+	observation := &AcceptanceObservation{}
+	core := NewCore(NewInferenceEngine(backend, nil)).WithAcceptanceObservation(observation)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := core.inference.generate(ctx, inferencePlan{}); !errors.Is(err, context.Canceled) || calls != 0 || observation.GenerateCalls != 0 {
+		t.Fatalf("canceled before call: calls=%d observed=%d err=%v", calls, observation.GenerateCalls, err)
+	}
+	if _, err := core.inference.generate(context.Background(), inferencePlan{}); err != nil || calls != 1 || observation.GenerateCalls != 1 {
+		t.Fatalf("backend call: calls=%d observed=%d err=%v", calls, observation.GenerateCalls, err)
+	}
+}
+
 func TestInferenceCorePreflightsAllRequests(t *testing.T) {
 	injected := errors.New("request preparation failed")
 	for _, failure := range []string{"context", "policy", "build", "count", "success"} {

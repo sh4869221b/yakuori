@@ -57,10 +57,23 @@ func (e *Error) Error() string {
 func (e *Error) Unwrap() error { return e.Err }
 
 type Core struct {
-	limits    config.Limits
-	engine    Engine
-	inference *InferenceEngine
-	segmented *segmentedGenerator
+	limits      config.Limits
+	engine      Engine
+	inference   *InferenceEngine
+	segmented   *segmentedGenerator
+	observation *AcceptanceObservation
+}
+
+// WithAcceptanceObservation enables the bounded, per-run evidence used by the
+// explicit acceptance runner. Ordinary product execution does not use it.
+func (c Core) WithAcceptanceObservation(observation *AcceptanceObservation) Core {
+	c.observation = observation
+	if c.inference != nil {
+		engine := *c.inference
+		engine.observation = observation
+		c.inference = &engine
+	}
+	return c
 }
 
 func NewCore(engine Engine) Core {
@@ -242,6 +255,7 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 			}
 			if found {
 				accepted = append(accepted, translation)
+				c.observeAccepted(translation, "tm")
 				continue
 			}
 		}
@@ -283,6 +297,11 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 			return nil, &Error{Phase: "validate", UnitID: id, Err: err}
 		}
 		accepted = append(accepted, translation)
+		kind := "unchanged"
+		if prepared.GenerationRequired() {
+			kind = "generated"
+		}
+		c.observeAccepted(translation, kind)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, &Error{Phase: "prepare_export", Err: err}

@@ -161,3 +161,70 @@ intentionally fail this readiness check. The confirmation record represents a
 user decision obtained in #85; the checker does not solicit or make it. Neither
 checker mode executes GPU or CPU inference, establishes quality, or completes
 v1 acceptance.
+
+## Explicit W3 acceptance runner
+
+`tools/acceptance/cmd/run` performs the product W3/SQLite/publication path
+with CUDA and compares each published file with the separately built research
+oracle. It starts only when the checker reports `acceptance_ready: true`.
+The current candidate is pending #85, so an ordinary invocation records
+`not_run` and does not start a translation. The runner does not approve
+criteria, download a model or retry a failed generation.
+
+After the representative set and criteria are confirmed, register and select
+the intended local GGUF with the normal `yakuori models` commands. Build the
+runner with Go 1.27.1 and CUDA support; the oracle build needs Rust/Cargo and
+its locked dependencies already available locally. The runner uses
+`cargo build --locked --offline` in a fresh private target directory; the GPL
+oracle remains a separate process. Build time is outside the fixture run.
+
+For example, from the checkout root, substitute the selected model ID, its
+expected SHA-256, and an empty private evidence path on a supported filesystem:
+
+```sh
+CGO_ENABLED=0 GOTOOLCHAIN=local go build -tags cuda -o /tmp/yakuori-acceptance ./tools/acceptance/cmd/run
+/tmp/yakuori-acceptance \
+  --manifest docs/evidence/acceptance/fixtures.json \
+  --criteria docs/evidence/acceptance/criteria.json \
+  --root "$PWD" --repository "$PWD" \
+  --evidence /path/to/private/empty-evidence-directory \
+  --model-id MODEL_ID --model-sha256 MODEL_SHA256 \
+  --game witcher3 --artifact acceptance
+```
+
+The existing selected model registry is used for model loading, but each
+fixture gets an isolated new TM. Each fresh run is followed by a separate
+process that reuses that TM and publishes a separate file. The runner saves
+`run.json` and the published outputs under the private evidence directory;
+original fixtures remain at their manifest paths. The JSON associates each
+unit and category with the original and published output without copying their
+text into the record. Temporary oracle records, the working TM and the oracle
+build directory are removed after use. Keep the referenced original fixtures
+and private outputs for later review, subject to their use conditions.
+
+The oracle checks the output language, IDs, text and all decoded key relations
+against actual accepted values and source key relations. Its length-delimited
+records preserve literal newlines and distinguish a zero key from no key.
+An input the independent reader cannot decode, including its known zero-key
+table limitation, fails rather than being replaced with a structural test
+result; see the existing W3 structural tests. A successful machine check is not a human
+translation-quality judgment. A missing worker result, missing build pin,
+failed oracle or unconfirmed CUDA resident path cannot be reported as success.
+`run.json` uses `not_run`, `fail` and `pass` and leaves unobserved counters and
+stages null rather than reporting them as zero or false.
+
+The `worker` subcommand reads one JSON `WorkerRequest` from stdin and writes
+one `WorkerResult` to inherited descriptor 3. Its result contains accepted text
+and must be treated as private. It runs just the translation, allowing the
+#98 supervisor to be its direct parent for process RSS and VRAM measurements;
+`acceptance.RunWithLauncher` lets it use the same preparation, published-output
+check, acceptance decision and record as the ordinary runner. The oracle
+record distinguishes launch failure, process exit or signal, exit code, and
+the independent comparison result.
+It is not by itself a formal acceptance result.
+
+The model-free runner contract test uses the project-authored
+`tools/acceptance/testdata/small.w3strings`, generated from `small.csv` with
+the research oracle's `encode` command. Its empty entry and long generated
+Japanese translation exercise the runner contract; the synthetic test run is
+not a real MOD or GPU acceptance result.
