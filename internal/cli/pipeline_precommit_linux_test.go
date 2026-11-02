@@ -39,6 +39,28 @@ type cliPrecommitEngine struct {
 	Injected     []string
 }
 
+const (
+	offlinePipelineEnv       = "YAKUORI_OFFLINE_PIPELINE_CANARIES"
+	offlineSourceCanary      = "SOURCE_CANARY_95"
+	offlineTranslationCanary = "TRANSLATION_CANARY_95"
+	offlinePromptCanary      = "PROMPT_CANARY_95"
+	offlineErrorCanary       = "BACKEND_ERROR_CANARY_95"
+)
+
+// configureOfflinePipelineRequest affects only the dedicated observer run.
+// The empty profile request retains its original prompt and identity.
+func configureOfflinePipelineRequest(e *cliPrecommitEngine) {
+	if os.Getenv(offlinePipelineEnv) != "1" {
+		return
+	}
+	e.RequestFunc = func(ctx context.Context, input prompt.Input, policy inference.GenerationPolicy) (inference.GenerationRequest, error) {
+		if input.Text != "" {
+			input.Text += " " + offlinePromptCanary
+		}
+		return e.translationEngine.NewRequest(ctx, input, policy)
+	}
+}
+
 type cliPrecommitRequest struct {
 	Text     string
 	Tokens   []int

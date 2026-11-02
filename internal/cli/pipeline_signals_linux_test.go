@@ -315,6 +315,10 @@ func (e *signalStreamEngine) emit(event string, mutate func(*signalNotice)) int 
 }
 
 func (e *signalStreamEngine) Generate(ctx context.Context, request inference.GenerationRequest) (inference.GenerationResult, error) {
+	if os.Getenv(offlinePipelineEnv) == "1" &&
+		(!strings.Contains(request.RenderedPrompt(), "Hello.") || !strings.Contains(request.RenderedPrompt(), offlinePromptCanary)) {
+		return inference.GenerationResult{}, errors.New("offline signal request canary not reached")
+	}
 	policy := request.Policy()
 	applied := policy.RequestTimeout
 	if e.requestTimeout > 0 {
@@ -366,6 +370,9 @@ func (e *signalStreamEngine) Generate(ctx context.Context, request inference.Gen
 	}
 	<-workerDone
 	e.emit("consumer-complete", nil)
+	if os.Getenv(offlinePipelineEnv) == "1" && text.String() != cliAuthoredTranslation {
+		return inference.GenerationResult{}, errors.New("offline signal translation canary not reached")
+	}
 	result := inference.GenerationResult{
 		Text: text.String(), Finish: inference.Canceled,
 		PromptTokens: len(request.TokenIDs()), OutputTokens: 3, Policy: policy,
@@ -495,6 +502,7 @@ func executeSignalChild(t *testing.T, request signalChildRequest, sink *signalNo
 	}
 	base := &translationEngine{info: request.Info, text: translation, finish: inference.Stop}
 	inner := &cliPrecommitEngine{translationEngine: base}
+	configureOfflinePipelineRequest(inner)
 	resolve := func() (config.Paths, error) { return request.Paths, nil }
 	var open selectedEngineOpener
 	var engine *signalStreamEngine
@@ -1410,6 +1418,17 @@ func (f signalFixture) judgeRerun(t *testing.T, observation signalObservation) s
 	}
 	if state.Runs != 1 || state.Records != 0 || state.Stages != 0 || state.Backups != 0 {
 		t.Errorf("rerun artifacts=%d/%d/%d/%d want 1/0/0/0", state.Runs, state.Records, state.Stages, state.Backups)
+	}
+	if os.Getenv(offlinePipelineEnv) == "1" {
+		runDirs, err := filepath.Glob(filepath.Join(f.Dir, ".yakuori-run-*"))
+		if err != nil || len(runDirs) != 1 {
+			t.Errorf("recovery fixture run directories=%v error=%v, want one", runDirs, err)
+		} else {
+			want := "record=" + filepath.Join(runDirs[0], "record.json") + " output=" + f.OutputPath + " backup="
+			if !strings.Contains(state.Stderr, want) {
+				t.Error("recovery diagnostic does not identify the fixture record and output paths")
+			}
+		}
 	}
 	f.save(t, "rerun", f.rerunExpectation(), state, observation.Stdout)
 	return state

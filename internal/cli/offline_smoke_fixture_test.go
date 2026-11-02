@@ -218,23 +218,29 @@ func offlineSmokeObserver(t *testing.T, prefix string) offlineSmokeObserverRecor
 // never observed, and every route has to show a clean preflight (the positive
 // control), the expected target exit and zero forbidden attempts.
 func (l *offlineSmokeLayout) run(t *testing.T, name string, expect int, args ...string) offlineSmokeRun {
+	return l.runCommand(t, name, expect, offlineSmokeBinary(t), l.env, offlineSmokeAllowMPS(), args...)
+}
+
+// runCommand observes the supplied executable with the same fail-closed checks
+// used for the product CLI. env is explicit so test children can keep their
+// fixture state and evidence directories separate from the product matrix.
+func (l *offlineSmokeLayout) runCommand(t *testing.T, name string, expect int, binary string, env []string, allowMPS bool, args ...string) offlineSmokeRun {
 	t.Helper()
 	prefix := filepath.Join(offlineSmokeEvidence(t), name)
 	if _, err := os.Stat(prefix + ".json"); err == nil {
 		t.Fatalf("observer evidence %s.json already exists; a stale prefix would be refused", prefix)
 	}
 	observer := filepath.Join(offlineSmokeRepoRoot(t), "ci", "offline.py")
-	allowMPS := offlineSmokeAllowMPS()
 	command := []string{"python3", observer, "--evidence", prefix, "--expect-exit", strconv.Itoa(expect),
 		"--timeout-seconds", strconv.Itoa(int(offlineSmokeObserverTimeout.Seconds()))}
 	if allowMPS {
 		command = append(command, "--allow-nvidia-mps")
 	}
-	command = append(command, "--", offlineSmokeBinary(t))
+	command = append(command, "--", binary)
 	command = append(command, args...)
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Dir = l.root
-	cmd.Env = l.env
+	cmd.Env = env
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Start(); err != nil {
