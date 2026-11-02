@@ -2,7 +2,7 @@
 set -eu
 export CGO_ENABLED=0 GOTOOLCHAIN=local
 [ "$(go env GOOS)/$(go env GOARCH)" = linux/amd64 ]
-[ "$(go env GOVERSION)" = go1.27.1 ]
+[ "$(go env GOVERSION)" = go1.27.3 ]
 go version
 go run ci/check-cgo.go
 # Prove the guard catches even a build-tag-excluded import.

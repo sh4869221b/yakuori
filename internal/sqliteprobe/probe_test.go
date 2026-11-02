@@ -176,7 +176,7 @@ func TestDriverAndRollback(t *testing.T) {
 	if err := db.QueryRow("SELECT sqlite_version()").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("SQLite %s; driver modernc.org/sqlite v1.60.1; CGO=0 gate", version)
+	t.Logf("SQLite %s; driver modernc.org/sqlite v1.61.1; CGO=0 gate", version)
 	sentinel := errors.New("injected failure")
 	ctx, cancel := context.WithTimeout(context.Background(), operationLimit)
 	defer cancel()

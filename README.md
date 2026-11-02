@@ -56,7 +56,7 @@ importされた原文のkey関係（LE4 byteのopaque keyをIDへ結び付ける
 
 ## Build / test / run
 
-Go 1.27.1を使用します（公式archiveとchecksumは[基盤の再現資料](docs/foundation.md)）。
+Go 1.27.3を使用します（公式archiveとchecksumは[基盤の再現資料](docs/foundation.md)）。
 
 ```sh
 CGO_ENABLED=0 GOTOOLCHAIN=local go build ./cmd/yakuori

@@ -18,7 +18,7 @@ func TestAcceptedCannotBeForged(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	module := "module github.com/sh4869221b/yakuori/consumer\n\ngo 1.27.0\n\nrequire github.com/sh4869221b/yakuori v0.0.0\nreplace github.com/sh4869221b/yakuori => " + root + "\n"
+	module := "module github.com/sh4869221b/yakuori/consumer\n\ngo 1.27.3\n\nrequire github.com/sh4869221b/yakuori v0.0.0\nreplace github.com/sh4869221b/yakuori => " + root + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(module), 0600); err != nil {
 		t.Fatal(err)
 	}
