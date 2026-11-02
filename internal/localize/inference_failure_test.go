@@ -74,7 +74,8 @@ func TestInferenceCoreFailure(t *testing.T) {
 			})
 			sink, memory := &textSink{limit: -1}, &fakeTM{}
 			a := &textProbe{Adapter: textadapter.New("en", "ja"), t: t, sink: sink, tm: memory, replace: tt.corrupt}
-			result, err := NewCore(engine).Text(ctx, []byte("Hello"), a, textProfile(t), memory, sink)
+			observation := &AcceptanceObservation{}
+			result, err := NewCore(engine).WithAcceptanceObservation(observation).Text(ctx, []byte("Hello"), a, textProfile(t), memory, sink)
 			if !errors.Is(err, tt.want) || result.TMCommitted || result.BytesWritten != 0 || sink.calls != 0 || memory.calls != 0 || len(memory.rows) != 0 {
 				t.Fatalf("result = %+v, error = %v, writes = %d, commits = %d, rows = %v", result, err, sink.calls, memory.calls, memory.rows)
 			}
@@ -95,6 +96,18 @@ func TestInferenceCoreFailure(t *testing.T) {
 			}
 			if counts != wantCounts || generates != wantGenerates {
 				t.Fatalf("count/generate calls = %d/%d, want %d/%d", counts, generates, wantCounts, wantGenerates)
+			}
+			if observation.GenerateCalls != wantGenerates || observation.GenerateCompleted+observation.GenerateFailed != wantGenerates {
+				t.Fatalf("backend observations: %+v", observation)
+			}
+			wantValidation := ValidationCounts{}
+			if tt.name == "candidate validation" {
+				wantValidation = ValidationCounts{Attempted: 1, Failed: 1}
+			} else if tt.name == "final validation" {
+				wantValidation = ValidationCounts{Attempted: 1, Passed: 1}
+			}
+			if observation.Validation != wantValidation || observation.TMValidation != (ValidationCounts{}) {
+				t.Fatalf("validation must only count attempted validation, not generation failure: %+v", observation)
 			}
 		})
 	}

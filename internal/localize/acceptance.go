@@ -1,17 +1,41 @@
 package localize
 
 import (
+	"time"
+
 	"github.com/sh4869221b/yakuori/internal/validate"
 )
 
 // AcceptanceObservation is populated only during an explicitly observed run.
 // Text is private evidence and must not be included in ordinary diagnostics.
 type AcceptanceObservation struct {
-	SourceSHA256   [32]byte
-	Units          []AcceptanceUnit
-	Keys           []AcceptanceKey
-	GenerateCalls  int
-	FinalValidated bool
+	SourceSHA256       [32]byte
+	Units              []AcceptanceUnit
+	Keys               []AcceptanceKey
+	GenerateCalls      int
+	GenerateCompleted  int
+	GenerateFailed     int
+	GenerationDuration time.Duration
+	Validation         ValidationCounts
+	TMValidation       ValidationCounts
+	FinalValidated     bool
+}
+
+// ValidationCounts counts actual Validate calls, independently of final unit
+// acceptance. A rejected TM candidate may still be replaced by a valid generation.
+type ValidationCounts struct {
+	Attempted int `json:"attempted"`
+	Passed    int `json:"passed"`
+	Failed    int `json:"failed"`
+}
+
+func (v *ValidationCounts) record(err error) {
+	v.Attempted++
+	if err == nil {
+		v.Passed++
+	} else {
+		v.Failed++
+	}
 }
 
 type AcceptanceKey struct {

@@ -117,14 +117,18 @@ func TestTMInvalidRowGeneration(t *testing.T) {
 	session, _ := generationFixture(t, []string{"one", "two", "three"}, nil)
 	seedTMRow(t, db, session, profile, 0, "cached")
 	seedTMRow(t, db, session, profile, 1, "")
+	observation := &AcceptanceObservation{}
 	core := NewCore(fakeEngine(func(_ context.Context, _ unit.UnitID, text string) (Generation, error) {
 		calls++
 		return Generation{Text: text, Finish: Stop}, nil
-	}))
+	})).WithAcceptanceObservation(observation)
 	memory := &tmExecution{store: store, scope: tmScope()}
 	accepted, err := core.generate(context.Background(), session, profile, memory)
 	if err != nil || calls != 2 || len(accepted) != 3 || accepted[0].Text() != "cached" {
 		t.Fatalf("error=%v calls=%d accepted=%v", err, calls, accepted)
+	}
+	if observation.TMValidation != (ValidationCounts{Attempted: 2, Passed: 1, Failed: 1}) || observation.Validation != (ValidationCounts{Attempted: 2, Passed: 2}) || len(observation.Units) != 3 {
+		t.Fatalf("cache rejection must not count as a failed final unit: %+v", observation)
 	}
 	if err := memory.run.Stage(accepted); err != nil {
 		t.Fatal(err)

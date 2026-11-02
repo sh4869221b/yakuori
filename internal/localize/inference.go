@@ -3,6 +3,7 @@ package localize
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/glossary"
@@ -102,10 +103,20 @@ func (e InferenceEngine) generate(ctx context.Context, plan inferencePlan) (Gene
 	if err := ctx.Err(); err != nil {
 		return Generation{}, err
 	}
+	var started time.Time
 	if e.observation != nil {
 		e.observation.GenerateCalls++
+		started = time.Now()
 	}
 	result, err := e.engine.Generate(ctx, plan.request)
+	if e.observation != nil {
+		e.observation.GenerationDuration += time.Since(started)
+		if err != nil || result.Finish != inference.Stop || result.PromptTokens != plan.count {
+			e.observation.GenerateFailed++
+		} else {
+			e.observation.GenerateCompleted++
+		}
+	}
 	generation := Generation{Text: result.Text}
 	switch result.Finish {
 	case inference.Stop:

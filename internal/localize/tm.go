@@ -16,9 +16,10 @@ import (
 var ErrNilTMStore = errors.New("translation memory store is nil")
 
 type tmExecution struct {
-	store *tm.Store
-	scope tm.Scope
-	run   *tm.Run
+	store       *tm.Store
+	scope       tm.Scope
+	run         *tm.Run
+	observation *AcceptanceObservation
 }
 
 // keyRelationProvider is implemented by adapters that can report the keys of
@@ -71,6 +72,9 @@ func (m *tmExecution) lookup(ctx context.Context, session unit.Session, id unit.
 		return validate.AcceptedTranslation{}, false, err
 	}
 	accepted, err := validate.Validate(session, id, profile, text)
+	if m.observation != nil {
+		m.observation.TMValidation.record(err)
+	}
 	if err != nil && !errors.Is(err, validate.ErrInvalidCandidate) {
 		return validate.AcceptedTranslation{}, false, err
 	}
