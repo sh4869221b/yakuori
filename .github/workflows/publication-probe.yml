@@ -483,8 +483,8 @@ jobs:
                 require_names "$label" "$names" "$log"
               }
 
-              printf '%s\n' TestPipelineStdoutBoundaries/normal TestPipelineStdoutBoundaries/cancel-before TestPipelineStdoutBoundaries/cancel-after > /evidence/names/stdout-boundaries
-              printf '%s\n' TestPipelineCLIStdoutExit/normal TestPipelineCLIStdoutExit/short TestPipelineCLIStdoutExit/partial TestPipelineCLIStdoutExit/epipe TestPipelineCLIStdoutExit/diagnostic > /evidence/names/cli-stdout-exit
+              printf "%s\n" TestPipelineStdoutBoundaries/normal TestPipelineStdoutBoundaries/cancel-before TestPipelineStdoutBoundaries/cancel-after > /evidence/names/stdout-boundaries
+              printf "%s\n" TestPipelineCLIStdoutExit/normal TestPipelineCLIStdoutExit/short TestPipelineCLIStdoutExit/partial TestPipelineCLIStdoutExit/epipe TestPipelineCLIStdoutExit/diagnostic > /evidence/names/cli-stdout-exit
               run_required stdout-boundaries /evidence/names/stdout-boundaries \
                 go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineStdoutBoundaries$" -v
               run_required cli-stdout-exit /evidence/names/cli-stdout-exit \
