@@ -118,6 +118,10 @@ func (e *cliPublicationExitEngine) Open(ctx context.Context, backend string) (st
 }
 
 func (e *cliPublicationExitEngine) Generate(ctx context.Context, request inference.GenerationRequest) (inference.GenerationResult, error) {
+	if os.Getenv(offlinePipelineEnv) == "1" &&
+		(!strings.Contains(request.RenderedPrompt(), "Hello.") || !strings.Contains(request.RenderedPrompt(), offlinePromptCanary)) {
+		return inference.GenerationResult{}, errors.New("offline publication request canary not reached")
+	}
 	e.generated++
 	e.report.Generated++
 	unit := e.report.Generated
@@ -169,6 +173,9 @@ func (e *cliPublicationExitEngine) Generate(ctx context.Context, request inferen
 	<-done
 	e.report.Drained++
 	e.report.StreamEvents = append(e.report.StreamEvents, fmt.Sprintf("drained-%d", unit))
+	if os.Getenv(offlinePipelineEnv) == "1" && text.String() != cliAuthoredTranslation {
+		return inference.GenerationResult{}, errors.New("offline publication translation canary not reached")
+	}
 	return inference.GenerationResult{Text: text.String(), Finish: inference.Stop,
 		PromptTokens: len(request.TokenIDs()), OutputTokens: 3, Policy: request.Policy()}, ctx.Err()
 }
@@ -276,6 +283,7 @@ func cliPublicationExitChild(t *testing.T, request signalChildRequest, sink *sig
 	base := &translationEngine{info: request.Info, text: cliAuthoredTranslation, finish: inference.Stop}
 	e := &cliPublicationExitEngine{cliPrecommitEngine: &cliPrecommitEngine{translationEngine: base},
 		t: t, request: request, sink: sink, control: control}
+	configureOfflinePipelineRequest(e.cliPrecommitEngine)
 	e.report.BeforeRuns, err = filepath.Glob(filepath.Join(filepath.Dir(command.options.Source), ".yakuori-run-*"))
 	if err != nil {
 		t.Fatal(err)
