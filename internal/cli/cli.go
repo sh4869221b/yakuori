@@ -61,6 +61,10 @@ func runWithPipeline(ctx context.Context, args []string, stdout, stderr io.Write
 
 // runWithTranslationOpener is the single pipeline body. A nil opener selects the resolved model registry.
 func runWithTranslationOpener(ctx context.Context, args []string, stdout, stderr io.Writer, resolve func() (config.Paths, error), runner fileRunner, open selectedEngineOpener) int {
+	return runWithTranslationExecutor(ctx, args, stdout, stderr, resolve, runner, open, translationCommand.execute)
+}
+
+func runWithTranslationExecutor(ctx context.Context, args []string, stdout, stderr io.Writer, resolve func() (config.Paths, error), runner fileRunner, open selectedEngineOpener, execute func(translationCommand, context.Context, io.Writer, config.Paths, selectedEngineOpener) (localize.Result, error)) int {
 	fail := func(code int, message string) int {
 		// A failed diagnostic write must still return failure.
 		_, _ = fmt.Fprintf(stderr, "yakuori: %s\n", message)
@@ -94,7 +98,7 @@ func runWithTranslationOpener(ctx context.Context, args []string, stdout, stderr
 			if open == nil {
 				open = models.New(paths).OpenSelected
 			}
-			result, err := command.execute(ctx, stdout, paths, open)
+			result, err := execute(command, ctx, stdout, paths, open)
 			return reportPipeline(stderr, result, err)
 		}
 		n, err := io.WriteString(stdout, help)

@@ -459,6 +459,8 @@ func TestPipelinePrecommitSignalChild(t *testing.T) {
 	var failed bool
 	if request.Mode == "publication-exit" {
 		code, failed = cliPublicationExitChild(t, request, sink)
+	} else if request.Mode == "stdout-exit" {
+		code, failed = cliStdoutExitChild(t, request, sink)
 	} else {
 		code, failed = executeSignalChild(t, request, sink)
 	}

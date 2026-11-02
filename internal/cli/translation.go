@@ -28,13 +28,16 @@ type requestFactory interface {
 var errTranslationInput = errors.New("translation requires a bounded regular UTF-8 file")
 var errRequestFactory = errors.New("selected engine cannot construct requests")
 
-// The opener is the only test seam; Store and Core are always the real implementations.
 // Context, output, resolved storage and the selected-model loader have independent lifetimes.
 func (command translationCommand) execute(ctx context.Context, stdout io.Writer, paths config.Paths, open selectedEngineOpener) (result localize.Result, err error) {
 	return command.executeObserved(ctx, stdout, paths, open, nil, nil)
 }
 
 func (command translationCommand) executeObserved(ctx context.Context, stdout io.Writer, paths config.Paths, open selectedEngineOpener, observation *localize.AcceptanceObservation, details *AcceptanceDetails) (result localize.Result, err error) {
+	return command.executeWithStoreClose(ctx, stdout, paths, open, observation, details, nil)
+}
+
+func (command translationCommand) executeWithStoreClose(ctx context.Context, stdout io.Writer, paths config.Paths, open selectedEngineOpener, observation *localize.AcceptanceObservation, details *AcceptanceDetails, closeStore func(*tm.Store) error) (result localize.Result, err error) {
 	var adapter localize.Adapter = textadapter.New(command.sourceLanguage, command.targetLanguage)
 	if command.format == "w3strings" {
 		table, err := w3strings.NewForSource(command.sourceLanguage, config.DefaultLimits())
@@ -103,7 +106,10 @@ func (command translationCommand) executeObserved(ctx context.Context, stdout io
 		return result, &localize.Error{Phase: "tm_open", Err: err}
 	}
 	defer func() {
-		if closeErr := store.Close(); closeErr != nil {
+		if closeStore == nil {
+			closeStore = (*tm.Store).Close
+		}
+		if closeErr := closeStore(store); closeErr != nil {
 			err = errors.Join(err, &localize.Error{Phase: "close", Err: closeErr})
 		}
 	}()

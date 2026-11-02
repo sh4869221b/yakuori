@@ -238,6 +238,8 @@ pipeline_fs_independent() {
  cat "$log"
 }
 
+printf '%s\n' TestPipelineStdoutBoundaries/normal TestPipelineStdoutBoundaries/cancel-before TestPipelineStdoutBoundaries/cancel-after >"$pipeline_tmp/stdout-boundaries.names"
+pipeline_fs_independent stdout-boundaries '^TestPipelineStdoutBoundaries$' "$pipeline_tmp/stdout-boundaries.names"
 pipeline_fs_independent fixture-inputs '^TestPipelineFixtureInputs$' "$pipeline_tmp/fixture-inputs.names"
 pipeline_fs_independent barrier '^TestPipelineHarnessBarrier$' "$pipeline_tmp/barrier.names"
 pipeline_fs_independent guards '^TestPipelineHarnessGuards$' "$pipeline_tmp/guards.names"
