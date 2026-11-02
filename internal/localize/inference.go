@@ -17,6 +17,7 @@ type InferenceEngine struct {
 	engine       inference.Engine
 	buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)
 	buildTerms   TermsRequestBuilder
+	observation  *AcceptanceObservation
 }
 
 func NewInferenceEngine(engine inference.Engine, buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) InferenceEngine {
@@ -100,6 +101,9 @@ func buildTermsRequest(ctx context.Context, id unit.UnitID, input RequestInput, 
 func (e InferenceEngine) generate(ctx context.Context, plan inferencePlan) (Generation, error) {
 	if err := ctx.Err(); err != nil {
 		return Generation{}, err
+	}
+	if e.observation != nil {
+		e.observation.GenerateCalls++
 	}
 	result, err := e.engine.Generate(ctx, plan.request)
 	generation := Generation{Text: result.Text}

@@ -4,6 +4,7 @@ package localize
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"io"
 
@@ -57,13 +58,22 @@ func (c Core) fileWithTM(ctx context.Context, options publication.Options, adapt
 			err = errors.Join(err, &Error{Phase: "close", Err: closeErr})
 		}
 	}()
-	session, err := adapter.Import(run.SourceSnapshot(), profile)
+	source := run.SourceSnapshot()
+	if c.observation != nil && sha256.Sum256(source) != c.observation.SourceSHA256 {
+		return result, &Error{Phase: "import", Err: errors.New("source does not match fixture pin")}
+	}
+	session, err := adapter.Import(source, profile)
 	if err != nil {
 		return result, &Error{Phase: "import", Err: err}
 	}
 	if memory != nil {
 		if err := memory.bindKeys(session, adapter); err != nil {
 			return result, &Error{Phase: "tm_begin", Err: err}
+		}
+		if c.observation != nil {
+			for _, key := range memory.scope.Keys {
+				c.observation.Keys = append(c.observation.Keys, AcceptanceKey{ID: key.UnitID.StableID(), Key: []byte(key.Key)})
+			}
 		}
 	}
 	accepted, err := c.generate(ctx, session, profile, memory)
@@ -86,6 +96,9 @@ func (c Core) fileWithTM(ctx context.Context, options publication.Options, adapt
 		return final.check(reader, adapter)
 	}); err != nil {
 		return result, &Error{Phase: "stage", Err: err}
+	}
+	if c.observation != nil {
+		c.observation.FinalValidated = true
 	}
 	result.TMCommitted, err = final.commit(ctx, tm, c.limits.DBOperationTimeout)
 	if err != nil {

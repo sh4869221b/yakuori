@@ -1,0 +1,5 @@
+;meta[language=en]
+; id      |key(hex)|key(str)| text
+10|00000001||Hello
+20|00000002||
+30|00000003||Long source
