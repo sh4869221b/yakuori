@@ -228,3 +228,156 @@ The model-free runner contract test uses the project-authored
 the research oracle's `encode` command. Its empty entry and long generated
 Japanese translation exercise the runner contract; the synthetic test run is
 not a real MOD or GPU acceptance result.
+
+## Explicit measurement supervisor
+
+The `--measure` option runs the same acceptance workflow with its translation
+worker directly supervised. Formal fixture runs still require confirmed
+criteria. The following is a template for a future confirmed run, not an
+approval or a measurement of this candidate set:
+
+```sh
+CGO_ENABLED=0 GOTOOLCHAIN=local go build -tags cuda -o /tmp/yakuori-acceptance ./tools/acceptance/cmd/run
+/tmp/yakuori-acceptance --measure \
+  --manifest docs/evidence/acceptance/fixtures.json \
+  --criteria docs/evidence/acceptance/criteria.json \
+  --root "$PWD" --repository "$PWD" \
+  --evidence /path/to/private/empty-evidence-directory \
+  --model-id MODEL_ID --model-sha256 MODEL_SHA256 \
+  --model-quant GGUF_QUANT --model-quant-source QUANT_SOURCE \
+  --gpu-uuid GPU_UUID --conditions 'OS page cache not flushed; external load recorded by operator' \
+  --repeat-index 1 --repeat-total 1 \
+  --game witcher3 --artifact acceptance
+```
+
+The selected device is identified by `--gpu-uuid`. The operator supplies the
+GGUF storage quantization and its source; it is distinct from the effective
+compute quantization obtained from the actual worker engine. The command does
+not infer a missing value. Record external activity and cache conditions in
+`--conditions`; a device sample cannot establish that the rest of the host is
+idle. One invocation executes one fresh/reuse pair per selected fixture.
+Repetitions use separate invocations and empty evidence directories. Fresh and
+reuse each start a process and load a model; reuse refers to TM reuse, not a
+warm resident model. Neither mode flushes the OS page cache.
+
+The private `run.json` adds a top-level `measurement` object and a measurement
+object to each reached run. It binds existing run IDs, manifest and criteria
+versions, selected model and engine details to host/device conditions, input
+counts and bytes, operator conditions and timings. It records the requested and
+effective backend/context, effective policy and goinfer/CUDA pins from the
+worker. GPU baseline samples contain device usage and other compute PIDs before
+worker startup. The per-worker samples contain timestamps, query durations,
+device and worker-PID memory, and other compute PIDs. A null value means the
+value was unavailable, not zero. Worker results containing translation text are
+not copied into the measurement record.
+
+Load time covers the worker opener, including its model verification, snapshot
+and load. Generation time is the sum of returned backend `Generate` call wall
+times, including failed calls and any drain; the record distinguishes unreached and partial
+calls. There is no inferred prefill/decode timing. Validation counts distinguish
+normal unit validation and TM-candidate revalidation; a rejected TM candidate
+followed by an accepted new translation is not a failed final unit. Final
+artifact validation is recorded separately. An absent worker result leaves
+these observations unavailable.
+
+Timing separates shared preparation (including manifest fixture checks),
+oracle build, each fresh/reuse interval and translation-worker wall time.
+Oracle build, downloads and fixture placement are excluded from performance
+execution. Each mode interval includes model load, the product pipeline,
+independent reading and ordinary worker reaping. Shared TM cleanup follows the
+pair or an abort and is recorded separately, as is oracle-build cleanup; reuse
+time is not added to the fresh interval. Runner wall time excluding build is
+also recorded. These intervals do not decide how a future confirmed criterion
+will account for shared preparation, nor do they apply the candidate 60-second
+limit to a differently scoped measurement.
+
+Linux worker RSS high-water comes from its direct child's `wait` resource usage
+(`ru_maxrss` KiB converted to bytes). It is not the runner's RSS, an oracle
+process value, or a sampled `/proc` maximum. GPU samples use `nvidia-smi` at a
+nominal 100 ms interval plus query time. The adopted UUID and worker PID must
+both match; ambiguous attribution remains unavailable. A successful query with
+the PID absent is distinct from query failure/N/A and from interrupted
+monitoring. A usable series requires completed monitoring and at least one
+valid attributed process and device value; query errors or early stop leave
+any observed maximum as a partial reference. PID absence during startup or
+teardown alone does not fail a series. These values are sampled maxima, not
+continuous peaks, and no missing value is replaced by zero.
+If a PID occurs on more than one GPU, its process sample is ambiguous and is
+not attributed to the selected GPU; device-wide values remain separate.
+`resource_status` describes resource collection only; it is not the product or
+overall measurement result. Each row's `measurement_status` and
+`measurement_missing` record the final measurement decision separately.
+`wall_seconds` is null if the worker never starts.
+If a GPU query's process or process-group cleanup cannot be confirmed, its
+cleanup status is `unknown` and further GPU queries are stopped.
+
+`--wall-limit` bounds each mode through its independent reader;
+`--preparation-limit` bounds preparation and the oracle build. Defaults are
+5 minutes and 10 minutes respectively; they are supervision parameters, not
+performance criteria. `--sample-interval`, `--query-timeout`, `--stop-grace`,
+and `--reap-timeout` control measurement and stop behavior. On timeout or
+cancellation, the supervisor stops the owned process group, escalates after a
+finite grace, and records actual exit/signal, result availability, wait and
+group recovery. A process remaining in an uninterruptible state or an
+unconfirmed group cleanup is not reported as success. This external stop is
+separate from the product's cooperative deadline and drain behavior; existing
+`internal/inference/goinfer/deadline_test.go`, `cancel_test.go`, and
+`close_test.go` cover the latter behavior.
+Preparation uses ordinary file inputs and context-aware loops. A filesystem
+operation blocked uninterruptibly in the kernel may exceed the preparation
+deadline; this does not provide hard cancellation of such I/O.
+`preparation_status` distinguishes complete, partial and not-run preparation;
+`preparation_seconds` is an elapsed partial value when preparation stops,
+with the reason recorded in `preparation_stop_reason`.
+
+Product, oracle, measurement and cleanup results are distinct. A published
+product result and passing independent reader remain recorded if VRAM is
+unavailable, but measurement is incomplete and the command exits nonzero.
+Incomplete samples, missing metadata, failed cleanup, timeout and unstarted
+runs cannot establish performance acceptance. The current #85 criteria remain
+pending; the supervisor does not change that state or perform #99's formal
+maximum-fixture comparison.
+
+### Controlled supervisor checks
+
+The following model-free tests use the Go test binary as an actual direct child
+and substitute a short controlled GPU query command; fake samples verify
+classification and are not real VRAM measurements:
+
+```sh
+CGO_ENABLED=0 GOTOOLCHAIN=local go test ./tools/acceptance -run '^TestSupervisor' -count=1 -v
+```
+
+The controlled cases exercise successful and failed worker exits, a missing
+worker result, wall limit, cancellation, a result descriptor retained by a
+descendant, actual child `ru_maxrss`, query hangs and PID-absent/error/interrupted
+sample classifications. The supervisor tests passed on Linux/amd64 with Go
+1.27.1 and `CGO_ENABLED=0`; they do not establish GPU performance or a formal
+fixture result. Product publication and independent-reader integration are
+verified separately on a supported filesystem.
+
+One execution of the command above using the project-authored test binary as
+the worker on Linux/amd64 and Go 1.27.1 produced the following values. GPU
+queries were controlled shell helpers; durations and RSS are observations from
+these short processes, not real model or GPU performance:
+
+| Control | Wall seconds | Child RSS bytes | Exit / signal | Stop reason | FD 3 result | Reap / group |
+| --- | ---: | ---: | --- | --- | --- | --- |
+| success | 0.252038 | 14,024,704 | 0 | none | available | reaped / cleared |
+| failure | 0.001480 | 16,138,240 | 7 | none | missing or invalid | reaped / cleared |
+| missing | 0.001395 | 16,138,240 | 0 | none | missing or invalid | reaped / cleared |
+| deadline | 2.041012 | 16,138,240 | killed | wall limit | missing or invalid | reaped / cleared |
+| cancellation | 0.045557 | 16,138,240 | killed | canceled | missing or invalid | reaped / cleared |
+
+Each row was written to a private `run.json` by the normal record writer and
+read back by the test. The tests also verify that a query process leaving a
+same-group child is cleaned up, and stop further queries when that cleanup
+cannot be confirmed. These process checks do not assert recovery of a child
+that escapes its owned group or a process stuck in uninterruptible kernel I/O.
+The deadline case uses an actual `context.WithTimeout` expiration after the
+worker signals readiness. Another controlled case retains a valid earlier GPU
+sample when a later query's stop grace exceeds the supervisor's reap wait. At
+worker exit the supervisor kills an active query group before its caller can
+exit, then waits a finite time for query recovery; unconfirmed cleanup remains
+unknown. A separate helper exits immediately after supervision returns, and
+the parent test verifies that the TERM-ignoring query no longer exists.

@@ -238,6 +238,7 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 		plans = append(plans, plan)
 	}
 	if memory != nil {
+		memory.observation = c.observation
 		if err := memory.begin(session, profile); err != nil {
 			return nil, &Error{Phase: "tm_begin", Err: err}
 		}
@@ -293,6 +294,9 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 			return nil, &Error{Phase: "restore", UnitID: id, Err: err}
 		}
 		translation, err := validate.Validate(session, id, profile, restored)
+		if c.observation != nil {
+			c.observation.Validation.record(err)
+		}
 		if err != nil {
 			return nil, &Error{Phase: "validate", UnitID: id, Err: err}
 		}

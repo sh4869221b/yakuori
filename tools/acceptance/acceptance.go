@@ -2,6 +2,7 @@
 package acceptance
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sh4869221b/yakuori/internal/adapter/w3strings"
@@ -103,14 +105,22 @@ type FixtureResult struct {
 
 // Load reads one JSON document without copying fixture text into diagnostics.
 func Load(path string, out any) error {
-	f, err := os.Open(path)
+	return LoadContext(context.Background(), path, out)
+}
+
+// LoadContext stops between reads when preparation is canceled.
+func LoadContext(ctx context.Context, path string, out any) error {
+	f, err := openRegular(ctx, path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 	const maxDocument = 1 << 20
-	raw, err := io.ReadAll(io.LimitReader(f, maxDocument+1))
+	raw, err := io.ReadAll(io.LimitReader(contextReader{ctx, f}, maxDocument+1))
 	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if len(raw) > maxDocument {
@@ -124,12 +134,20 @@ func Load(path string, out any) error {
 	if err := dec.Decode(new(any)); err != io.EOF {
 		return errors.New("evaluation document must contain one JSON value")
 	}
-	return nil
+	return ctx.Err()
 }
 
 // Check validates metadata, local originals, and readiness without performing a translation.
 func Check(root string, m Manifest, c Criteria) (Result, error) {
+	return CheckContext(context.Background(), root, m, c)
+}
+
+// CheckContext validates the same inputs as Check with cancellation between files and reads.
+func CheckContext(ctx context.Context, root string, m Manifest, c Criteria) (Result, error) {
 	result := Result{MissingReal: []string{}, MissingAll: []string{}, Undetermined: []string{}, Confirmation: c.Confirmation.Status, Fixtures: []FixtureResult{}, ProductIncompatible: []string{}}
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	if strings.TrimSpace(root) == "" || strings.TrimSpace(m.Version) == "" || strings.TrimSpace(c.Version) == "" || c.ManifestVersion != m.Version || len(m.Fixtures) == 0 || len(c.FixtureIDs) == 0 {
 		return result, errors.New("root, versions, fixture set or matching manifest version missing")
 	}
@@ -145,11 +163,14 @@ func Check(root string, m Manifest, c Criteria) (Result, error) {
 	selectedUnits, selectedTextBytes, selectedArtifactBytes := 0, 0, 0
 	selectedHasMod := false
 	for _, f := range m.Fixtures {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
 		if seen[f.ID] || f.ID == "" {
 			return result, errors.New("empty or duplicate fixture ID")
 		}
 		seen[f.ID] = true
-		fixtureResult, err := checkFixture(root, f, selected[f.ID], covered, realCovered)
+		fixtureResult, err := checkFixture(ctx, root, f, selected[f.ID], covered, realCovered)
 		if err != nil {
 			return result, fmt.Errorf("fixture %s: %w", f.ID, err)
 		}
@@ -221,7 +242,7 @@ func Check(root string, m Manifest, c Criteria) (Result, error) {
 	return result, nil
 }
 
-func checkFixture(root string, f Fixture, selected bool, covered, realCovered map[string]bool) (FixtureResult, error) {
+func checkFixture(ctx context.Context, root string, f Fixture, selected bool, covered, realCovered map[string]bool) (FixtureResult, error) {
 	result := FixtureResult{ID: f.ID, InputLimits: "product"}
 	if f.Limits != nil {
 		result.InputLimits = "research"
@@ -245,12 +266,15 @@ func checkFixture(root string, f Fixture, selected bool, covered, realCovered ma
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(root, path)
 	}
-	file, err := os.Open(path)
+	file, err := openRegular(ctx, path)
 	if err != nil {
 		return result, fmt.Errorf("open local original: %w", err)
 	}
-	raw, readErr := io.ReadAll(io.LimitReader(file, int64(f.Bytes)+1))
+	raw, readErr := io.ReadAll(io.LimitReader(contextReader{ctx, file}, int64(f.Bytes)+1))
 	if err := errors.Join(readErr, file.Close()); err != nil {
+		return result, err
+	}
+	if err := ctx.Err(); err != nil {
 		return result, err
 	}
 	if len(raw) != f.Bytes {
@@ -272,6 +296,9 @@ func checkFixture(root string, f Fixture, selected bool, covered, realCovered ma
 	ids := make(map[string]bool, len(units))
 	total, maxText := 0, 0
 	for _, u := range units {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
 		ids[u.ID().StableID()] = true
 		n := u.SourceBytes()
 		total += n
@@ -282,6 +309,9 @@ func checkFixture(root string, f Fixture, selected bool, covered, realCovered ma
 	}
 	seenCategories := map[string]bool{}
 	for _, cat := range f.Categories {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
 		if !slices.Contains(categories, cat.Name) || seenCategories[cat.Name] || len(cat.UnitIDs) == 0 || strings.TrimSpace(cat.Evidence) == "" {
 			return result, errors.New("invalid category, unit references or evidence")
 		}
@@ -303,4 +333,40 @@ func checkFixture(root string, f Fixture, selected bool, covered, realCovered ma
 	defaults := config.DefaultLimits()
 	result.ProductInputCompatible = len(raw) <= defaults.ArtifactBytes && len(units) <= defaults.Units && maxText <= defaults.UnitTextBytes && total <= defaults.TotalTextBytes
 	return result, nil
+}
+
+// openRegular rejects FIFOs and devices after opening without blocking on them.
+func openRegular(ctx context.Context, path string) (*os.File, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		f.Close()
+		if err != nil {
+			return nil, err
+		}
+		return nil, errors.New("input must be a regular file")
+	}
+	if err := ctx.Err(); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r contextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(p)
 }

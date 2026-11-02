@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"time"
 
 	"github.com/sh4869221b/yakuori/internal/cli"
 	"github.com/sh4869221b/yakuori/internal/config"
@@ -66,6 +67,8 @@ type WorkerResult struct {
 	Observation  localize.AcceptanceObservation `json:"observation"`
 	Result       localize.Result                `json:"result"`
 	FailurePhase string                         `json:"failure_phase,omitempty"`
+	LoadSeconds  *float64                       `json:"load_seconds"`
+	LoadStatus   string                         `json:"load_status"`
 }
 
 type EngineOpener func(context.Context, string) (string, inference.Engine, error)
@@ -83,7 +86,7 @@ func decodeDigest(s string) ([32]byte, error) {
 // RunWorker accepts an opener only so tests can exercise the identical process
 // protocol with a controlled Engine. The command always supplies OpenSelected.
 func RunWorker(ctx context.Context, req WorkerRequest, open EngineOpener) (result WorkerResult, err error) {
-	result = WorkerResult{RunID: req.RunID, FixtureID: req.FixtureID, Mode: req.Mode, Build: CurrentBuild()}
+	result = WorkerResult{RunID: req.RunID, FixtureID: req.FixtureID, Mode: req.Mode, Build: CurrentBuild(), LoadStatus: "not_run"}
 	defer func() {
 		if err != nil {
 			result.FailurePhase = "worker"
@@ -109,7 +112,18 @@ func RunWorker(ctx context.Context, req WorkerRequest, open EngineOpener) (resul
 	paths := req.ModelPaths
 	paths.Data = req.TMData
 	args := []string{"--format", "w3strings", "--source-language", req.SourceLanguage, "--target-language", "ja", "--game", req.Game, "--artifact", req.Artifact, "--backend", req.Backend, "--output", req.Output, req.Source}
-	result.Result, err = cli.RunW3Acceptance(ctx, args, paths, open, &result.Observation, &result.Details)
+	timedOpen := func(ctx context.Context, backend string) (string, inference.Engine, error) {
+		started := time.Now()
+		id, engine, openErr := open(ctx, backend)
+		elapsed := time.Since(started).Seconds()
+		result.LoadSeconds = &elapsed
+		result.LoadStatus = "complete"
+		if openErr != nil {
+			result.LoadStatus = "failed"
+		}
+		return id, engine, openErr
+	}
+	result.Result, err = cli.RunW3Acceptance(ctx, args, paths, timedOpen, &result.Observation, &result.Details)
 	return result, err
 }
 

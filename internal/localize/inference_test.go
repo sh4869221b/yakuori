@@ -25,8 +25,11 @@ type commonEngine struct {
 
 func TestAcceptanceGenerateCountOnlyCountsBackendCalls(t *testing.T) {
 	calls := 0
+	var callDuration time.Duration
 	backend := commonEngine{generate: func(context.Context, inference.GenerationRequest) (inference.GenerationResult, error) {
+		started := time.Now()
 		calls++
+		callDuration = time.Since(started)
 		return inference.GenerationResult{Text: "訳", Finish: inference.Stop}, nil
 	}}
 	observation := &AcceptanceObservation{}
@@ -38,6 +41,9 @@ func TestAcceptanceGenerateCountOnlyCountsBackendCalls(t *testing.T) {
 	}
 	if _, err := core.inference.generate(context.Background(), inferencePlan{}); err != nil || calls != 1 || observation.GenerateCalls != 1 {
 		t.Fatalf("backend call: calls=%d observed=%d err=%v", calls, observation.GenerateCalls, err)
+	}
+	if observation.GenerateCompleted != 1 || observation.GenerateFailed != 0 || observation.GenerationDuration < callDuration {
+		t.Fatalf("backend timing/result: %+v; minimum duration=%v", observation, callDuration)
 	}
 }
 
