@@ -3,8 +3,14 @@
 ## Scope and toolchain
 
 Verified 2026-10-02 against the official [download manifest](https://go.dev/dl/?mode=json)
-and [release history](https://go.dev/doc/devel/release). Baseline remains Go 1.27;
-CI pins Go **1.27.1**, with `GOTOOLCHAIN=local` (no automatic toolchain switch).
+and [release history](https://go.dev/doc/devel/release). At that time CI pinned Go **1.27.1**.
+The current baseline is Go 1.27.3; CI uses the official Go **1.27.3** toolchain
+with `GOTOOLCHAIN=local` (no automatic toolchain switch):
+
+- Archive: https://go.dev/dl/go1.27.3.linux-amd64.tar.gz
+- SHA-256: `65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40`
+
+The original 2026-10-02 evidence used:
 
 - Archive: https://go.dev/dl/go1.27.1.linux-amd64.tar.gz
 - SHA-256: `63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445`

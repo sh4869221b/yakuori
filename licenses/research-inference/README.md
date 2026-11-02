@@ -10,8 +10,9 @@ permission statement must not be interpreted as proof of aikit's source lineage.
 The initial 2026-10-07 reviewed baseline's CLI did not link these packages.
 The current CLI selects the CPU inference engine and, with `-tags cuda` on
 linux/amd64, the CUDA backend. Exact-version goinfer v0.23.0 and aikit v1.70.1
-notices are retained alongside the previous pins; the six root notice files
-are unchanged from goinfer v0.22.0 and aikit v1.57.0.
+notices are retained here alongside the previous pins. The root notices for
+current aikit v1.76.0 are retained under `../upstream/aikit-v1.76.0/`; source
+notice findings for this version have not been re-audited.
 `go-module-sums-v0.22.0.json` preserves the previous selected-module inventory;
 `../go-module-sums.json` records the current pins.
 No upstream model/tokenizer fixtures, executable or module source tree is included.

@@ -180,7 +180,7 @@ remain active without input-only text budgets. Legal output larger than
 
 Run from the repository root. Normal Go build/test requires neither Rust nor
 the oracle. The dedicated Docker image builds the unchanged locked
-`w3strings` 0.2.0 reader with Rust 1.90.0 and uses official Go 1.27.1:
+`w3strings` 0.2.0 reader with Rust 1.90.0 and uses official Go 1.27.3:
 
 ```sh
 docker build --progress=plain -f ci/w3strings-spike.Dockerfile .
@@ -192,8 +192,8 @@ exact no-op and the pinned zero-key negative) and `ci/w3strings-adapter.sh`
 (real production exports, close/reopen/CompareFinal, independent decode and
 saved-CSV comparison). The second runs the existing strict CGO=0 clean gate,
 including offline model-free checks and Linux arm64 cross-build, not arm64
-execution. A host `go1.27.1-X:nodwarf5` does not satisfy the exact official
-`go1.27.1` gate.
+execution. A host `go1.27.3-X:nodwarf5` does not satisfy the exact official
+`go1.27.3` gate.
 
 Ordinary Docker overlayfs is not a qualified publication filesystem. The
 three W3 Core tests explicitly assert prepare-phase unsupported-filesystem

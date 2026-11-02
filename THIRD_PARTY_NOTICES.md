@@ -9,54 +9,45 @@ for future research binaries, vendor trees or model-bearing images.
 
 ## Scope and retained notices
 
-Dependency pins updated 2026-10-16: goinfer and its CUDA module v0.23.0, with
-aikit v1.70.1. All 17 modules selected in go.mod were obtained at their current
-go.mod/go.sum versions from proxy.golang.org, with checksum verification enabled.
-Every selected module sum matches the current go.sum; `go mod verify` passed.
-Exact current sums are retained in `licenses/go-module-sums.json`; the previous
-inventory remains in `licenses/research-inference/go-module-sums-v0.22.0.json`.
-GitHub-hosted root notices were also independently verified by blob hash; see
-`licenses/upstream-index.json`, which retains the previous-pin records.
-Original full notices are retained under `licenses/`.
-The Go 1.27.1 toolchain's BSD-3-Clause notice is also retained there.
-The root goinfer/aikit LICENSE, NOTICE and THIRD_PARTY_LICENSES files for the
-current inference pins remain under `licenses/upstream/` and
-`licenses/research-inference/notices/`; the CUDA and aikit/gpu module LICENSEs
-and their gocudrv/purego dependencies are retained under `licenses/upstream/`.
-The six root goinfer/aikit notice files are byte-identical to the previous pins;
-the CUDA module's LICENSE is unchanged too. Copies for previous pins remain as
-historical evidence. Upstream notices also
-describe optional backends and model-bearing release assets; those assets are not
-included. The current package selections use the modules listed below.
+The current Go module versions and their module sums are recorded in
+`licenses/go-module-sums.json`; `go mod verify` passed after the 2026-11-03
+update. Original root notices for the current pins are retained under
+`licenses/upstream/` and `licenses/research-modernc/verbatim-files/`.
+The original 2026-10-16 inventory, independently verified GitHub-hosted root
+notices, and file-level source notice collections describe the versions examined
+at that time; see `licenses/upstream-index.json`, `licenses/research-inference/`,
+and `licenses/research-modernc/`. They have not been re-audited for the new pins.
+Upstream notices also describe optional backends and model-bearing release assets;
+those assets are not included. The current package selections use the modules
+listed below.
 
-| Component | Exact pin | Notice verified | Current use |
+| Component | Exact pin | Root notice | Current use |
 |---|---|---|---|
-| Go runtime / standard library | 1.27.1 | BSD-3-Clause, retained | Built executables |
-| golang.org/x/sys | v0.48.0 | BSD-3-Clause, retained | Linux publisher in CLI |
+| Go runtime / standard library | 1.27.3 | BSD-3-Clause, retained | Built executables |
+| golang.org/x/sys | v0.49.0 | BSD-3-Clause, retained | Linux publisher in CLI |
 | github.com/townsendmerino/goinfer | v0.23.0 | MIT, [retained](licenses/upstream/goinfer-v0.23.0/LICENSE) | CPU/CUDA inference engines and research tools |
 | [github.com/townsendmerino/goinfer/cuda](https://github.com/townsendmerino/goinfer/blob/cuda/v0.23.0/LICENSE) | v0.23.0 | MIT, [retained](licenses/upstream/goinfer-cuda-v0.23.0/LICENSE) | CUDA inference backend (`cuda && linux && amd64`) |
-| github.com/townsendmerino/aikit | v1.70.1 | MIT, [retained](licenses/upstream/aikit-v1.70.1/LICENSE) | Inference transitive dependency |
-| [github.com/townsendmerino/aikit/gpu](https://github.com/townsendmerino/aikit/blob/gpu/v0.33.5/LICENSE) | v0.33.5 | MIT, [retained](licenses/upstream/aikit-gpu-v0.33.5/LICENSE) | CUDA tensor primitives |
+| github.com/townsendmerino/aikit | v1.76.0 | MIT, [retained](licenses/upstream/aikit-v1.76.0/LICENSE) | Inference transitive dependency |
+| [github.com/townsendmerino/aikit/gpu](https://github.com/townsendmerino/aikit/blob/gpu/v0.35.0/LICENSE) | v0.35.0 | MIT, [retained](licenses/upstream/aikit-gpu-v0.35.0/LICENSE) | CUDA tensor primitives |
 | [github.com/eitamring/gocudrv](https://github.com/eitamring/gocudrv/blob/v0.3.2/LICENSE) | v0.3.2 | MIT, [retained](licenses/upstream/gocudrv-v0.3.2/LICENSE) | CUDA driver API binding |
-| [github.com/ebitengine/purego](https://github.com/ebitengine/purego/blob/v0.10.1/LICENSE) | v0.10.1 | Apache-2.0, [retained](licenses/upstream/purego-v0.10.1/LICENSE) | CUDA driver loading |
-| golang.org/x/text | v0.40.0 | BSD-3-Clause, retained | Inference transitive dependency |
-| modernc.org/sqlite | v1.60.1 | BSD-3-Clause wrapper plus scoped engine/third-party notices, retained | Translation-memory persistence and SQLite probes |
-| modernc.org/libc | v1.77.1 | BSD-3-Clause root plus scoped third-party notices, retained | SQLite dependency |
+| [github.com/ebitengine/purego](https://github.com/ebitengine/purego/blob/v0.11.2/LICENSE) | v0.11.2 | Apache-2.0, [retained](licenses/upstream/purego-v0.11.2/LICENSE) | CUDA driver loading |
+| golang.org/x/text | v0.43.0 | BSD-3-Clause, retained | Inference transitive dependency |
+| modernc.org/sqlite | v1.61.1 | BSD-3-Clause wrapper plus scoped engine/third-party notices, retained | Translation-memory persistence and SQLite probes |
+| modernc.org/libc | v1.80.0 | BSD-3-Clause root plus scoped third-party notices, retained | SQLite dependency |
 | modernc.org/mathutil | v1.7.1 | BSD-3-Clause root plus scoped third-party notices, retained | SQLite dependency |
 | modernc.org/memory | v1.12.1 | BSD-3-Clause root plus mmap/Go notices, retained | SQLite dependency |
-| github.com/dustin/go-humanize | v1.0.1 | MIT, retained | SQLite dependency |
+| github.com/dustin/go-humanize | v1.1.0 | MIT, retained | SQLite dependency |
 | github.com/google/uuid | v1.6.0 | BSD-3-Clause, retained | SQLite dependency |
 | github.com/mattn/go-isatty | v0.0.24 | MIT, retained | SQLite test dependency |
-| github.com/ncruces/go-strftime | v1.0.0 | MIT, retained | SQLite test dependency |
+| github.com/ncruces/go-strftime | v1.1.0 | MIT, retained | SQLite test dependency |
 | github.com/remyoudompheng/bigfft | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause, retained | SQLite dependency |
 
-Exact archives and module verification underpin the retained notices. At the
-2026-10-16 update, `go list -m all` and linux/amd64 and linux/arm64 CLI package
+At the 2026-10-16 update, `go list -m all` and linux/amd64 and linux/arm64 CLI package
 selections were inspected again, including linux/amd64 with `-tags cuda`.
-The current CLI selects goinfer/aikit/x/text and SQLite in addition to x/sys;
-the CUDA build also selects the CUDA rows above. The full module graph includes
+The CLI selected goinfer/aikit/x/text and SQLite in addition to x/sys;
+the CUDA build also selected the CUDA rows above. The module graph included
 `aikit/gpu/visioncuda v0.1.0`, but no package from that module is imported by these
-builds, and it is not among the 17 go.mod-selected modules inventoried here.
+builds, and it was not among the 17 go.mod-selected modules inventoried there.
 The goinfer and aikit GitHub trees include separate nested modules. Running CUDA
 inference or evaluation requires a working
 NVIDIA driver; gocudrv dynamically loads the host's `libcuda.so.1` at runtime
@@ -66,20 +57,21 @@ repository.
 
 ### File-level findings and distribution limits
 
-The Go runtime has additional Sun Microsystems, Stephen L. Moshier/Cephes and
-Lucent/Vita Nuova attribution blocks. These are retained alongside its BSD
-LICENSE in `licenses/upstream/go-1.27.1/THIRD_PARTY_SOURCE_NOTICES.txt`.
+The Go 1.27.1 runtime had additional Sun Microsystems, Stephen L. Moshier/Cephes
+and Lucent/Vita Nuova attribution blocks. These are retained in
+`licenses/upstream/go-1.27.1/THIRD_PARTY_SOURCE_NOTICES.txt`; the current Go
+1.27.3 source has not been re-audited for file-level notices.
 
 The SQLite/libc family has nested and generated-source notices beyond BSD root
-metadata. These are preserved under `licenses/research-modernc/`, including complete
-selected source-notice blocks and original nested notices, without labeling the entire module
+metadata. The prior-pin collections under `licenses/research-modernc/` include selected
+source-notice blocks and original nested notices, without labeling the entire module
 or Yakuori as one of the licenses found in generated-header comments. SQLite is
 now selected by the CLI's translation-memory persistence code. Do not redistribute SQLite probe binaries
 or whole module caches based on this source-publication preparation.
 
 The inference engines and separately built CPU probe select aikit codebooks identified as copied
 from llama.cpp/gguf-py, whose additional MIT attribution is missing upstream's
-summary; current primary notices are retained under `licenses/research-inference/`.
+summary; notices from the prior pins are retained under `licenses/research-inference/`.
 Some selected aikit numeric kernels reference Cephes without an exact licensed
 source lineage. Resolve that provenance and reconcile the copied-code notices
 before redistributing inference-bearing binaries or inference module sources.
