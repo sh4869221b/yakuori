@@ -88,7 +88,7 @@ type cliPublicationExitChildReport struct {
 	SQLiteCode                      int
 	RecordExistsError, CloseIOError bool
 	Generated, Drained, Closed      int
-	Injected                        int
+	Injected, StoreCloses           int
 	BeforeRuns, NewRuns             []string
 	RunDir                          string
 	Collision                       cliPrecommitFile
@@ -180,7 +180,7 @@ func cliPublicationExitTrigger(key translationTMRow) string {
 
 func (e *cliPublicationExitEngine) inject(ctx context.Context) (err error) {
 	switch e.request.Row {
-	case "normal", "published-close-error", "published-diagnostic-error":
+	case "normal", "published-close-error", "published-diagnostic-error", "published-store-close-error", "published-store-diagnostic-error":
 		return nil
 	case "commit-failure":
 		db, err := sql.Open("sqlite", "file:"+config.ResolveStoragePaths(e.request.Paths).TMFile+"?mode=rw")
@@ -295,13 +295,20 @@ func cliPublicationExitChild(t *testing.T, request signalChildRequest, sink *sig
 	if request.Row == "published-close-error" || request.Row == "published-diagnostic-error" {
 		e.CloseFunc = func() error { return syscall.EIO }
 	}
-	if request.Row == "published-diagnostic-error" {
+	if request.Row == "published-diagnostic-error" || request.Row == "published-store-diagnostic-error" {
 		writer.err = syscall.ENOSPC
 	}
 	var executeErr error
 	runner := func(ctx context.Context, options publication.Options) (localize.Result, error) {
 		command.options = options
-		e.report.Result, executeErr = command.execute(ctx, os.Stdout, request.Paths, e.Open)
+		if strings.HasPrefix(request.Row, "published-store-") {
+			e.report.Result, executeErr = command.executeWithStoreClose(ctx, os.Stdout, request.Paths, e.Open, nil, nil, func(store *tm.Store) error {
+				e.report.StoreCloses++
+				return errors.Join(store.Close(), syscall.EIO)
+			})
+		} else {
+			e.report.Result, executeErr = command.execute(ctx, os.Stdout, request.Paths, e.Open)
+		}
 		return e.report.Result, executeErr
 	}
 	// This is Run's actual dispatcher, with only the existing per-call opener
@@ -491,7 +498,7 @@ func (f cliPublicationExitFixture) judge(state cliPublicationExitState) []string
 		}
 	}
 	row := f.Case.Row
-	published := row == "normal" || row == "published-close-error" || row == "published-diagnostic-error"
+	published := row == "normal" || row == "published-close-error" || row == "published-diagnostic-error" || strings.HasPrefix(row, "published-store-")
 	committed := row != "commit-failure"
 	wantExit := 1
 	if row == "normal" {
@@ -529,11 +536,16 @@ func (f cliPublicationExitFixture) judge(state cliPublicationExitState) []string
 	case "postcommit-prepublish":
 		injected, wantPhase = 1, "publish"
 		check(child.RecordExistsError, "record-eexist")
-	case "published-close-error", "published-diagnostic-error":
+	case "published-close-error", "published-diagnostic-error", "published-store-close-error", "published-store-diagnostic-error":
 		wantPhase = "close"
 		check(child.CloseIOError, "real-engine-close-error")
 	}
 	check(child.Injected == injected, "injection-exactly-once")
+	wantStoreCloses := 0
+	if strings.HasPrefix(row, "published-store-") {
+		wantStoreCloses = 1
+	}
+	check(child.StoreCloses == wantStoreCloses, "store-close-exactly-once")
 	check(child.Phase == wantPhase && child.Result.TMCommitted == committed && child.Result.Publication.State == wantState, "caller-result")
 	wantRows := f.D0
 	if committed {
@@ -593,7 +605,7 @@ func (f cliPublicationExitFixture) judge(state cliPublicationExitState) []string
 		wantAttempts = 0
 	}
 	check(child.WriterAttempts == wantAttempts, "diagnostic-attempts")
-	if row == "published-diagnostic-error" {
+	if row == "published-diagnostic-error" || row == "published-store-diagnostic-error" {
 		check(child.WriterError == syscall.ENOSPC.Error() && child.Delegated == 0 && len(o.Stderr) == 0 && len(child.Diagnostic) > 0, "actual-diagnostic-writer-error")
 	} else {
 		check(child.WriterError == "" && child.Delegated == len(child.Diagnostic) && bytes.Equal(o.Stderr, child.Diagnostic), "actual-stderr")
@@ -651,9 +663,12 @@ func (f cliPublicationExitFixture) save(t *testing.T, state cliPublicationExitSt
 }
 
 func TestPipelineCLIPublicationExit(t *testing.T) {
-	for _, row := range []string{"normal", "commit-failure", "postcommit-prepublish", "published-close-error", "published-diagnostic-error"} {
+	for _, row := range []string{"normal", "commit-failure", "postcommit-prepublish", "published-close-error", "published-diagnostic-error", "published-store-close-error", "published-store-diagnostic-error"} {
 		t.Run(row, func(t *testing.T) {
 			for _, kind := range []string{"text", "w3"} {
+				if strings.HasPrefix(row, "published-store-") && kind == "w3" {
+					continue
+				}
 				t.Run(kind, func(t *testing.T) {
 					for _, mode := range []string{"create", "replace-absent", "replace-existing", "in-place"} {
 						t.Run(mode, func(t *testing.T) {

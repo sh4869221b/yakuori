@@ -302,10 +302,11 @@ jobs:
                 done
               done
               : > /evidence/names/cli-publication-exit
-              for row in normal commit-failure postcommit-prepublish published-close-error published-diagnostic-error; do
+              for row in normal commit-failure postcommit-prepublish published-close-error published-diagnostic-error published-store-close-error published-store-diagnostic-error; do
                 prefix="TestPipelineCLIPublicationExit/$row"
                 printf "%s\n" "$prefix" >> /evidence/names/cli-publication-exit
                 for kind in text w3; do
+                  case "$row/$kind" in published-store-*/w3) continue ;; esac
                   printf "%s\n" "$prefix/$kind" >> /evidence/names/cli-publication-exit
                   for mode in create replace-absent replace-existing in-place; do
                     printf "%s\n" "$prefix/$kind/$mode" >> /evidence/names/cli-publication-exit
@@ -482,6 +483,12 @@ jobs:
                 require_names "$label" "$names" "$log"
               }
 
+              printf '%s\n' TestPipelineStdoutBoundaries/normal TestPipelineStdoutBoundaries/cancel-before TestPipelineStdoutBoundaries/cancel-after > /evidence/names/stdout-boundaries
+              printf '%s\n' TestPipelineCLIStdoutExit/normal TestPipelineCLIStdoutExit/short TestPipelineCLIStdoutExit/partial TestPipelineCLIStdoutExit/epipe TestPipelineCLIStdoutExit/diagnostic > /evidence/names/cli-stdout-exit
+              run_required stdout-boundaries /evidence/names/stdout-boundaries \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineStdoutBoundaries$" -v
+              run_required cli-stdout-exit /evidence/names/cli-stdout-exit \
+                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelineCLIStdoutExit$" -v
               run_required bridge /evidence/names/bridge \
                 go test -count=1 -timeout 10m -tags pipelinefaults ./internal/publication -run "^TestPipelineFaultBridge$" -v
               run_required fixture-inputs /evidence/names/fixture-inputs \
