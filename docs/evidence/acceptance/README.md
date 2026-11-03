@@ -6,6 +6,9 @@ result. The checker reads local originals and reports readiness; it does not
 translate or judge quality. #86, #99 and #87 own the GPU run, performance
 measurement and human review respectively.
 
+The [2026-11-03 shared GPU run](gpu-run-2026-11-03.md) records the first
+approved fixture measurement and its remaining acceptance limits.
+
 ## Recommended fixture set
 
 Select all 19 BetterKeybinds entries, all 30 MonsterOfTheWeek entries and the
