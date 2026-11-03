@@ -381,3 +381,88 @@ worker exit the supervisor kills an active query group before its caller can
 exit, then waits a finite time for query recovery; unconfirmed cleanup remains
 unknown. A separate helper exits immediately after supervision returns, and
 the parent test verifies that the TERM-ignoring query no longer exists.
+
+## Human review sheets
+
+`tools/acceptance/cmd/review` consumes the runner's `run.json`. It does not
+perform a human evaluation. Keep the original fixtures, published outputs and
+review sheets private under the applicable use conditions; a sheet contains
+the complete source and translated text as well as human observations. Do not
+upload it to CI artifacts. Generation creates a new file with mode `0600` and
+will not overwrite an existing sheet.
+
+For each selected fixture run, choose the run ID from `run.json` and generate
+a sheet. Relative source paths are resolved from `--root`; relative output paths
+are resolved from the directory containing `run.json`. The tool verifies the
+existing fixture and output SHA-256 pins before displaying text.
+
+```sh
+CGO_ENABLED=0 GOTOOLCHAIN=local go build -o /tmp/yakuori-review ./tools/acceptance/cmd/review
+/tmp/yakuori-review generate \
+  --manifest docs/evidence/acceptance/fixtures.json \
+  --criteria docs/evidence/acceptance/criteria.json \
+  --root "$PWD" --run /path/to/private/evidence/run.json \
+  --run-id fixture-000-fresh --sheet /path/to/private/review.json
+```
+
+The sheet includes the criteria and confirmation state, run/model/profile and
+fixture/output bindings including the producer publication run ID, unit
+categories, nonblocking review findings, and the
+source/translation pairs. For each row, the human reviewer fills `reviewer`,
+`date` (RFC 3339), `verdict` (`pass`, `fail`, or `hold`), and `rationale`.
+Leave rows unfilled when they were not reviewed; do not add observations to a
+row with unavailable output. `hold` remains unconfirmed. A pass or fail is
+counted as reviewed only when all four fields are present and the date is
+valid. Preserve the bindings and text when editing the sheet.
+
+Summarize one or more sheets from the same run record, repeating `--sheet` for
+each selected fixture run:
+
+```sh
+/tmp/yakuori-review summarize \
+  --manifest docs/evidence/acceptance/fixtures.json \
+  --criteria docs/evidence/acceptance/criteria.json \
+  --root "$PWD" --run /path/to/private/evidence/run.json \
+  --sheet /path/to/private/review.json \
+  --sheet /path/to/private/another-review.json > summary.json
+```
+
+The command reconstructs each expected sheet and rejects altered bindings,
+criteria, text, missing or duplicate units, and duplicate runs. The JSON
+summary contains counts and category coverage without fixture text, private
+paths, reviewer names or rationales. It identifies selected fixtures without a
+completed review and counts missing output, unreviewed and held units.
+`selected_scope` reports all selected source units and category memberships;
+`unsubmitted_scope` counts the portion whose fixtures have no submitted sheet.
+The main counts describe submitted runs, so multiple runs of the same fixture
+are counted separately there, while the selected fixture scope is counted once. A summary can report human
+`pass` only when all included rows and at least one run of every selected
+fixture have been reviewed, and the existing fixture/criteria check is ready.
+This is a human-review result for the supplied runs, not machine or formal
+acceptance. Unconfirmed criteria and incomplete reviews remain `incomplete`;
+CPU and GPU output need not be identical. Actual GPU execution and human
+review remain separate work.
+
+The fixed quality cases reuse these tests, with no automatic human judgment:
+
+- Empty source/candidate and nonempty/empty mismatch: `internal/validate`,
+  `TestValidateCurrentUnit` and `TestValidateRejectsInvalidCandidate`.
+- Proper-name and identical-source review findings: `internal/validate`,
+  `TestReviewFindings` (accepted, nonblocking).
+- Added explanatory wrappers and their boundaries: `internal/validate`,
+  `TestContentRejectsAdditions`, `TestContentSourceExemptions`, and
+  `TestContentFiniteBoundaries`.
+- Duplicated protected token and crossed tags: `internal/protect`,
+  `TestProtectionRejectsInvalid` and `TestProtectionRejectsInvalidStructure`.
+- Conflicting glossary matches: `internal/glossary`, `TestMatchConflicts`.
+
+The model-free review tests use the project-authored
+`tools/acceptance/testdata/small.w3strings` and synthetic run metadata,
+criteria and human decisions. They exercise bindings and aggregation, not a
+GPU execution or real human quality assessment:
+
+```sh
+CGO_ENABLED=0 GOTOOLCHAIN=local go test ./tools/acceptance/... ./internal/validate ./internal/protect ./internal/glossary
+CGO_ENABLED=0 GOTOOLCHAIN=local go build ./tools/acceptance/cmd/review
+CGO_ENABLED=0 GOTOOLCHAIN=local go vet ./tools/acceptance/... ./internal/validate ./internal/protect ./internal/glossary
+```
