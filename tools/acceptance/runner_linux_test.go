@@ -262,10 +262,20 @@ func TestPendingCriteriaAreNotExecuted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, _, criteria := candidate(t)
+	criteria.Confirmation = Confirmation{Status: "pending"}
+	data, err := json.Marshal(criteria)
+	if err != nil {
+		t.Fatal(err)
+	}
+	criteriaPath := filepath.Join(t.TempDir(), "criteria.json")
+	if err := os.WriteFile(criteriaPath, data, 0600); err != nil {
+		t.Fatal(err)
+	}
 	evidence := filepath.Join(t.TempDir(), "evidence")
-	opts := RunOptions{Manifest: filepath.Join(root, "docs/evidence/acceptance/fixtures.json"), Criteria: filepath.Join(root, "docs/evidence/acceptance/criteria.json"), Root: root, Repository: root, Evidence: evidence, ModelID: "not-opened", ModelSHA256: strings.Repeat("0", 64), Game: "witcher3", Artifact: "test"}
+	opts := RunOptions{Manifest: filepath.Join(root, "docs/evidence/acceptance/fixtures.json"), Criteria: criteriaPath, Root: root, Repository: root, Evidence: evidence, ModelID: "not-opened", ModelSHA256: strings.Repeat("0", 64), Game: "witcher3", Artifact: "test"}
 	record, err := Run(context.Background(), opts)
-	if err == nil || record.Status != "not_run" || record.FailurePhase != "readiness" || len(record.Runs) != 4 {
+	if err == nil || record.Status != "not_run" || record.FailurePhase != "readiness" || len(record.Runs) != 6 {
 		t.Fatalf("pending criteria: %+v err=%v", record, err)
 	}
 	for _, entry := range record.Runs {
@@ -273,12 +283,12 @@ func TestPendingCriteriaAreNotExecuted(t *testing.T) {
 			t.Fatalf("worker started: %+v", entry)
 		}
 	}
-	data, err := os.ReadFile(filepath.Join(evidence, "run.json"))
+	data, err = os.ReadFile(filepath.Join(evidence, "run.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var saved RunRecord
-	if err := json.Unmarshal(data, &saved); err != nil || saved.Status != "not_run" || len(saved.Runs) != 4 {
+	if err := json.Unmarshal(data, &saved); err != nil || saved.Status != "not_run" || len(saved.Runs) != 6 {
 		t.Fatalf("saved record: %+v err=%v", saved, err)
 	}
 }

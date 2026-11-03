@@ -1,0 +1,9 @@
+;meta[language=en]
+; id      |key(hex)|key(str)| text
+8501|00002135||Will you open the gate before dawn?
+8502|00002136||No. I will wait until the guards return.
+8503|00002137||Carry the signal lantern to the night watch.
+8504|00002138||Tell the night watch to keep the signal lantern lit.
+8505|00002139||The courier left three sealed letters at the eastern gate before sunset. Keep them in the locked chest until the captain returns, and do not give any letter to a visitor. If the captain is delayed, ask the guard to send a message at dawn.
+8506|0000213a||<b>{player}</b>, return to the gate.
+8507|0000213b||

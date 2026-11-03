@@ -1,5 +1,5 @@
 {
-  "version": "fixture-candidates-v1",
+  "version": "fixture-candidates-v2",
   "fixtures": [
     {
       "id": "better-keybinds-en",
@@ -79,6 +79,29 @@
         {"name": "empty_text", "unit_ids": ["1002"], "evidence": "Authored fixture has an empty text."},
         {"name": "long_text", "unit_ids": ["1003"], "evidence": "Authored fixture contains 2,048 UTF-16 units of repeated Japanese text."},
         {"name": "tags_placeholders", "unit_ids": ["4294967295"], "evidence": "Authored fixture contains a tag and placeholders."}
+      ]
+    },
+    {
+      "id": "representative-authored-en",
+      "kind": "synthetic",
+      "source_url": "https://github.com/sh4869221b/yakuori/tree/4e296a2d906d6e1945ec3bbff4d88347bf24191a/tools/acceptance/testdata",
+      "revision": "4e296a2d906d6e1945ec3bbff4d88347bf24191a",
+      "license": "MIT; retain the repository LICENSE notice when redistributing",
+      "local_path": "tools/acceptance/testdata/representative-en.w3strings",
+      "sha256": "0f1896b71371a643f2c4994fb0f1f0deccd7b7085da73ee765880b1c0876dfff",
+      "bytes": 1060,
+      "units": 7,
+      "text_bytes": 445,
+      "max_text_bytes": 238,
+      "format": "w3strings",
+      "format_version": 162,
+      "language": "en",
+      "categories": [
+        {"name": "dialogue", "unit_ids": ["8501", "8502"], "evidence": "Authored gate question and answer form a dialogue pair."},
+        {"name": "long_text", "unit_ids": ["8505"], "evidence": "Authored three-sentence passage contains sequential actions, a prohibition and a condition."},
+        {"name": "terminology", "unit_ids": ["8503", "8504"], "evidence": "Both authored instructions repeat signal lantern and night watch."},
+        {"name": "tags_placeholders", "unit_ids": ["8506"], "evidence": "Authored instruction contains a paired tag and a player placeholder."},
+        {"name": "empty_text", "unit_ids": ["8507"], "evidence": "Authored entry has empty text."}
       ]
     }
   ]

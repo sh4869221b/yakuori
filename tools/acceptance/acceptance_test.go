@@ -43,25 +43,25 @@ func TestCandidateFixturesAndReadiness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.AcceptanceReady || result.Confirmation != "pending" || !slices.Contains(result.MissingReal, "dialogue") || !slices.Contains(result.MissingReal, "long_text") || len(result.Undetermined) != 0 {
-		t.Fatalf("candidate must remain unready: %+v", result)
+	if !result.AcceptanceReady || result.Confirmation != "confirmed" || !slices.Contains(result.MissingReal, "dialogue") || !slices.Contains(result.MissingReal, "long_text") || len(result.Undetermined) != 0 {
+		t.Fatalf("approved selection must be ready and retain real-MOD gaps: %+v", result)
 	}
-	if len(result.Fixtures) != 4 || !result.Fixtures[0].ProductInputCompatible || result.Fixtures[2].ProductInputCompatible || result.Fixtures[2].InputLimits != "research" {
+	if len(result.Fixtures) != 5 || !result.Fixtures[0].ProductInputCompatible || result.Fixtures[2].ProductInputCompatible || result.Fixtures[2].InputLimits != "research" || !result.Fixtures[4].ProductInputCompatible {
 		t.Fatalf("product and research fixture conditions: %+v", result.Fixtures)
 	}
 	// Merely selecting a synthetic long fixture cannot establish real-MOD coverage.
 	c.FixtureIDs = append(c.FixtureIDs, "authored-en")
-	setCount(&c, "units", "53")
-	setCount(&c, "text_bytes", "6676")
-	setCount(&c, "artifact_bytes", "6330")
+	setCount(&c, "units", "60")
+	setCount(&c, "text_bytes", "7121")
+	setCount(&c, "artifact_bytes", "7390")
 	result, err = Check(root, m, c)
 	if err != nil || slices.Contains(result.MissingAll, "long_text") || !slices.Contains(result.MissingReal, "long_text") {
 		t.Fatalf("synthetic category must not fill real-MOD coverage: %+v, %v", result, err)
 	}
-	c.FixtureIDs = c.FixtureIDs[:2]
-	setCount(&c, "units", "49")
-	setCount(&c, "text_bytes", "482")
-	setCount(&c, "artifact_bytes", "2074")
+	c.FixtureIDs = c.FixtureIDs[:3]
+	setCount(&c, "units", "56")
+	setCount(&c, "text_bytes", "927")
+	setCount(&c, "artifact_bytes", "3134")
 	readyCandidate(t, &m, &c)
 	result, err = Check(root, m, c)
 	if err != nil || !result.AcceptanceReady {
@@ -71,6 +71,12 @@ func TestCandidateFixturesAndReadiness(t *testing.T) {
 
 func TestMixedCategoriesAndSelectedMOD(t *testing.T) {
 	root, m, c := candidate(t)
+	// Isolate this test's two fixtures so the actual synthetic fixture does not
+	// mask the deliberately removed category below.
+	c.FixtureIDs = c.FixtureIDs[:2]
+	setCount(&c, "units", "49")
+	setCount(&c, "text_bytes", "482")
+	setCount(&c, "artifact_bytes", "2074")
 	// Reuse a product-sized original as a synthetic fixture for record mechanics.
 	// These test-only labels do not assert the semantic category of its text.
 	synthetic, mod := &m.Fixtures[0], &m.Fixtures[1]
@@ -82,6 +88,7 @@ func TestMixedCategoriesAndSelectedMOD(t *testing.T) {
 		}
 	}
 
+	c.Confirmation = Confirmation{Status: "pending"}
 	result, err := Check(root, m, c)
 	if err != nil || result.AcceptanceReady || len(result.MissingAll) != 0 || len(result.MissingReal) == 0 {
 		t.Fatalf("pending mixed set must be unready, while reporting real gaps: %+v, %v", result, err)
