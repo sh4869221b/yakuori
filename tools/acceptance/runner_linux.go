@@ -137,6 +137,8 @@ type FixtureRun struct {
 	TMCommitted            *bool                  `json:"tm_committed"`
 	FinalValidationStatus  string                 `json:"final_validation_status"`
 	CommitStatus           string                 `json:"commit_status"`
+	TMVerificationStatus   string                 `json:"tm_verification_status,omitempty"`
+	TMVerifiedUnits        *int                   `json:"tm_verified_units,omitempty"`
 	PublicationStatus      string                 `json:"publication_status"`
 	Publication            string                 `json:"publication,omitempty"`
 	PublicationRunID       string                 `json:"publication_run_id,omitempty"`
@@ -237,7 +239,7 @@ func finalizeWorker(ctx context.Context, oracle string, req WorkerRequest, worke
 		result.FailurePhase = "worker"
 		return result, err
 	}
-	if childErr != nil || worker.FailurePhase != "" || !worker.Observation.FinalValidated || !worker.Result.TMCommitted || worker.Result.Publication.State != publication.Published {
+	if childErr != nil || worker.FailurePhase != "" || !worker.Observation.FinalValidated || !worker.Result.TMCommitted || worker.Result.Publication.State != publication.Published || worker.Observation.TMVerificationStatus != "pass" || worker.Observation.TMVerifiedUnits != len(worker.Observation.Units) {
 		result.FailurePhase = "worker"
 		return result, errors.New("worker did not publish successfully")
 	}
@@ -604,7 +606,7 @@ func runWith(ctx context.Context, opts RunOptions, launch WorkerLauncher, oracle
 		}
 		dirName := fmt.Sprintf("fixture-%03d", len(record.Runs)/2)
 		for _, mode := range []string{"fresh", "reuse"} {
-			entry := FixtureRun{RunID: dirName + "-" + mode, FixtureID: fixture.ID, FixtureRevision: fixture.Revision, FixtureSourceURL: fixture.SourceURL, FixtureLicense: fixture.License, Mode: mode, Status: "not_run", SourcePath: fixture.LocalPath, SourceSHA256: fixture.SHA256, OutputPath: filepath.Join(dirName, mode+".w3strings"), Oracle: oracleNotRun(), WorkerExit: "not_run", FinalValidationStatus: "not_run", CommitStatus: "not_run", PublicationStatus: "not_run"}
+			entry := FixtureRun{RunID: dirName + "-" + mode, FixtureID: fixture.ID, FixtureRevision: fixture.Revision, FixtureSourceURL: fixture.SourceURL, FixtureLicense: fixture.License, Mode: mode, Status: "not_run", SourcePath: fixture.LocalPath, SourceSHA256: fixture.SHA256, OutputPath: filepath.Join(dirName, mode+".w3strings"), Oracle: oracleNotRun(), WorkerExit: "not_run", FinalValidationStatus: "not_run", CommitStatus: "not_run", PublicationStatus: "not_run", TMVerificationStatus: "not_run"}
 			if measurement != nil {
 				entry.MeasurementStatus = "not_run"
 				entry.FixtureUnits, entry.FixtureBytes, entry.FixtureTextBytes = &fixture.Units, &fixture.Bytes, &fixture.TextBytes
@@ -735,7 +737,7 @@ func runWith(ctx context.Context, opts RunOptions, launch WorkerLauncher, oracle
 				entry.Measurement = measurement.supervisor.Results[req.RunID]
 			}
 			entry.WorkerBuild = worker.Build
-			entry.FinalValidationStatus, entry.CommitStatus, entry.PublicationStatus = "unknown", "unknown", "unknown"
+			entry.FinalValidationStatus, entry.CommitStatus, entry.PublicationStatus, entry.TMVerificationStatus = "unknown", "unknown", "unknown", "unknown"
 			var generated, reused, unchanged int
 			if worker.CheckRequest(req) == nil {
 				calls, accepted := worker.Observation.GenerateCalls, len(worker.Observation.Units)
@@ -743,6 +745,13 @@ func runWith(ctx context.Context, opts RunOptions, launch WorkerLauncher, oracle
 				details := worker.Details
 				entry.Details, entry.GenerateCalls, entry.AcceptedUnits = &details, &calls, &accepted
 				entry.FinalValidated, entry.TMCommitted, entry.Publication = &final, &committed, string(worker.Result.Publication.State)
+				entry.TMVerificationStatus = worker.Observation.TMVerificationStatus
+				if entry.TMVerificationStatus == "" {
+					entry.TMVerificationStatus = "not_run"
+				} else {
+					verified := worker.Observation.TMVerifiedUnits
+					entry.TMVerifiedUnits = &verified
+				}
 				entry.PublicationRunID = worker.Result.Publication.RunID
 				entry.FinalValidationStatus, entry.CommitStatus, entry.PublicationStatus = "not_run", "not_run", "not_run"
 				if final {

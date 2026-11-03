@@ -405,7 +405,7 @@ func TestControlledRunnerRecord(t *testing.T) {
 		}
 	}
 	for _, entry := range record.Runs {
-		if entry.Oracle.Comparison != "pass" || entry.SourcePath != source || entry.OutputSHA256 == "" || entry.OutputPath == "" {
+		if entry.Oracle.Comparison != "pass" || entry.SourcePath != source || entry.OutputSHA256 == "" || entry.OutputPath == "" || entry.TMVerificationStatus != "pass" || entry.TMVerifiedUnits == nil || *entry.TMVerifiedUnits != 3 {
 			t.Fatalf("record references: %+v", entry)
 		}
 		foundEmpty, foundLong := false, false
@@ -424,6 +424,17 @@ func TestControlledRunnerRecord(t *testing.T) {
 		}
 		if _, err := os.Stat(filepath.Join(opts.Evidence, entry.OutputPath)); err != nil {
 			t.Fatal(err)
+		}
+	}
+	for _, status := range []string{"", "fail", "pass"} {
+		unverified := capturedFresh
+		unverified.Observation.TMVerificationStatus = status
+		if status == "pass" {
+			unverified.Observation.TMVerifiedUnits--
+		}
+		oracle, err := FinalizeWorker(context.Background(), fakeReader, WorkerRequest{RunID: unverified.RunID, FixtureID: unverified.FixtureID, Mode: unverified.Mode, Output: filepath.Join(opts.Evidence, "fixture-000", "fresh.w3strings")}, unverified, nil, filepath.Join(dir, "unverified.records"))
+		if err == nil || oracle.FailurePhase != "worker" || oracle.Execution != "not_run" {
+			t.Fatal("worker without successful database verification reached oracle")
 		}
 	}
 	data, err := os.ReadFile(filepath.Join(opts.Evidence, "run.json"))

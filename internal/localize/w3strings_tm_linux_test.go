@@ -5,6 +5,7 @@ package localize
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
@@ -424,8 +425,9 @@ func newW3SQLiteHarness(t *testing.T) *w3SQLiteHarness {
 
 type w3SQLiteRun struct {
 	publicationRun
-	closed    int
-	published int
+	closed       int
+	published    int
+	afterPublish func()
 }
 
 func (r *w3SQLiteRun) Close() error {
@@ -435,7 +437,49 @@ func (r *w3SQLiteRun) Close() error {
 
 func (r *w3SQLiteRun) Publish(ctx context.Context) (publication.Result, error) {
 	r.published++
-	return r.publicationRun.Publish(ctx)
+	result, err := r.publicationRun.Publish(ctx)
+	if err == nil && r.afterPublish != nil {
+		r.afterPublish()
+	}
+	return result, err
+}
+
+func TestAcceptanceDetectsCommittedTMChangesAfterPublication(t *testing.T) {
+	for _, mutation := range []string{"DELETE FROM tm", "UPDATE tm SET translated_text = 'mismatched'"} {
+		t.Run(strings.Fields(mutation)[0], func(t *testing.T) {
+			f := newW3SQLiteHarness(t)
+			if !f.supported {
+				t.Skip("real publication requires ext4 or Btrfs")
+			}
+			observation := &AcceptanceObservation{SourceSHA256: sha256.Sum256(fileBytes(t, f.options.Source))}
+			core := f.core.WithAcceptanceObservation(observation)
+			var published *w3SQLiteRun
+			result, err := core.fileWithTM(context.Background(), f.options, f.adapter, f.profile, nil,
+				&tmExecution{store: f.store, scope: tm.Scope{GameNamespace: w3SQLiteGame, ArtifactNamespace: w3SQLiteArtifact}},
+				func(ctx context.Context, options publication.Options) (publicationRun, error) {
+					run, err := publication.PrepareWithLimits(ctx, options, config.DefaultLimits())
+					if err != nil {
+						return nil, err
+					}
+					published = &w3SQLiteRun{publicationRun: run, afterPublish: func() {
+						if _, err := f.db.Exec(mutation); err != nil {
+							t.Fatal(err)
+						}
+					}}
+					return published, nil
+				})
+			var failure *Error
+			if !errors.As(err, &failure) || failure.Phase != "tm_verify" || !result.TMCommitted || result.Publication.State != publication.Published || observation.TMVerificationStatus != "fail" || observation.TMVerifiedUnits != 0 {
+				t.Fatalf("database mismatch not detected after publication: result=%+v status=%q checked=%d err=%v", result, observation.TMVerificationStatus, observation.TMVerifiedUnits, err)
+			}
+			if published == nil || published.closed != 1 {
+				t.Fatal("publication was not closed")
+			}
+			if _, err := os.Stat(f.options.Output); err != nil {
+				t.Fatalf("published output unavailable: %v", err)
+			}
+		})
+	}
 }
 
 func (f *w3SQLiteHarness) checkUnsupported(result Result, err error, before []w3SQLiteRow, source []byte) {

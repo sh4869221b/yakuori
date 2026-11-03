@@ -111,5 +111,24 @@ func (c Core) fileWithTM(ctx context.Context, options publication.Options, adapt
 	if err != nil {
 		return result, &Error{Phase: "publish", Err: err}
 	}
+	if c.observation != nil && memory != nil {
+		c.observation.TMVerificationStatus = "fail"
+		c.observation.TMVerifiedUnits = 0
+		verification, verifyErr := memory.store.BeginRun(session, profile, memory.scope)
+		if verifyErr != nil {
+			return result, &Error{Phase: "tm_verify", Err: verifyErr}
+		}
+		for _, translation := range accepted {
+			text, found, verifyErr := verification.Lookup(ctx, translation.UnitID())
+			if verifyErr != nil {
+				return result, &Error{Phase: "tm_verify", Err: verifyErr}
+			}
+			if !found || text != translation.Text() {
+				return result, &Error{Phase: "tm_verify", Err: errors.New("committed translation memory does not match accepted output")}
+			}
+			c.observation.TMVerifiedUnits++
+		}
+		c.observation.TMVerificationStatus = "pass"
+	}
 	return result, nil
 }
