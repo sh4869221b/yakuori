@@ -1,10 +1,9 @@
-# W3 acceptance fixture and criteria candidates
+# W3 acceptance fixtures and criteria
 
-This is the Issue #85 proposal, not an approved fixture set or a v1 acceptance
-result. `fixtures.json` (`fixture-candidates-v2`) and `criteria.json`
-(`criteria-candidates-v3`) are the candidate versions. The checker reads local
-originals and reports readiness; it does not translate or judge quality. User
-confirmation is pending. #86, #99 and #87 own the later GPU run, performance
+The user approved `fixtures.json` (`fixture-candidates-v2`) and `criteria.json`
+(`criteria-candidates-v3`) for Issue #85. This decision is not a v1 acceptance
+result. The checker reads local originals and reports readiness; it does not
+translate or judge quality. #86, #99 and #87 own the GPU run, performance
 measurement and human review respectively.
 
 ## Recommended fixture set
@@ -56,15 +55,14 @@ each exceeds the product artifact, per-unit and total-text budgets, and the
 `en` header contains Japanese research text. Their explicit research limits
 are for inspection only and do not expand product support.
 
-The recommendation is to accept this mixed real/synthetic scope for a bounded
-first v1 evaluation. If real MOD dialogue or long-text coverage is required,
-the alternative is to defer confirmation and propose a suitable independently
-pinned, lawfully usable MOD with known source and redistribution conditions.
-A private local reference may be used under its terms; do not copy unlicensed
-full MOD text into the repository, logs or CI artifacts. Re-evaluate the
-selection, totals, categories and affected evidence before confirmation.
+The approved mixed real/synthetic scope bounds the first v1 evaluation. If
+real MOD dialogue or long-text coverage is later required, propose a suitable
+independently pinned, lawfully usable MOD with known source and redistribution
+conditions. A private local reference may be used under its terms; do not copy
+unlicensed full MOD text into the repository, logs or CI artifacts. Re-evaluate
+the selection, totals, categories and affected evidence before changing it.
 
-## Proposed human quality criteria
+## Approved human quality criteria
 
 Review every row of the three fresh published outputs: 56 rows across three
 sheets, including all six category counts above. Do not count the separate TM
@@ -95,7 +93,7 @@ against accepted output, not the tag spelling against the source. Common
 validation and the final published artifact/independent-reader check must pass
 for every fixture, in addition to human review.
 
-The recommended quality result passes only when all 56 rows pass and all six
+The quality result passes only when all 56 rows pass and all six
 category memberships are reviewed. A failed row is an outstanding failure;
 unavailable output, missing review or `hold` makes the review incomplete, not
 pass. When failures and incomplete rows coexist, the existing summary reports
@@ -103,7 +101,7 @@ pass. When failures and incomplete rows coexist, the existing summary reports
 sheets contain source, translated text and rationale and must be kept private
 under applicable terms. No quality review is claimed here.
 
-## Proposed performance criteria
+## Approved performance criteria
 
 For one recorded repetition (`--repeat-index 1 --repeat-total 1`), run each
 selected fixture on the same adopted CUDA device, registered model and profile
@@ -115,11 +113,11 @@ The same valid `--measure` run record may support #86 and #99 if it meets both
 issues' requirements. No formal GPU or performance run is claimed here.
 
 Each of the three fresh results is compared individually against all three
-candidate ceilings, with equality allowed:
+approved ceilings, with equality allowed:
 
-| Candidate | Record and boundary | Impact |
+| Criterion | Record and boundary | Impact |
 | --- | --- | --- |
-| 60 s wall time | Fixture run `measurement_wall_seconds`: fresh mode from fixture setup through model snapshot/load, production pipeline, validation, TM commit, publication, independent reader and normal reaping. | A breach is a candidate failure; no averaging or retry to hide it. |
+| 60 s wall time | Fixture run `measurement_wall_seconds`: fresh mode from fixture setup through model snapshot/load, production pipeline, validation, TM commit, publication, independent reader and normal reaping. | A breach is a criterion failure; no averaging or retry to hide it. |
 | 5 GiB (5,368,709,120 bytes) RAM | `measurement.rss_bytes`: Linux translation-child `wait4`/`getrusage` RSS high-water, converted from KiB. | This is process RSS, not host-wide RAM capacity or combined RAM and VRAM. Record host RAM and other workload; no host-wide ceiling is proposed. |
 | 3 GiB (3,221,225,472 bytes) VRAM | `measurement.process_vram_sampled_max_bytes`: selected GPU UUID and worker PID, nominal 100 ms interval plus query latency. | A sampled process maximum, not a continuous peak, device-wide total or minimum device capacity. |
 
@@ -129,7 +127,7 @@ product and oracle pass, `measurement_status: complete`, valid resource
 samples and successful cleanup. Missing, partial, ambiguous or interrupted
 measurements are incomplete, never zero or pass. Record shared
 `measurement.preparation_seconds`, `measurement.oracle_build_seconds` and
-`measurement.pair_cleanup` separately; the recommendation allocates none of
+`measurement.pair_cleanup` separately; the approved criteria allocate none of
 those shared intervals to the per-fixture time ceiling. `measurement_wall_seconds`
 is not worker-only `measurement.wall_seconds`. Downloads, builds and fixture
 placement are outside the criterion. The fresh process does not imply a cold
@@ -143,8 +141,8 @@ the authored fixture has the most source text (445 bytes) and largest single
 unit (238 bytes). These are maxima **within the selected set**, not product
 capacity. The separate #76 CPU regression uses its own criteria.
 
-The 60 s / 5 GiB / 3 GiB values remain unapproved candidates derived from a
-**different goinfer/cuda v0.22 workload**, not v0.23 product E2E measurements:
+The approved 60 s / 5 GiB / 3 GiB limits were derived from a **different
+goinfer/cuda v0.22 workload**, not v0.23 product E2E measurements:
 
 | Historical reference | Observed value | Manual candidate margin |
 | --- | --- | --- |
@@ -162,23 +160,20 @@ The current go.mod pins v0.23 and its supported CUDA KV default is f16. The
 historical model source lacked an immutable repository revision. Record the
 actual adopted model identity, driver, host RAM, workload and effective engine
 conditions and check comparability. Pipeline/model/hardware differences may
-cause any candidate to fail; do not silently raise a limit after measurement.
-As an alternative to adopting these provisional ceilings, defer their approval
-until separately authorized reference measurements can inform revised values;
-#99's formal measurement still requires confirmed criteria.
+cause any criterion to fail; do not silently raise a limit after measurement.
+Changes to approved limits require a new decision and re-evaluation of affected
+evidence.
 
 ## Confirmation and re-evaluation
 
-The user must decide whether to adopt the pinned mixed set and its limits in
-real-MOD coverage, the 56-row/six-category quality rules and required terms,
-and the three numerical ceilings, per-fresh measurement boundaries, single
-repetition and reference conditions. Alternatively, defer and obtain a
-lawfully usable real-MOD candidate before deciding. No response, this PR or a
-tool result is approval. The current confirmation is `pending`, with its other
-fields empty. Only after an actual approval should #85 record `confirmed`,
-`approved`, reviewer, RFC 3339 date/time and both current version IDs. Record
-requested changes and present a new candidate version rather than implying
-approval.
+On 2026-11-03 at 10:08:41 +09:00, user `sh4869221b` approved the pinned
+mixed set and its real-MOD coverage limits, 56-row/six-category quality rules
+and required terms, and the three numerical ceilings, per-fresh measurement
+boundaries, single repetition and reference conditions. The decision is
+recorded as `confirmed` and `approved` in `criteria.json`, bound to
+`fixture-candidates-v2` and `criteria-candidates-v3`. This approval is a
+selection decision, not evidence that any later GPU run, measurement or human
+review has passed.
 
 #86, #99, #87 and the evidence index should reference the same confirmed
 manifest and criteria versions and the relevant fixture/model/run/output.
@@ -213,9 +208,10 @@ The command verifies every listed local original, including unselected fixtures.
 It checks selected category references and reports both missing categories in
 all selected fixtures and those missing from selected real MODs. Its JSON also
 reports each fixture's chosen input limits, whether its observed input fits
-product budgets and the IDs of selected fixtures that exceed those budgets. Normal candidate validation exits zero for structurally valid
-but unconfirmed candidates and reports `acceptance_ready: false`, no missing
-set-wide categories, the real-MOD gaps, and `confirmation: pending`. Invalid
+product budgets and the IDs of selected fixtures that exceed those budgets. For
+the approved selection, normal validation reports `acceptance_ready: true`, no
+missing set-wide categories, the real-MOD gaps, and `confirmation: confirmed`.
+Invalid
 metadata, original bytes, SHA-256, format, language, counts, limits or versions
 exit nonzero. Validation of a research fixture under research limits is not a
 product execution result.
@@ -228,8 +224,8 @@ the selected fixtures, all criteria have values and confirmation has `status: co
 `decision: approved`, with the current manifest and criteria versions, reviewer
 and RFC 3339 date/time. Missing real-MOD categories remain visible for the #85
 representativeness decision; synthetic coverage does not establish real-MOD
-coverage. The current candidates
-intentionally fail this readiness check. The confirmation record represents a
+coverage. The approved selection passes this readiness check when the local
+originals match their recorded metadata. The confirmation record represents a
 user decision obtained in #85; the checker does not solicit or make it. Neither
 checker mode executes GPU or CPU inference, establishes quality, or completes
 v1 acceptance.
@@ -239,11 +235,11 @@ v1 acceptance.
 `tools/acceptance/cmd/run` performs the product W3/SQLite/publication path
 with CUDA and compares each published file with the separately built research
 oracle. It starts only when the checker reports `acceptance_ready: true`.
-The current candidate is pending #85, so an ordinary invocation records
-`not_run` and does not start a translation. The runner does not approve
+A pending or otherwise unready selection records `not_run` and does not start a
+translation. The runner does not approve
 criteria, download a model or retry a failed generation.
 
-After the representative set and criteria are confirmed, register and select
+Register and select
 the intended local GGUF with the normal `yakuori models` commands. Build the
 runner with Go 1.27.3 and CUDA support; the oracle build needs Rust/Cargo and
 its locked dependencies already available locally. The runner uses
@@ -359,9 +355,9 @@ execution. Each mode interval includes model load, the product pipeline,
 independent reading and ordinary worker reaping. Shared TM cleanup follows the
 pair or an abort and is recorded separately, as is oracle-build cleanup; reuse
 time is not added to the fresh interval. Runner wall time excluding build is
-also recorded. The proposal above compares the fresh mode interval with the
-candidate 60-second ceiling and allocates none of the separately recorded
-shared preparation to it; actual confirmation is still required.
+also recorded. The approved criteria compare the fresh mode interval with the
+60-second ceiling and allocate none of the separately recorded shared
+preparation to it.
 
 Linux worker RSS high-water comes from its direct child's `wait` resource usage
 (`ru_maxrss` KiB converted to bytes). It is not the runner's RSS, an oracle
@@ -406,9 +402,8 @@ Product, oracle, measurement and cleanup results are distinct. A published
 product result and passing independent reader remain recorded if VRAM is
 unavailable, but measurement is incomplete and the command exits nonzero.
 Incomplete samples, missing metadata, failed cleanup, timeout and unstarted
-runs cannot establish performance acceptance. The current #85 criteria remain
-pending; the supervisor does not change that state or perform #99's formal
-maximum-fixture comparison.
+runs cannot establish performance acceptance. The supervisor does not
+perform #99's formal maximum-fixture comparison.
 
 ### Controlled supervisor checks
 

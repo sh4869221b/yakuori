@@ -43,8 +43,8 @@ func TestCandidateFixturesAndReadiness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.AcceptanceReady || result.Confirmation != "pending" || !slices.Contains(result.MissingReal, "dialogue") || !slices.Contains(result.MissingReal, "long_text") || len(result.Undetermined) != 0 {
-		t.Fatalf("candidate must remain unready: %+v", result)
+	if !result.AcceptanceReady || result.Confirmation != "confirmed" || !slices.Contains(result.MissingReal, "dialogue") || !slices.Contains(result.MissingReal, "long_text") || len(result.Undetermined) != 0 {
+		t.Fatalf("approved selection must be ready and retain real-MOD gaps: %+v", result)
 	}
 	if len(result.Fixtures) != 5 || !result.Fixtures[0].ProductInputCompatible || result.Fixtures[2].ProductInputCompatible || result.Fixtures[2].InputLimits != "research" || !result.Fixtures[4].ProductInputCompatible {
 		t.Fatalf("product and research fixture conditions: %+v", result.Fixtures)
@@ -88,6 +88,7 @@ func TestMixedCategoriesAndSelectedMOD(t *testing.T) {
 		}
 	}
 
+	c.Confirmation = Confirmation{Status: "pending"}
 	result, err := Check(root, m, c)
 	if err != nil || result.AcceptanceReady || len(result.MissingAll) != 0 || len(result.MissingReal) == 0 {
 		t.Fatalf("pending mixed set must be unready, while reporting real gaps: %+v, %v", result, err)
