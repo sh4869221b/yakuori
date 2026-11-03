@@ -9,16 +9,18 @@ import (
 // AcceptanceObservation is populated only during an explicitly observed run.
 // Text is private evidence and must not be included in ordinary diagnostics.
 type AcceptanceObservation struct {
-	SourceSHA256       [32]byte
-	Units              []AcceptanceUnit
-	Keys               []AcceptanceKey
-	GenerateCalls      int
-	GenerateCompleted  int
-	GenerateFailed     int
-	GenerationDuration time.Duration
-	Validation         ValidationCounts
-	TMValidation       ValidationCounts
-	FinalValidated     bool
+	SourceSHA256         [32]byte
+	Units                []AcceptanceUnit
+	Keys                 []AcceptanceKey
+	GenerateCalls        int
+	GenerateCompleted    int
+	GenerateFailed       int
+	GenerationDuration   time.Duration
+	Validation           ValidationCounts
+	TMValidation         ValidationCounts
+	FinalValidated       bool
+	TMVerificationStatus string
+	TMVerifiedUnits      int
 }
 
 // ValidationCounts counts actual Validate calls, independently of final unit

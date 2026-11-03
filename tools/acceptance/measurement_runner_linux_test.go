@@ -159,6 +159,7 @@ func TestMeasuredOracleUsesExistingDeadline(t *testing.T) {
 	req := WorkerRequest{RunID: "r", FixtureID: "f", Mode: "fresh", Output: output}
 	worker := WorkerResult{RunID: req.RunID, FixtureID: req.FixtureID, Mode: req.Mode}
 	worker.Observation.FinalValidated = true
+	worker.Observation.TMVerificationStatus = "pass"
 	worker.Result.TMCommitted = true
 	worker.Result.Publication.State = publication.Published
 	worker.Result.Publication.OutputPath = output
