@@ -16,7 +16,9 @@ RUN for tool in cc gcc g++ c++ clang clang++ cmake; do \
     && go build -o /cpuspike ./tools/cpuspike \
     && GOOS=linux GOARCH=arm64 go build -o /cpuspike-arm64 ./tools/cpuspike \
     && go test -c -tags cpusmoke -o /cpu-wrapper-smoke.test ./internal/inference/goinfer \
-    && GOOS=linux GOARCH=arm64 go test -c -tags cpusmoke -o /cpu-wrapper-smoke-arm64.test ./internal/inference/goinfer
+    && GOOS=linux GOARCH=arm64 go test -c -tags cpusmoke -o /cpu-wrapper-smoke-arm64.test ./internal/inference/goinfer \
+    && go test -c -tags cpusmoke -o /w3-cpu-smoke.test ./internal/cli \
+    && GOOS=linux GOARCH=arm64 go test -c -tags cpusmoke -o /w3-cpu-smoke-arm64.test ./internal/cli
 # Explicit test-fixture acquisition during image BUILD only. No runtime downloader.
 RUN curl --fail --location --silent --show-error --max-time 300 \
     https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf \
