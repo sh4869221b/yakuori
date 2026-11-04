@@ -132,9 +132,10 @@ releasing model resources. A forward pass can overrun its deadline. Loading has
 pre/post context checks, but upstream Load itself has no cancellable API.
 
 The `cpusmoke`-tagged `TestCPUWrapperSmoke` requires `YAKUORI_CPU_MODEL`; absent or
-unreadable models fail rather than skip or download. The image builds both amd64
-and arm64 test binaries without a native compiler, but only amd64 is executed.
-The dedicated offline workflow checks this pinned Qwen fixture's 32,768-token
+unreadable models fail rather than skip or download. CI builds both amd64 and arm64
+test binaries without a native compiler, but only amd64 is executed. The CPU image
+builds the amd64 binaries; the required foundation job cross-builds arm64 with its
+already prepared arm64 dependencies. The offline CPU job checks this pinned Qwen fixture's 32,768-token
 metadata, natural nonempty Stop, exact prompt count, literal `<|im_end|>` handling,
 a real 1 ms cooperative deadline, healthy reuse after drain, and Close. Its explicit
 128-token output budget, 60-second normal request budget, and 180-second binary

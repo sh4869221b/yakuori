@@ -18,3 +18,10 @@ RUN for tool in cc gcc g++ c++ clang clang++ cmake; do \
     && test ! -e /usr/include/sqlite3.h \
     && test ! -e /usr/local/include/sqlite3.h
 RUN sh ci/verify.sh
+# Required compile-only CPU checks reuse the ARM64 dependencies built by the
+# full common gate above. These binaries are never executed; the independent
+# linux-cpu-gguf job retains every amd64 model-required inference check, and
+# CI complete requires both jobs to succeed.
+RUN GOOS=linux GOARCH=arm64 go build -o /cpuspike-arm64 ./tools/cpuspike \
+    && GOOS=linux GOARCH=arm64 go test -c -tags cpusmoke -o /cpu-wrapper-smoke-arm64.test ./internal/inference/goinfer \
+    && GOOS=linux GOARCH=arm64 go test -c -tags cpusmoke -o /w3-cpu-smoke-arm64.test ./internal/cli

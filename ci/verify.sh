@@ -4,10 +4,67 @@ export CGO_ENABLED=0 GOTOOLCHAIN=local
 [ "$(go env GOOS)/$(go env GOARCH)" = linux/amd64 ]
 [ "$(go env GOVERSION)" = go1.27.3 ]
 go version
+# The observer tests need only Python/strace and their own temporary fixtures.
+# Overlap their bounded waits with cold Go compilation, then join before any
+# observer-backed CLI matrix. A failing Go audit still waits for normal teardown.
+observer_tmp=$(mktemp -d)
+observer_pid=
+observer_starting=1
+observer_signal=0
+fixture=
+offline_evidence=
+pipeline_tmp=
+observer_join() {
+ observer_status=0
+ if [ -n "$observer_pid" ]; then
+  if wait "$observer_pid"; then :; else observer_status=$?; fi
+  observer_pid=
+  if cat "$observer_tmp/log"; then :; else
+   [ "$observer_status" -ne 0 ] || observer_status=1
+  fi
+ fi
+ return "$observer_status"
+}
+verify_cleanup() {
+ verify_status=$?
+ # Repeated cancellation must not abandon the observer while it owns children.
+ # Let its existing bounded subprocess checks finish their own teardown.
+ trap '' HUP INT TERM
+ trap - EXIT
+ if observer_join; then :; else
+  observer_cleanup_status=$?
+  [ "$verify_status" -ne 0 ] || verify_status=$observer_cleanup_status
+ fi
+ if rm -rf "$observer_tmp" "$fixture" "$offline_evidence" "$pipeline_tmp"; then :; else
+  [ "$verify_status" -ne 0 ] || verify_status=1
+ fi
+ exit "$verify_status"
+}
+verify_signal() {
+ if [ "$observer_starting" -eq 1 ]; then
+  observer_signal=$1
+ else
+  exit "$1"
+ fi
+}
+trap verify_cleanup EXIT
+trap 'verify_signal 129' HUP
+trap 'verify_signal 130' INT
+trap 'verify_signal 143' TERM
+# A noninteractive shell ignores INT/QUIT for asynchronous commands. Restore
+# their foreground defaults before exec so the self-tests keep those semantics.
+python3 -c '
+import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+signal.signal(signal.SIGQUIT, signal.SIG_DFL)
+os.execv(sys.executable, [sys.executable, *sys.argv[1:]])
+' ci/test-offline.py >"$observer_tmp/log" 2>&1 &
+observer_pid=$!
+observer_starting=0
+[ "$observer_signal" -eq 0 ] || exit "$observer_signal"
 go run ci/check-cgo.go
 # Prove the guard catches even a build-tag-excluded import.
 fixture=$(mktemp -d)
-trap 'rm -rf "$fixture"' EXIT
 printf '//go:build never\n\npackage forbidden\nimport "C"\n' > "$fixture/forbidden.go"
 if go run ci/check-cgo.go "$fixture"; then
  echo 'cgo guard self-test unexpectedly passed' >&2; exit 1
@@ -21,13 +78,12 @@ done
 go build ./cmd/yakuori
 # Test-only offline observer self-test (strace and python3 come from the CI image).
 python3 ci/test-test-events.py
-python3 ci/test-offline.py
+observer_join
 # Model-free acquisition failures against the built binary; no MODEL env is set,
 # so normal CI never fetches or places a model.
 YAKUORI_PULL_BINARY="$PWD/yakuori" go test -count=1 -tags modelsmoke ./internal/cli -run '^TestPullCLIFailure$' -v
 # Model-free CLI/error matrix under the same offline observer.
 offline_evidence=$(mktemp -d)
-trap 'rm -rf "$fixture" "$offline_evidence"' EXIT
 # Keep only the observed Go command on one CPU for the existing tracer.
 # Unit/concurrency tests below retain the caller's normal affinity.
 YAKUORI_PULL_BINARY="$PWD/yakuori" YAKUORI_PULL_EVIDENCE="$offline_evidence" \
@@ -45,7 +101,6 @@ go vet ./...
 # run real child lifecycles. Qualified publication positives require a non-root
 # ext4/Btrfs mount and run in .github/workflows/ci.yml (non-root-filesystems).
 pipeline_tmp=$(mktemp -d)
-trap 'rm -rf "$fixture" "$offline_evidence" "$pipeline_tmp"' EXIT
 go vet -tags pipelinefaults ./internal/localize ./internal/publication ./internal/cli ./internal/tm
 mkdir "$pipeline_tmp/normal"
 go test -c -o "$pipeline_tmp/normal/" ./internal/localize ./internal/publication ./internal/cli ./internal/tm

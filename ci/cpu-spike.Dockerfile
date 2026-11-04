@@ -17,7 +17,8 @@ RUN curl --fail --location --silent --show-error --max-time 300 \
 
 # BuildKit can acquire the pinned fixture while the independent checks run.
 # The required linux-cgo-free job runs the full clean ci/verify.sh gate once.
-# Keep this image's toolchain audit and every CPU-specific check independent.
+# Keep this image's toolchain audit and every amd64 CPU runtime check independent.
+# ARM64 compile-only checks follow the common gate in ci/Dockerfile.
 FROM toolchain AS checks
 COPY . .
 RUN for tool in cc gcc g++ c++ clang clang++ cmake; do \
@@ -31,10 +32,7 @@ RUN for tool in cc gcc g++ c++ clang clang++ cmake; do \
     && python3 ci/test-long-context-supervisor.py \
     && test -z "$(gofmt -l tools/cpuspike)" \
     && go build -o /cpuspike ./tools/cpuspike \
-    && GOOS=linux GOARCH=arm64 go build -o /cpuspike-arm64 ./tools/cpuspike \
     && go test -c -tags cpusmoke -o /cpu-wrapper-smoke.test ./internal/inference/goinfer \
-    && GOOS=linux GOARCH=arm64 go test -c -tags cpusmoke -o /cpu-wrapper-smoke-arm64.test ./internal/inference/goinfer \
-    && go test -c -tags cpusmoke -o /w3-cpu-smoke.test ./internal/cli \
-    && GOOS=linux GOARCH=arm64 go test -c -tags cpusmoke -o /w3-cpu-smoke-arm64.test ./internal/cli
+    && go test -c -tags cpusmoke -o /w3-cpu-smoke.test ./internal/cli
 COPY --from=model /model.gguf /model.gguf
 ENTRYPOINT ["/usr/bin/time", "-v", "/cpuspike", "/model.gguf"]
