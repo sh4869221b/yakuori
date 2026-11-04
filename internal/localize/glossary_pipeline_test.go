@@ -167,9 +167,9 @@ func TestGlossaryCoreRejectsWrongRequestTermsBeforeGeneration(t *testing.T) {
 						return inference.GenerationRequest{}, nil
 					}
 					if segmented {
-						h.core.segmented.buildTerms, h.core.segmented.buildRequest = nil, legacy
+						h.core.segmented.buildTerms = textRequestBuilder(legacy)
 					} else {
-						h.core.inference.buildTerms, h.core.inference.buildRequest = nil, legacy
+						h.core.inference.buildTerms = textRequestBuilder(legacy)
 					}
 				}
 				if mismatch == "fake" {

@@ -92,7 +92,7 @@ func pipelineSegmentedExercise(t *testing.T, spec pipelineHarnessCase, backend s
 	// identity is supplied by the canonical CPU/CUDA fixture, not a new splitter.
 	fixture := segmentedFixture(t, byteLength, nil)
 	f.setRequestBuilder(func(ctx context.Context, id unit.UnitID, text string) (inference.GenerationRequest, error) {
-		request, err := fixture.segmented.buildRequest(ctx, id, text)
+		request, err := fixture.segmented.buildTerms(ctx, id, RequestInput{Text: text})
 		if err != nil {
 			return inference.GenerationRequest{}, err
 		}

@@ -14,15 +14,14 @@ import (
 
 // InferenceEngine connects generation to Core without taking ownership of the model.
 type InferenceEngine struct {
-	limits       config.Limits
-	engine       inference.Engine
-	buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)
-	buildTerms   TermsRequestBuilder
-	observation  *AcceptanceObservation
+	limits      config.Limits
+	engine      inference.Engine
+	buildTerms  TermsRequestBuilder
+	observation *AcceptanceObservation
 }
 
 func NewInferenceEngine(engine inference.Engine, buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) InferenceEngine {
-	return InferenceEngine{engine: engine, buildRequest: buildRequest, limits: config.DefaultLimits()}
+	return NewGlossaryInferenceEngine(engine, textRequestBuilder(buildRequest))
 }
 
 func (e InferenceEngine) Generate(ctx context.Context, id unit.UnitID, text string) (Generation, error) {
@@ -49,7 +48,7 @@ func (e InferenceEngine) plan(ctx context.Context, id unit.UnitID, text string) 
 }
 
 func (e InferenceEngine) planWithTerms(ctx context.Context, id unit.UnitID, input RequestInput) (inferencePlan, error) {
-	request, err := buildTermsRequest(ctx, id, input, e.buildTerms, e.buildRequest)
+	request, err := buildTermsRequest(ctx, id, input, e.buildTerms)
 	if err != nil {
 		return inferencePlan{}, err
 	}
@@ -79,17 +78,22 @@ func NewGlossaryInferenceEngine(engine inference.Engine, build TermsRequestBuild
 	return InferenceEngine{engine: engine, buildTerms: build, limits: config.DefaultLimits()}
 }
 
-func buildTermsRequest(ctx context.Context, id unit.UnitID, input RequestInput, build TermsRequestBuilder, legacy func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) (inference.GenerationRequest, error) {
-	var request inference.GenerationRequest
-	var err error
-	if build != nil {
-		request, err = build(ctx, id, input)
-	} else {
-		if !input.Terms.Empty() || legacy == nil {
+// textRequestBuilder adapts the text-only constructor once, before planning.
+// It must reject applicable terms rather than silently dropping them.
+func textRequestBuilder(build func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) TermsRequestBuilder {
+	return func(ctx context.Context, id unit.UnitID, input RequestInput) (inference.GenerationRequest, error) {
+		if !input.Terms.Empty() || build == nil {
 			return inference.GenerationRequest{}, ErrInferenceProfile
 		}
-		request, err = legacy(ctx, id, input.Text)
+		return build(ctx, id, input.Text)
 	}
+}
+
+func buildTermsRequest(ctx context.Context, id unit.UnitID, input RequestInput, build TermsRequestBuilder) (inference.GenerationRequest, error) {
+	if build == nil {
+		return inference.GenerationRequest{}, ErrInferenceProfile
+	}
+	request, err := build(ctx, id, input)
 	if err != nil {
 		return inference.GenerationRequest{}, err
 	}

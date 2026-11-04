@@ -248,7 +248,7 @@ func tmCapacityProfile(t *testing.T) validate.Profile {
 		t.Fatal(err)
 	}
 	info.ContextTokens = config.DefaultLimits().ContextTokens
-	base, err := core.inference.buildRequest(context.Background(), unit.UnitID{}, "fixture")
+	base, err := core.inference.buildTerms(context.Background(), unit.UnitID{}, RequestInput{Text: "fixture"})
 	if err != nil {
 		t.Fatal(err)
 	}
