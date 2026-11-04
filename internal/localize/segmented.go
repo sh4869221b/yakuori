@@ -13,14 +13,13 @@ import (
 )
 
 type segmentedGenerator struct {
-	engine       inference.Engine
-	buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)
-	buildTerms   TermsRequestBuilder
+	engine     inference.Engine
+	buildTerms TermsRequestBuilder
 }
 
 // NewSegmentedCore plans all requests before sequential generation. The caller owns the engine.
 func NewSegmentedCore(engine inference.Engine, buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) Core {
-	return Core{segmented: &segmentedGenerator{engine: engine, buildRequest: buildRequest}, limits: config.DefaultLimits()}
+	return NewGlossarySegmentedCore(engine, textRequestBuilder(buildRequest))
 }
 
 func NewGlossarySegmentedCore(engine inference.Engine, build TermsRequestBuilder) Core {
@@ -38,12 +37,7 @@ func NewGlossarySegmentedCoreWithLimits(engine inference.Engine, build TermsRequ
 
 // NewSegmentedCoreWithLimits keeps explicit finite experimental limits separate from product defaults.
 func NewSegmentedCoreWithLimits(engine inference.Engine, buildRequest func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error), limits config.Limits) (Core, error) {
-	if err := limits.Check(); err != nil {
-		return Core{}, err
-	}
-	core := NewSegmentedCore(engine, buildRequest)
-	core.limits = limits
-	return core, nil
+	return NewGlossarySegmentedCoreWithLimits(engine, textRequestBuilder(buildRequest), limits)
 }
 
 func segmentedFailure(err error) (Generation, error) {
@@ -69,7 +63,7 @@ func (g *segmentedGenerator) planWithTerms(ctx context.Context, id unit.UnitID, 
 		return segment.Plan{}, err
 	}
 	return segment.BuildWithLimits(ctx, id, prepared, info, func(ctx context.Context, text string) (inference.GenerationRequest, error) {
-		return buildTermsRequest(ctx, id, RequestInput{Text: text, Terms: terms}, g.buildTerms, g.buildRequest)
+		return buildTermsRequest(ctx, id, RequestInput{Text: text, Terms: terms}, g.buildTerms)
 	}, g.engine.CountTokens, limits)
 }
 

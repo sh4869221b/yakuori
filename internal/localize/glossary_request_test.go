@@ -24,7 +24,7 @@ func TestRequestBuilderChecksExactTerms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, condition := range []string{"matching", "dropped", "wrong", "legacy"} {
+	for _, condition := range []string{"matching", "dropped", "wrong", "legacy", "nil", "nil legacy"} {
 		t.Run(condition, func(t *testing.T) {
 			calls := 0
 			build := TermsRequestBuilder(func(_ context.Context, _ unit.UnitID, input RequestInput) (inference.GenerationRequest, error) {
@@ -41,15 +41,20 @@ func TestRequestBuilderChecksExactTerms(t *testing.T) {
 				calls++
 				return inference.GenerationRequest{}, nil
 			}
-			if condition == "legacy" {
+			switch condition {
+			case "legacy":
+				build = textRequestBuilder(legacy)
+			case "nil":
 				build = nil
+			case "nil legacy":
+				build = textRequestBuilder(nil)
 			}
-			request, err := buildTermsRequest(context.Background(), unit.UnitID{}, RequestInput{Text: "cat", Terms: terms}, build, legacy)
+			request, err := buildTermsRequest(context.Background(), unit.UnitID{}, RequestInput{Text: "cat", Terms: terms}, build)
 			if condition == "matching" {
 				if err != nil || request.Terms() != terms || calls != 1 {
 					t.Fatalf("request=%v calls=%d error=%v", request, calls, err)
 				}
-			} else if !errors.Is(err, ErrInferenceProfile) || (condition == "legacy" && calls != 0) {
+			} else if !errors.Is(err, ErrInferenceProfile) || ((condition == "legacy" || condition == "nil" || condition == "nil legacy") && calls != 0) {
 				t.Fatalf("calls=%d error=%v", calls, err)
 			}
 		})

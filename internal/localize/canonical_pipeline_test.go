@@ -161,7 +161,7 @@ func TestCanonicalInferenceProfileEntrySchemaAndLimits(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				request, err := core.inference.buildRequest(context.Background(), unit.UnitID{}, "one")
+				request, err := core.inference.buildTerms(context.Background(), unit.UnitID{}, RequestInput{Text: "one"})
 				if err != nil {
 					t.Fatal(err)
 				}
