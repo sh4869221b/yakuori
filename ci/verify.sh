@@ -43,7 +43,7 @@ go vet ./...
 # Issue #68/#69/#70 pipeline fault harness. Vet and compilation check the test-only
 # surface; they are not a behavior PASS. The filesystem-independent lanes below
 # run real child lifecycles. Qualified publication positives require a non-root
-# ext4/Btrfs mount and run in .github/workflows/publication-probe.yml.
+# ext4/Btrfs mount and run in .github/workflows/ci.yml (non-root-filesystems).
 pipeline_tmp=$(mktemp -d)
 trap 'rm -rf "$fixture" "$offline_evidence" "$pipeline_tmp"' EXIT
 go vet -tags pipelinefaults ./internal/localize ./internal/publication ./internal/cli ./internal/tm

@@ -16,12 +16,19 @@ RUN curl --fail --location --silent --show-error --max-time 300 \
     && echo '1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32  /model.gguf' | sha256sum -c -
 
 # BuildKit can acquire the pinned fixture while the independent checks run.
+# The required linux-cgo-free job runs the full clean ci/verify.sh gate once.
+# Keep this image's toolchain audit and every CPU-specific check independent.
 FROM toolchain AS checks
 COPY . .
 RUN for tool in cc gcc g++ c++ clang clang++ cmake; do \
       if command -v "$tool"; then exit 1; fi; done \
+    && test ! -e /usr/include/sqlite3.h \
+    && test ! -e /usr/local/include/sqlite3.h \
+    && test "$(go env GOOS)/$(go env GOARCH)" = linux/amd64 \
+    && test "$(go env GOVERSION)" = go1.27.3 \
+    && test "$(go env CGO_ENABLED)" = 0 \
+    && test "$(go env GOTOOLCHAIN)" = local \
     && python3 ci/test-long-context-supervisor.py \
-    && sh ci/verify.sh \
     && test -z "$(gofmt -l tools/cpuspike)" \
     && go build -o /cpuspike ./tools/cpuspike \
     && GOOS=linux GOARCH=arm64 go build -o /cpuspike-arm64 ./tools/cpuspike \

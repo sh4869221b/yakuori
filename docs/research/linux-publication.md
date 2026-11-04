@@ -369,7 +369,7 @@ tmpfs, the dedicated refusal invocation
 passed. `sh ci/verify.sh`, the `ci/Dockerfile` build, `go vet ./internal/publication`,
 and the Linux arm64 test cross-compile passed; the cross-compile is not arm64
 runtime evidence. The
-`.github/workflows/publication-probe.yml` `non-root-filesystems` job runs the
+`.github/workflows/ci.yml` `non-root-filesystems` job runs the
 product suite on ext4; the corresponding PR CI run is the authoritative hosted
 result, and these local Btrfs results do not substitute for it. These product
 checks do not connect TM commit after #16 or the full pipeline fault suite in
@@ -515,7 +515,7 @@ behavior pass), the filesystem-independent `TestPipelineFixtureInputs`,
 as a real tmpfs/overlay. Those lanes assert PASS, at least one selected test,
 and zero FAIL/SKIP.
 
-`.github/workflows/publication-probe.yml` keeps its non-root ext4 job and
+`.github/workflows/ci.yml` keeps its non-root ext4 job and
 existing `/tmp` refusal lanes. Before the qualified selectors it creates the
 owned `/evidence/tmp` and caches, asserts UID != 0 and ext4 (statfs `ef53`), and
 sets `TMPDIR`/`GOTMPDIR` to that directory. It then runs the publication bridge,
