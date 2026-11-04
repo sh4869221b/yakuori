@@ -334,6 +334,12 @@ func (e *signalStreamEngine) Generate(ctx context.Context, request inference.Gen
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)
+		// The parent may cancel as soon as readiness is reported. Deliver the
+		// first token before that boundary so the authored drain is stable.
+		select {
+		case tokens <- "訳":
+		case <-generateCtx.Done():
+		}
 		e.emit("generate-ready", func(notice *signalNotice) {
 			notice.Detail = fmt.Sprintf("applied_request_timeout=%s", applied)
 			notice.GenerateStarted = generateStarted
@@ -341,10 +347,6 @@ func (e *signalStreamEngine) Generate(ctx context.Context, request inference.Gen
 			notice.GenerateDeadline = generateDeadline
 		})
 		e.readyOnce.Do(func() { close(e.ready) })
-		select {
-		case tokens <- "訳":
-		case <-generateCtx.Done():
-		}
 		<-generateCtx.Done()
 		e.emit("cancel-observed", func(notice *signalNotice) {
 			source := "request"

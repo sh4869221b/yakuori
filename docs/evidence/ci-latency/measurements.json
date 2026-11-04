@@ -1,0 +1,974 @@
+{
+  "date": "2026-11-04",
+  "baseline_tree": "f74a50a4261033092e3aa5cc3b0f1d643bbf655a",
+  "conditions": {
+    "runner": "ubuntu-24.04",
+    "go": "1.27.3",
+    "cgo_enabled": 0,
+    "cross_run_cache": "none; fresh Docker builders",
+    "cpu_smoke": "network none, cpus=2, memory=4g",
+    "local": "GOMAXPROCS=2 for Go, existing Go build cache; OS page cache not controlled"
+  },
+  "actions_jobs": [
+    {
+      "iteration": "history",
+      "job": "foundation",
+      "run_id": 41793250616,
+      "attempt": 1,
+      "head_sha": "9f1e1bcf51562d4dbe3503fab2e20147333ef014",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41793250616/job/126451279153",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 3.0,
+      "job_seconds": 149.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 3.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 2.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+          "seconds": 140.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "history",
+      "job": "cpu",
+      "run_id": 41791488266,
+      "attempt": 1,
+      "head_sha": "9b3c903d33c41e5b141748383e45f9f0872e03e6",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41791488266/job/126445662002",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 350.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Build without native compiler and acquire checksum-pinned test fixture",
+          "seconds": 208.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Real CPU generation and failure semantics without network",
+          "seconds": 3.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Production CPU wrapper smoke without network",
+          "seconds": 3.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Production W3 CPU regression without network",
+          "seconds": 10.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Bounded 1K and 4K token-counted CPU experiment",
+          "seconds": 111.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Show bounded long-context evidence even on failure",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "history",
+      "job": "publication",
+      "run_id": 41793250486,
+      "attempt": 1,
+      "head_sha": "9f1e1bcf51562d4dbe3503fab2e20147333ef014",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41793250486/job/126451278861",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 354.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Build pinned CGO-free toolchain image",
+          "seconds": 196.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Non-root host filesystem and separate-mount probes",
+          "seconds": 149.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload offline pipeline evidence",
+          "seconds": 2.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "baseline-repeat",
+      "job": "foundation",
+      "run_id": 41791488197,
+      "attempt": 2,
+      "head_sha": "9b3c903d33c41e5b141748383e45f9f0872e03e6",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41791488197/job/126476602331",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 199.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+          "seconds": 193.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "baseline-repeat",
+      "job": "cpu",
+      "run_id": 41791488266,
+      "attempt": 2,
+      "head_sha": "9b3c903d33c41e5b141748383e45f9f0872e03e6",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41791488266/job/126476612569",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 336.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Build without native compiler and acquire checksum-pinned test fixture",
+          "seconds": 206.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Real CPU generation and failure semantics without network",
+          "seconds": 3.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Production CPU wrapper smoke without network",
+          "seconds": 4.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Production W3 CPU regression without network",
+          "seconds": 8.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Bounded 1K and 4K token-counted CPU experiment",
+          "seconds": 111.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Show bounded long-context evidence even on failure",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "baseline-repeat",
+      "job": "publication",
+      "run_id": 41791488279,
+      "attempt": 2,
+      "head_sha": "9b3c903d33c41e5b141748383e45f9f0872e03e6",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41791488279/job/126476622321",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 340.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 4.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Build pinned CGO-free toolchain image",
+          "seconds": 175.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Non-root host filesystem and separate-mount probes",
+          "seconds": 152.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload offline pipeline evidence",
+          "seconds": 2.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "iteration1",
+      "job": "foundation",
+      "run_id": 41798867117,
+      "attempt": 1,
+      "head_sha": "b37490acf2c90c3ddd436d9ad7553f3f85083395",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41798867117/job/126469438166",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 227.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 4.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+          "seconds": 218.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "iteration1",
+      "job": "cpu",
+      "run_id": 41798867114,
+      "attempt": 1,
+      "head_sha": "b37490acf2c90c3ddd436d9ad7553f3f85083395",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41798867114/job/126469438112",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 406.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 2.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Build without native compiler and acquire checksum-pinned test fixture",
+          "seconds": 272.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Real CPU generation and failure semantics without network",
+          "seconds": 4.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Production CPU wrapper smoke without network",
+          "seconds": 3.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Production W3 CPU regression without network",
+          "seconds": 8.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Bounded 1K and 4K token-counted CPU experiment",
+          "seconds": 111.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Show bounded long-context evidence even on failure",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "iteration1",
+      "job": "publication",
+      "run_id": 41798867212,
+      "attempt": 2,
+      "head_sha": "b37490acf2c90c3ddd436d9ad7553f3f85083395",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41798867212/job/126471845224",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 322.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 2.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Build pinned CGO-free toolchain image",
+          "seconds": 185.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Non-root host filesystem and separate-mount probes",
+          "seconds": 127.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload offline pipeline evidence",
+          "seconds": 2.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "iteration2",
+      "job": "foundation",
+      "run_id": 41799770654,
+      "attempt": 1,
+      "head_sha": "b4a5ce89d0e01cc96d885d9b4a6aa44073c8c2af",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41799770654/job/126472397160",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 187.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+          "seconds": 183.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "iteration2",
+      "job": "cpu",
+      "run_id": 41799770622,
+      "attempt": 1,
+      "head_sha": "b4a5ce89d0e01cc96d885d9b4a6aa44073c8c2af",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41799770622/job/126472396792",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 319.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Build without native compiler and acquire checksum-pinned test fixture",
+          "seconds": 208.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Real CPU generation and failure semantics without network",
+          "seconds": 3.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Production CPU wrapper smoke without network",
+          "seconds": 3.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Production W3 CPU regression without network",
+          "seconds": 9.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Bounded 1K and 4K token-counted CPU experiment",
+          "seconds": 90.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Show bounded long-context evidence even on failure",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "iteration2",
+      "job": "publication",
+      "run_id": 41799770848,
+      "attempt": 1,
+      "head_sha": "b4a5ce89d0e01cc96d885d9b4a6aa44073c8c2af",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41799770848/job/126472397851",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 291.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Build pinned CGO-free toolchain image",
+          "seconds": 186.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Non-root host filesystem and separate-mount probes",
+          "seconds": 97.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload offline pipeline evidence",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "iteration3",
+      "job": "foundation",
+      "run_id": 41800528505,
+      "attempt": 1,
+      "head_sha": "7328bfc0d55a56d18861f7502f987cb062970693",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41800528505/job/126474880486",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 180.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+          "seconds": 175.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "iteration3",
+      "job": "cpu",
+      "run_id": 41800528474,
+      "attempt": 1,
+      "head_sha": "7328bfc0d55a56d18861f7502f987cb062970693",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41800528474/job/126474879817",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 233.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Build without native compiler and acquire checksum-pinned test fixture",
+          "seconds": 156.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Real CPU generation and failure semantics without network",
+          "seconds": 2.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Production CPU wrapper smoke without network",
+          "seconds": 2.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Production W3 CPU regression without network",
+          "seconds": 7.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Bounded 1K and 4K token-counted CPU experiment",
+          "seconds": 62.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Show bounded long-context evidence even on failure",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "iteration": "iteration3",
+      "job": "publication",
+      "run_id": 41800528519,
+      "attempt": 1,
+      "head_sha": "7328bfc0d55a56d18861f7502f987cb062970693",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41800528519/job/126474880663",
+      "conclusion": "success",
+      "runner_labels": [
+        "ubuntu-24.04"
+      ],
+      "queue_seconds": 2.0,
+      "job_seconds": 297.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Build pinned CGO-free toolchain image",
+          "seconds": 189.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Non-root host filesystem and separate-mount probes",
+          "seconds": 100.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload offline pipeline evidence",
+          "seconds": 1.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "seconds": 0.0,
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "seconds": 0.0,
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "validator_local": [
+    {
+      "root": "TestPipelineCommitPublicationState",
+      "names": 930,
+      "events": 3720,
+      "seconds": {
+        "old": [
+          49.4279,
+          20.7098,
+          22.6434
+        ],
+        "new": [
+          0.1389,
+          0.0638,
+          0.0865
+        ]
+      }
+    },
+    {
+      "root": "TestPipelinePublicationFailures",
+      "names": 523,
+      "events": 2834,
+      "seconds": {
+        "old": [
+          12.8039,
+          11.0778,
+          10.3876
+        ],
+        "new": [
+          0.0673,
+          0.0737,
+          0.0555
+        ]
+      }
+    },
+    {
+      "root": "TestPipelineCLIPublicationExit",
+      "names": 68,
+      "events": 1928,
+      "seconds": {
+        "old": [
+          1.4003,
+          1.3524,
+          1.3424
+        ],
+        "new": [
+          0.0566,
+          0.059,
+          0.0897
+        ]
+      }
+    },
+    {
+      "root": "TestPipelineFilesystem",
+      "names": 234,
+      "events": 1188,
+      "seconds": {
+        "old": [
+          4.7968,
+          4.8739,
+          4.4758
+        ],
+        "new": [
+          0.0642,
+          0.0986,
+          0.0607
+        ]
+      }
+    }
+  ],
+  "test_binary_local": [
+    {
+      "repeat": 0,
+      "method": "go-test",
+      "seconds": 0.5743,
+      "test_names_count": 9
+    },
+    {
+      "repeat": 0,
+      "method": "binary",
+      "seconds": 0.6479,
+      "test_names_count": 9
+    },
+    {
+      "repeat": 1,
+      "method": "binary",
+      "seconds": 0.1396,
+      "test_names_count": 9
+    },
+    {
+      "repeat": 1,
+      "method": "go-test",
+      "seconds": 0.6097,
+      "test_names_count": 9
+    },
+    {
+      "repeat": 2,
+      "method": "go-test",
+      "seconds": 0.5076,
+      "test_names_count": 9
+    },
+    {
+      "repeat": 2,
+      "method": "binary",
+      "seconds": 0.1275,
+      "test_names_count": 9
+    },
+    {
+      "repeat": 3,
+      "method": "binary",
+      "seconds": 0.1301,
+      "test_names_count": 9
+    },
+    {
+      "repeat": 3,
+      "method": "go-test",
+      "seconds": 0.5373,
+      "test_names_count": 9
+    },
+    {
+      "repeat": 4,
+      "method": "go-test",
+      "seconds": 0.5404,
+      "test_names_count": 9
+    },
+    {
+      "repeat": 4,
+      "method": "binary",
+      "seconds": 0.1303,
+      "test_names_count": 9
+    }
+  ],
+  "compile_grouping_local": [
+    {
+      "repeat": 0,
+      "mode": "separate",
+      "seconds": 15.04
+    },
+    {
+      "repeat": 0,
+      "mode": "grouped",
+      "seconds": 0.385
+    },
+    {
+      "repeat": 1,
+      "mode": "grouped",
+      "seconds": 0.51
+    },
+    {
+      "repeat": 1,
+      "mode": "separate",
+      "seconds": 1.208
+    },
+    {
+      "repeat": 2,
+      "mode": "separate",
+      "seconds": 1.21
+    },
+    {
+      "repeat": 2,
+      "mode": "grouped",
+      "seconds": 0.462
+    }
+  ],
+  "limitations": [
+    "Runner hardware was not fixed; whole-job differences are observations, not isolated causal effects.",
+    "First separate compile sample includes cold linking and is excluded from warm comparison.",
+    "Iteration 1 publication attempt 1 failed before validation; attempt 2 succeeded.",
+    "Final CI after the ready/cancel regression fix is linked from PR #112."
+  ]
+}

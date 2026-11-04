@@ -56,6 +56,13 @@ pipeline_require() {
  python3 ci/check-test-events.py "$2" "$3"
 }
 
+printf '%s\n' TestSignalReadyCancellation >"$pipeline_tmp/signal-ready.names"
+if ! sh ci/run-test-binary.sh "$pipeline_tmp/cli.test" internal/cli 180s '^TestSignalReadyCancellation$' \
+ >"$pipeline_tmp/signal-ready.log" 2>&1; then
+ cat "$pipeline_tmp/signal-ready.log" >&2; exit 1; fi
+pipeline_require signal-ready "$pipeline_tmp/signal-ready.names" "$pipeline_tmp/signal-ready.log"
+cat "$pipeline_tmp/signal-ready.log"
+
 cat >"$pipeline_tmp/fixture-inputs.names" <<'EOF'
 TestPipelineFixtureInputs/valid
 TestPipelineFixtureInputs/valid/text
