@@ -4,10 +4,67 @@ export CGO_ENABLED=0 GOTOOLCHAIN=local
 [ "$(go env GOOS)/$(go env GOARCH)" = linux/amd64 ]
 [ "$(go env GOVERSION)" = go1.27.3 ]
 go version
+# The observer tests need only Python/strace and their own temporary fixtures.
+# Overlap their bounded waits with cold Go compilation, then join before any
+# observer-backed CLI matrix. A failing Go audit still waits for normal teardown.
+observer_tmp=$(mktemp -d)
+observer_pid=
+observer_starting=1
+observer_signal=0
+fixture=
+offline_evidence=
+pipeline_tmp=
+observer_join() {
+ observer_status=0
+ if [ -n "$observer_pid" ]; then
+  if wait "$observer_pid"; then :; else observer_status=$?; fi
+  observer_pid=
+  if cat "$observer_tmp/log"; then :; else
+   [ "$observer_status" -ne 0 ] || observer_status=1
+  fi
+ fi
+ return "$observer_status"
+}
+verify_cleanup() {
+ verify_status=$?
+ # Repeated cancellation must not abandon the observer while it owns children.
+ # Let its existing bounded subprocess checks finish their own teardown.
+ trap '' HUP INT TERM
+ trap - EXIT
+ if observer_join; then :; else
+  observer_cleanup_status=$?
+  [ "$verify_status" -ne 0 ] || verify_status=$observer_cleanup_status
+ fi
+ if rm -rf "$observer_tmp" "$fixture" "$offline_evidence" "$pipeline_tmp"; then :; else
+  [ "$verify_status" -ne 0 ] || verify_status=1
+ fi
+ exit "$verify_status"
+}
+verify_signal() {
+ if [ "$observer_starting" -eq 1 ]; then
+  observer_signal=$1
+ else
+  exit "$1"
+ fi
+}
+trap verify_cleanup EXIT
+trap 'verify_signal 129' HUP
+trap 'verify_signal 130' INT
+trap 'verify_signal 143' TERM
+# A noninteractive shell ignores INT/QUIT for asynchronous commands. Restore
+# their foreground defaults before exec so the self-tests keep those semantics.
+python3 -c '
+import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+signal.signal(signal.SIGQUIT, signal.SIG_DFL)
+os.execv(sys.executable, [sys.executable, *sys.argv[1:]])
+' ci/test-offline.py >"$observer_tmp/log" 2>&1 &
+observer_pid=$!
+observer_starting=0
+[ "$observer_signal" -eq 0 ] || exit "$observer_signal"
 go run ci/check-cgo.go
 # Prove the guard catches even a build-tag-excluded import.
 fixture=$(mktemp -d)
-trap 'rm -rf "$fixture"' EXIT
 printf '//go:build never\n\npackage forbidden\nimport "C"\n' > "$fixture/forbidden.go"
 if go run ci/check-cgo.go "$fixture"; then
  echo 'cgo guard self-test unexpectedly passed' >&2; exit 1
@@ -20,13 +77,13 @@ done
 [ -z "$(gofmt -l cmd internal ci/check-cgo.go)" ]
 go build ./cmd/yakuori
 # Test-only offline observer self-test (strace and python3 come from the CI image).
-python3 ci/test-offline.py
+python3 ci/test-test-events.py
+observer_join
 # Model-free acquisition failures against the built binary; no MODEL env is set,
 # so normal CI never fetches or places a model.
 YAKUORI_PULL_BINARY="$PWD/yakuori" go test -count=1 -tags modelsmoke ./internal/cli -run '^TestPullCLIFailure$' -v
 # Model-free CLI/error matrix under the same offline observer.
 offline_evidence=$(mktemp -d)
-trap 'rm -rf "$fixture" "$offline_evidence"' EXIT
 # Keep only the observed Go command on one CPU for the existing tracer.
 # Unit/concurrency tests below retain the caller's normal affinity.
 YAKUORI_PULL_BINARY="$PWD/yakuori" YAKUORI_PULL_EVIDENCE="$offline_evidence" \
@@ -42,92 +99,24 @@ go vet ./...
 # Issue #68/#69/#70 pipeline fault harness. Vet and compilation check the test-only
 # surface; they are not a behavior PASS. The filesystem-independent lanes below
 # run real child lifecycles. Qualified publication positives require a non-root
-# ext4/Btrfs mount and run in .github/workflows/publication-probe.yml.
+# ext4/Btrfs mount and run in .github/workflows/ci.yml (non-root-filesystems).
 pipeline_tmp=$(mktemp -d)
-trap 'rm -rf "$fixture" "$offline_evidence" "$pipeline_tmp"' EXIT
 go vet -tags pipelinefaults ./internal/localize ./internal/publication ./internal/cli ./internal/tm
-for pipeline_pkg in localize publication cli tm; do
- go test -c -o "$pipeline_tmp/$pipeline_pkg-normal.test" "./internal/$pipeline_pkg"
- go test -c -tags pipelinefaults -o "$pipeline_tmp/$pipeline_pkg.test" "./internal/$pipeline_pkg"
-done
+mkdir "$pipeline_tmp/normal"
+go test -c -o "$pipeline_tmp/normal/" ./internal/localize ./internal/publication ./internal/cli ./internal/tm
+go test -c -tags pipelinefaults -o "$pipeline_tmp/" ./internal/localize ./internal/publication ./internal/cli ./internal/tm
 echo 'pipelinefaults compile-only: normal/tagged test binaries built; not a behavior PASS'
 
 pipeline_require() {
- label=$1
- names=$2
- test_log=$3
- # Only Go's framing is driver output; t.Log may contain child transcripts.
- event_log="$pipeline_tmp/$label.events"
- python3 -c "import json, sys; events = list(map(json.loads, sys.stdin)); \
-sys.exit(\"pipeline lane reported FAIL or SKIP\") if any(e[\"Action\"] in (\"fail\", \"skip\") for e in events) else None; \
-sys.stdout.writelines(e[\"Output\"] for e in events if e.get(\"OutputType\") == \"frame\")" \
-  <"$test_log" >"$event_log" || return 1
- test_log=$event_log
- pass_names="$pipeline_tmp/$label.pass"
- run_names="$pipeline_tmp/$label.run"
- observed="$pipeline_tmp/$label.observed"
- allowed="$pipeline_tmp/$label.allowed"
- roots="$pipeline_tmp/$label.roots"
- bad=0
- if grep -Eq '^[[:space:]]*--- (FAIL|SKIP)' "$test_log"; then
-  echo "pipeline lane reported FAIL or SKIP" >&2
-  return 1
- fi
- grep -E '^[[:space:]]*--- PASS: ' "$test_log" \
-  | sed -E "s/^[[:space:]]*--- PASS: //; s/ [(].*//" | sort >"$pass_names"
- if [ ! -s "$pass_names" ]; then
-  echo "pipeline $label selected no PASS output" >&2
-  return 1
- fi
- if [ -n "$(uniq -d "$pass_names")" ]; then
-  echo "pipeline $label duplicated a PASS name" >&2
-  return 1
- fi
- grep -E '^[[:space:]]*=== RUN   ' "$test_log" \
-  | sed -E 's/^[[:space:]]*=== RUN   //' | sort >"$run_names"
- if [ -n "$(uniq -d "$run_names")" ]; then
-  echo "pipeline $label duplicated a RUN name" >&2
-  return 1
- fi
- : >"$allowed"
- : >"$roots"
- while IFS= read -r name; do
-  [ -n "$name" ] || continue
-  runs=$(grep -Ec "^[[:space:]]*=== RUN   $name[[:space:]]*$" "$test_log" || true)
-  passes=$(grep -Ec "^[[:space:]]*--- PASS: $name[[:space:]]*[(]" "$test_log" || true)
-  if [ "$runs" -ne 1 ] || [ "$passes" -ne 1 ]; then
-   echo "pipeline $label terminal $name RUN=$runs PASS=$passes, want 1/1" >&2
-   bad=1
-  fi
-  root=${name%%/*}
-  if ! grep -Fqx "$root" "$roots"; then
-   printf "%s\n" "$root" >>"$roots"
-   root_runs=$(grep -Ec "^[[:space:]]*=== RUN   $root[[:space:]]*$" "$test_log" || true)
-   root_passes=$(grep -Ec "^[[:space:]]*--- PASS: $root[[:space:]]*[(]" "$test_log" || true)
-   if [ "$root_runs" -ne 1 ] || [ "$root_passes" -ne 1 ]; then
-    echo "pipeline $label root $root RUN=$root_runs PASS=$root_passes, want 1/1" >&2
-    bad=1
-   fi
-  fi
-  # Only actual t.Run parents are required; a slash in a leaf creates no parent.
-  printf "%s\n" "$root" "$name" >>"$allowed"
- done <"$names"
- { cat "$run_names"; cat "$pass_names"; } | sort -u >"$observed"
- while IFS= read -r name; do
-  [ -n "$name" ] || continue
-  grep -Fqx "$name" "$allowed" || {
-   echo "pipeline $label unexpected terminal $name" >&2
-   bad=1
-  }
-  runs=$(grep -Ec "^[[:space:]]*=== RUN   $name[[:space:]]*$" "$test_log" || true)
-  passes=$(grep -Ec "^[[:space:]]*--- PASS: $name[[:space:]]*[(]" "$test_log" || true)
-  if [ "$runs" -ne 1 ] || [ "$passes" -ne 1 ]; then
-   echo "pipeline $label incomplete terminal $name RUN=$runs PASS=$passes, want 1/1" >&2
-   bad=1
-  fi
- done <"$observed"
- [ "$bad" -eq 0 ]
+ python3 ci/check-test-events.py "$2" "$3"
 }
+
+printf '%s\n' TestSignalReadyCancellation >"$pipeline_tmp/signal-ready.names"
+if ! sh ci/run-test-binary.sh "$pipeline_tmp/cli.test" internal/cli 180s '^TestSignalReadyCancellation$' \
+ >"$pipeline_tmp/signal-ready.log" 2>&1; then
+ cat "$pipeline_tmp/signal-ready.log" >&2; exit 1; fi
+pipeline_require signal-ready "$pipeline_tmp/signal-ready.names" "$pipeline_tmp/signal-ready.log"
+cat "$pipeline_tmp/signal-ready.log"
 
 cat >"$pipeline_tmp/fixture-inputs.names" <<'EOF'
 TestPipelineFixtureInputs/valid
@@ -184,14 +173,12 @@ TestPipelineTMCommitHooks/private-callback
 TestPipelineTMCommitHooks/ineligible-run
 TestPipelineTMCommitHooks/dml-error
 EOF
-if ! go test -count=1 -timeout 10m ./internal/tm \
- -run '^(TestPipelineTMCommitCheckpoint|TestPipelineTMCommitStoppedProcess|TestCommitConcurrentKey|TestCommitBusyAndDeadline|TestCommitCleanupFailure)$' \
- -json >"$pipeline_tmp/tm-component.log" 2>&1; then
+if ! sh ci/run-test-binary.sh "$pipeline_tmp/normal/tm.test" internal/tm 10m '^(TestPipelineTMCommitCheckpoint|TestPipelineTMCommitStoppedProcess|TestCommitConcurrentKey|TestCommitBusyAndDeadline|TestCommitCleanupFailure)$' \
+ >"$pipeline_tmp/tm-component.log" 2>&1; then
  cat "$pipeline_tmp/tm-component.log" >&2; exit 1; fi
 pipeline_require tm-component "$pipeline_tmp/tm-component.names" "$pipeline_tmp/tm-component.log"
 cat "$pipeline_tmp/tm-component.log"
-if ! go test -count=1 -timeout 10m -tags pipelinefaults ./internal/tm \
- -run '^TestPipelineTMCommitHooks$' -json >"$pipeline_tmp/tm-hooks.log" 2>&1; then
+if ! sh ci/run-test-binary.sh "$pipeline_tmp/tm.test" internal/tm 10m '^TestPipelineTMCommitHooks$' >"$pipeline_tmp/tm-hooks.log" 2>&1; then
  cat "$pipeline_tmp/tm-hooks.log" >&2; exit 1; fi
 pipeline_require tm-hooks "$pipeline_tmp/tm-hooks.names" "$pipeline_tmp/tm-hooks.log"
 cat "$pipeline_tmp/tm-hooks.log"
@@ -231,8 +218,7 @@ pipeline_fs_independent() {
  selector=$2
  names=$3
  log="$pipeline_tmp/$label.log"
- if ! go test -count=1 -timeout 180s -tags pipelinefaults ./internal/localize \
-  -run "$selector" -json >"$log" 2>&1; then
+ if ! sh ci/run-test-binary.sh "$pipeline_tmp/localize.test" internal/localize 180s "$selector" >"$log" 2>&1; then
   cat "$log" >&2; echo "pipeline lane $label failed" >&2; exit 1; fi
  pipeline_require "$label" "$names" "$log"
  cat "$log"
@@ -256,8 +242,7 @@ tmpfs|overlayfs) ;;
 *) echo "/tmp is $tmp_fs, not a verified tmpfs/overlay" >&2; exit 1 ;;
 esac
 echo "unsupported-filesystem refusal lane filesystem: $tmp_fs"
-if ! TMPDIR=/tmp GOTMPDIR=/tmp go test -count=1 -timeout 180s -tags pipelinefaults \
- ./internal/localize -run '^TestPipelineUnsupportedFilesystem$' -json \
+if ! TMPDIR=/tmp GOTMPDIR=/tmp sh ci/run-test-binary.sh "$pipeline_tmp/localize.test" internal/localize 180s '^TestPipelineUnsupportedFilesystem$' \
  >"$pipeline_tmp/refusal.log" 2>&1; then
  cat "$pipeline_tmp/refusal.log" >&2; echo 'unsupported-filesystem refusal lane failed' >&2; exit 1; fi
 pipeline_require refusal "$pipeline_tmp/refusal.names" "$pipeline_tmp/refusal.log"

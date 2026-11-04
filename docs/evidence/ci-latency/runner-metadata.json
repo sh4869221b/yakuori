@@ -1,0 +1,561 @@
+{
+  "schema_version": 1,
+  "repository": "sh4869221b/yakuori",
+  "collected_at": "2026-11-04T09:46:08.671Z",
+  "notes": [
+    "Read-only GitHub connector log retrieval; exact timestamped excerpts retained.",
+    "All hardware records are per job. Equal runner labels or CPU model names do not establish equal host load or effective performance.",
+    "free -m memory columns: total, used, free, shared, buff/cache, available. Swap columns: total, used, free.",
+    "Publication job logs are unavailable where marked: GitHub connector returned Transport closed; no hardware inference is made for those jobs."
+  ],
+  "jobs": [
+    {
+      "run_id": 41807403556,
+      "attempt": 1,
+      "head_sha": "edb421dfe57ff6cfe0fae4f2f95ff11df42955dc",
+      "job_id": 126497746857,
+      "job_name": "linux-cgo-free",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41807403556/job/126497746857",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1014-aws",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "Intel(R) Xeon(R) 6975P-C",
+        "available_cpus": 4,
+        "cpu_max_mhz": null,
+        "cpu_min_mhz": null,
+        "memory_mib": [
+          15701,
+          831,
+          13485,
+          39,
+          1719,
+          14869
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:25:47.0435498Z Linux 7.0.0-1014-aws",
+        "2026-11-04T09:25:47.0457823Z Architecture:                            x86_64",
+        "2026-11-04T09:25:47.0458425Z CPU(s):                                  4",
+        "2026-11-04T09:25:47.0459123Z Model name:                              Intel(R) Xeon(R) 6975P-C",
+        "2026-11-04T09:25:47.0479005Z available CPUs: 4",
+        "2026-11-04T09:25:47.0519108Z Mem:           15701         831       13485          39        1719       14869",
+        "2026-11-04T09:25:47.0519727Z Swap:           3071           0        3071"
+      ]
+    },
+    {
+      "run_id": 41807403556,
+      "attempt": 1,
+      "head_sha": "edb421dfe57ff6cfe0fae4f2f95ff11df42955dc",
+      "job_id": 126497747185,
+      "job_name": "independent-roundtrip",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41807403556/job/126497747185",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1017-azure",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+        "available_cpus": 4,
+        "cpu_max_mhz": null,
+        "cpu_min_mhz": null,
+        "memory_mib": [
+          15983,
+          913,
+          14567,
+          38,
+          824,
+          15070
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:25:44.4888980Z Linux 7.0.0-1017-azure",
+        "2026-11-04T09:25:44.4915183Z Architecture:                            x86_64",
+        "2026-11-04T09:25:44.4915849Z CPU(s):                                  4",
+        "2026-11-04T09:25:44.4916709Z Model name:                              AMD EPYC 9V74 80-Core Processor",
+        "2026-11-04T09:25:44.4966448Z available CPUs: 4",
+        "2026-11-04T09:25:44.4983064Z Mem:           15983         913       14567          38         824       15070",
+        "2026-11-04T09:25:44.4983995Z Swap:           3071           0        3071"
+      ]
+    },
+    {
+      "run_id": 41807403556,
+      "attempt": 1,
+      "head_sha": "edb421dfe57ff6cfe0fae4f2f95ff11df42955dc",
+      "job_id": 126497747200,
+      "job_name": "non-root-filesystems",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41807403556/job/126497747200",
+      "status": "unavailable",
+      "error": "GitHub connector fetch_workflow_job_logs returned Transport closed on two read attempts."
+    },
+    {
+      "run_id": 41807403556,
+      "attempt": 1,
+      "head_sha": "edb421dfe57ff6cfe0fae4f2f95ff11df42955dc",
+      "job_id": 126497747323,
+      "job_name": "linux-cpu-gguf",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41807403556/job/126497747323",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1017-azure",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "INTEL(R) XEON(R) PLATINUM 8573C",
+        "available_cpus": 4,
+        "cpu_max_mhz": "2300.0000",
+        "cpu_min_mhz": "800.0000",
+        "memory_mib": [
+          15982,
+          843,
+          14645,
+          38,
+          814,
+          15139
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:25:44.2615852Z Linux 7.0.0-1017-azure",
+        "2026-11-04T09:25:44.2641278Z Architecture:                            x86_64",
+        "2026-11-04T09:25:44.2642127Z CPU(s):                                  4",
+        "2026-11-04T09:25:44.2642851Z Model name:                              INTEL(R) XEON(R) PLATINUM 8573C",
+        "2026-11-04T09:25:44.2643810Z CPU max MHz:                             2300.0000",
+        "2026-11-04T09:25:44.2644700Z CPU min MHz:                             800.0000",
+        "2026-11-04T09:25:44.2658840Z available CPUs: 4",
+        "2026-11-04T09:25:44.2675796Z Mem:           15982         843       14645          38         814       15139",
+        "2026-11-04T09:25:44.2677110Z Swap:           3071           0        3071"
+      ],
+      "model_fixture_excerpts": [
+        "2026-11-04T09:26:03.9037171Z #10 [model 1/1] RUN curl --fail --location --silent --show-error --max-time 300     https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf     -o /model.gguf     && echo '1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32  /model.gguf' | sha256sum -c -",
+        "2026-11-04T09:26:11.2649807Z #10 [model 1/1] RUN curl --fail --location --silent --show-error --max-time 300     https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf     -o /model.gguf     && echo '1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32  /model.gguf' | sha256sum -c -",
+        "2026-11-04T09:26:11.2652253Z #10 3.476 /model.gguf: OK",
+        "2026-11-04T09:27:47.4670128Z     w3_cpu_smoke_linux_test.go:65: CPU W3 evidence: model=cpu-regression sha256=1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32 size=491400064 backend_requested=cpu backend=cpu quant=int4 model_context=32768 effective_context=4096 goinfer=github.com/townsendmerino/goinfer@v0.23.0 policy={Schema:1 MaxOutputTokens:2048 RequestTimeout:30s Temperature:0 TopK:0 TopP:0 MinP:0 Seed:0 SeedFixed:true RepeatPenalty:0 PresencePenalty:0 FrequencyPenalty:0 RepeatLastN:0 LogitBiasEnabled:false Logprobs:false TopLogprobs:0 LogitProcessorEnabled:false LogitProcessorGateEnabled:false SpeculationEnabled:false SessionEnabled:false BatchingEnabled:false StopIDs:[151645]} generated=2 completed=2 failed=0 validation={Attempted:3 Passed:3 Failed:0} final_validated=true tm_committed=true publication=published"
+      ]
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 1,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126501695163,
+      "job_name": "independent-roundtrip",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126501695163",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1017-azure",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "AMD EPYC 9V45 96-Core Processor",
+        "available_cpus": 4,
+        "cpu_max_mhz": null,
+        "cpu_min_mhz": null,
+        "memory_mib": [
+          15983,
+          858,
+          14628,
+          38,
+          817,
+          15125
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:34:07.3092873Z Linux 7.0.0-1017-azure",
+        "2026-11-04T09:34:07.3120975Z Architecture:                            x86_64",
+        "2026-11-04T09:34:07.3121704Z CPU(s):                                  4",
+        "2026-11-04T09:34:07.3122087Z Model name:                              AMD EPYC 9V45 96-Core Processor",
+        "2026-11-04T09:34:07.3134435Z available CPUs: 4",
+        "2026-11-04T09:34:07.3149222Z Mem:           15983         858       14628          38         817       15125",
+        "2026-11-04T09:34:07.3149706Z Swap:           3071           0        3071"
+      ]
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 1,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126501695423,
+      "job_name": "linux-cpu-gguf",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126501695423",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1017-azure",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "AMD EPYC 9V45 96-Core Processor",
+        "available_cpus": 4,
+        "cpu_max_mhz": null,
+        "cpu_min_mhz": null,
+        "memory_mib": [
+          15983,
+          916,
+          14568,
+          38,
+          820,
+          15067
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:34:07.2912611Z Linux 7.0.0-1017-azure",
+        "2026-11-04T09:34:07.2938933Z Architecture:                            x86_64",
+        "2026-11-04T09:34:07.2939533Z CPU(s):                                  4",
+        "2026-11-04T09:34:07.2939946Z Model name:                              AMD EPYC 9V45 96-Core Processor",
+        "2026-11-04T09:34:07.2952637Z available CPUs: 4",
+        "2026-11-04T09:34:07.2967454Z Mem:           15983         916       14568          38         820       15067",
+        "2026-11-04T09:34:07.2967830Z Swap:           3071           0        3071"
+      ],
+      "model_fixture_excerpts": [
+        "2026-11-04T09:34:24.9632595Z #10 [model 1/1] RUN curl --fail --location --silent --show-error --max-time 300     https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf     -o /model.gguf     && echo '1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32  /model.gguf' | sha256sum -c -",
+        "2026-11-04T09:34:31.2376405Z #10 [model 1/1] RUN curl --fail --location --silent --show-error --max-time 300     https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf     -o /model.gguf     && echo '1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32  /model.gguf' | sha256sum -c -",
+        "2026-11-04T09:34:31.2377912Z #10 6.424 /model.gguf: OK",
+        "2026-11-04T09:34:38.1349396Z #10 [model 1/1] RUN curl --fail --location --silent --show-error --max-time 300     https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf     -o /model.gguf     && echo '1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32  /model.gguf' | sha256sum -c -"
+      ]
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 1,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126501695574,
+      "job_name": "linux-cgo-free",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126501695574",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1017-azure",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "AMD EPYC 7763 64-Core Processor",
+        "available_cpus": 4,
+        "cpu_max_mhz": null,
+        "cpu_min_mhz": null,
+        "memory_mib": [
+          15983,
+          864,
+          14596,
+          38,
+          845,
+          15119
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:34:08.0857312Z Linux 7.0.0-1017-azure",
+        "2026-11-04T09:34:08.0888870Z Architecture:                            x86_64",
+        "2026-11-04T09:34:08.0889763Z CPU(s):                                  4",
+        "2026-11-04T09:34:08.0890691Z Model name:                              AMD EPYC 7763 64-Core Processor",
+        "2026-11-04T09:34:08.0907823Z available CPUs: 4",
+        "2026-11-04T09:34:08.0926882Z Mem:           15983         864       14596          38         845       15119",
+        "2026-11-04T09:34:08.0927795Z Swap:           3071           0        3071"
+      ]
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 1,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126501695455,
+      "job_name": "non-root-filesystems",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126501695455",
+      "status": "unavailable",
+      "error": "GitHub connector fetch_workflow_job_logs returned Transport closed."
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 2,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126503385452,
+      "job_name": "linux-cgo-free",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126503385452",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1017-azure",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "AMD EPYC 9V45 96-Core Processor",
+        "available_cpus": 4,
+        "cpu_max_mhz": null,
+        "cpu_min_mhz": null,
+        "memory_mib": [
+          15983,
+          837,
+          14648,
+          38,
+          818,
+          15146
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:38:33.6091015Z Linux 7.0.0-1017-azure",
+        "2026-11-04T09:38:33.6117456Z Architecture:                            x86_64",
+        "2026-11-04T09:38:33.6118036Z CPU(s):                                  4",
+        "2026-11-04T09:38:33.6118452Z Model name:                              AMD EPYC 9V45 96-Core Processor",
+        "2026-11-04T09:38:33.6189309Z available CPUs: 4",
+        "2026-11-04T09:38:33.6203742Z Mem:           15983         837       14648          38         818       15146",
+        "2026-11-04T09:38:33.6204114Z Swap:           3071           0        3071"
+      ]
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 2,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126503385768,
+      "job_name": "non-root-filesystems",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126503385768",
+      "status": "unavailable",
+      "error": "Publication log not retrieved after repeated Transport closed errors for the preceding publication jobs; hardware unknown."
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 2,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126503386101,
+      "job_name": "linux-cpu-gguf",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126503386101",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1017-azure",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+        "available_cpus": 4,
+        "cpu_max_mhz": null,
+        "cpu_min_mhz": null,
+        "memory_mib": [
+          15983,
+          845,
+          14635,
+          38,
+          824,
+          15138
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:38:33.7390490Z Linux 7.0.0-1017-azure",
+        "2026-11-04T09:38:33.7420347Z Architecture:                            x86_64",
+        "2026-11-04T09:38:33.7421092Z CPU(s):                                  4",
+        "2026-11-04T09:38:33.7421647Z Model name:                              AMD EPYC 9V74 80-Core Processor",
+        "2026-11-04T09:38:33.7474994Z available CPUs: 4",
+        "2026-11-04T09:38:33.7491921Z Mem:           15983         845       14635          38         824       15138",
+        "2026-11-04T09:38:33.7492569Z Swap:           3071           0        3071"
+      ],
+      "model_fixture_excerpts": [
+        "2026-11-04T09:38:53.6201327Z #10 [model 1/1] RUN curl --fail --location --silent --show-error --max-time 300     https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf     -o /model.gguf     && echo '1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32  /model.gguf' | sha256sum -c -",
+        "2026-11-04T09:38:59.1462014Z #10 [model 1/1] RUN curl --fail --location --silent --show-error --max-time 300     https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf     -o /model.gguf     && echo '1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32  /model.gguf' | sha256sum -c -",
+        "2026-11-04T09:38:59.1464408Z #10 3.000 /model.gguf: OK",
+        "2026-11-04T09:39:56.6099956Z     w3_cpu_smoke_linux_test.go:65: CPU W3 evidence: model=cpu-regression sha256=1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32 size=491400064 backend_requested=cpu backend=cpu quant=int4 model_context=32768 effective_context=4096 goinfer=github.com/townsendmerino/goinfer@v0.23.0 policy={Schema:1 MaxOutputTokens:2048 RequestTimeout:30s Temperature:0 TopK:0 TopP:0 MinP:0 Seed:0 SeedFixed:true RepeatPenalty:0 PresencePenalty:0 FrequencyPenalty:0 RepeatLastN:0 LogitBiasEnabled:false Logprobs:false TopLogprobs:0 LogitProcessorEnabled:false LogitProcessorGateEnabled:false SpeculationEnabled:false SessionEnabled:false BatchingEnabled:false StopIDs:[151645]} generated=2 completed=2 failed=0 validation={Attempted:3 Passed:3 Failed:0} final_validated=true tm_committed=true publication=published"
+      ]
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 2,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126503387044,
+      "job_name": "independent-roundtrip",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126503387044",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1017-azure",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "AMD EPYC 7763 64-Core Processor",
+        "available_cpus": 4,
+        "cpu_max_mhz": null,
+        "cpu_min_mhz": null,
+        "memory_mib": [
+          15983,
+          837,
+          14636,
+          38,
+          832,
+          15146
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:38:34.5319813Z Linux 7.0.0-1017-azure",
+        "2026-11-04T09:38:34.5351342Z Architecture:                            x86_64",
+        "2026-11-04T09:38:34.5352120Z CPU(s):                                  4",
+        "2026-11-04T09:38:34.5352819Z Model name:                              AMD EPYC 7763 64-Core Processor",
+        "2026-11-04T09:38:34.5368735Z available CPUs: 4",
+        "2026-11-04T09:38:34.5390343Z Mem:           15983         837       14636          38         832       15146",
+        "2026-11-04T09:38:34.5391340Z Swap:           3071           0        3071"
+      ]
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 3,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126504512420,
+      "job_name": "non-root-filesystems",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126504512420",
+      "status": "unavailable",
+      "error": "Publication log not retrieved after repeated Transport closed errors for preceding publication jobs; hardware unknown."
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 3,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126504513648,
+      "job_name": "independent-roundtrip",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126504513648",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1017-azure",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+        "available_cpus": 4,
+        "cpu_max_mhz": "2800.0000",
+        "cpu_min_mhz": "800.0000",
+        "memory_mib": [
+          15982,
+          928,
+          14550,
+          38,
+          826,
+          15054
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:42:12.1467845Z Linux 7.0.0-1017-azure",
+        "2026-11-04T09:42:12.1489007Z Architecture:                            x86_64",
+        "2026-11-04T09:42:12.1489865Z CPU(s):                                  4",
+        "2026-11-04T09:42:12.1490626Z Model name:                              Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+        "2026-11-04T09:42:12.1491446Z CPU max MHz:                             2800.0000",
+        "2026-11-04T09:42:12.1492108Z CPU min MHz:                             800.0000",
+        "2026-11-04T09:42:12.1500769Z available CPUs: 4",
+        "2026-11-04T09:42:12.1516518Z Mem:           15982         928       14550          38         826       15054",
+        "2026-11-04T09:42:12.1517806Z Swap:           3071           0        3071"
+      ]
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 3,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126504563597,
+      "job_name": "linux-cgo-free",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126504563597",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1014-aws",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "Intel(R) Xeon(R) 6975P-C",
+        "available_cpus": 4,
+        "cpu_max_mhz": null,
+        "cpu_min_mhz": null,
+        "memory_mib": [
+          15701,
+          997,
+          13320,
+          39,
+          1719,
+          14704
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:42:22.6910528Z Linux 7.0.0-1014-aws",
+        "2026-11-04T09:42:22.6933278Z Architecture:                            x86_64",
+        "2026-11-04T09:42:22.6934823Z CPU(s):                                  4",
+        "2026-11-04T09:42:22.6936033Z Model name:                              Intel(R) Xeon(R) 6975P-C",
+        "2026-11-04T09:42:22.6950410Z available CPUs: 4",
+        "2026-11-04T09:42:22.6990957Z Mem:           15701         997       13320          39        1719       14704",
+        "2026-11-04T09:42:22.6992748Z Swap:           3071           0        3071"
+      ]
+    },
+    {
+      "run_id": 41808576213,
+      "attempt": 3,
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "job_id": 126504512089,
+      "job_name": "linux-cpu-gguf",
+      "job_url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126504512089",
+      "status": "collected",
+      "runner": {
+        "kernel": "Linux 7.0.0-1017-azure",
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "cpu_model": "AMD EPYC 7763 64-Core Processor",
+        "available_cpus": 4,
+        "cpu_max_mhz": null,
+        "cpu_min_mhz": null,
+        "memory_mib": [
+          15983,
+          855,
+          14618,
+          38,
+          831,
+          15128
+        ],
+        "swap_mib": [
+          3071,
+          0,
+          3071
+        ]
+      },
+      "exact_excerpts": [
+        "2026-11-04T09:42:11.7657240Z Linux 7.0.0-1017-azure",
+        "2026-11-04T09:42:11.7679940Z Architecture:                            x86_64",
+        "2026-11-04T09:42:11.7680719Z CPU(s):                                  4",
+        "2026-11-04T09:42:11.7681655Z Model name:                              AMD EPYC 7763 64-Core Processor",
+        "2026-11-04T09:42:11.7695317Z available CPUs: 4",
+        "2026-11-04T09:42:11.7715071Z Mem:           15983         855       14618          38         831       15128",
+        "2026-11-04T09:42:11.7716110Z Swap:           3071           0        3071"
+      ],
+      "model_fixture_excerpts": [
+        "2026-11-04T09:42:28.0055805Z #10 [model 1/1] RUN curl --fail --location --silent --show-error --max-time 300     https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf     -o /model.gguf     && echo '1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32  /model.gguf' | sha256sum -c -",
+        "2026-11-04T09:42:31.6933428Z #10 [model 1/1] RUN curl --fail --location --silent --show-error --max-time 300     https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf     -o /model.gguf     && echo '1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32  /model.gguf' | sha256sum -c -",
+        "2026-11-04T09:42:31.6936614Z #10 2.889 /model.gguf: OK",
+        "2026-11-04T09:43:36.0808092Z     w3_cpu_smoke_linux_test.go:65: CPU W3 evidence: model=cpu-regression sha256=1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32 size=491400064 backend_requested=cpu backend=cpu quant=int4 model_context=32768 effective_context=4096 goinfer=github.com/townsendmerino/goinfer@v0.23.0 policy={Schema:1 MaxOutputTokens:2048 RequestTimeout:30s Temperature:0 TopK:0 TopP:0 MinP:0 Seed:0 SeedFixed:true RepeatPenalty:0 PresencePenalty:0 FrequencyPenalty:0 RepeatLastN:0 LogitBiasEnabled:false Logprobs:false TopLogprobs:0 LogitProcessorEnabled:false LogitProcessorGateEnabled:false SpeculationEnabled:false SessionEnabled:false BatchingEnabled:false StopIDs:[151645]} generated=2 completed=2 failed=0 validation={Attempted:3 Passed:3 Failed:0} final_validated=true tm_committed=true publication=published"
+      ]
+    }
+  ]
+}
