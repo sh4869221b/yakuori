@@ -20,6 +20,7 @@ done
 [ -z "$(gofmt -l cmd internal ci/check-cgo.go)" ]
 go build ./cmd/yakuori
 # Test-only offline observer self-test (strace and python3 come from the CI image).
+python3 ci/test-test-events.py
 python3 ci/test-offline.py
 # Model-free acquisition failures against the built binary; no MODEL env is set,
 # so normal CI never fetches or places a model.
@@ -53,80 +54,7 @@ done
 echo 'pipelinefaults compile-only: normal/tagged test binaries built; not a behavior PASS'
 
 pipeline_require() {
- label=$1
- names=$2
- test_log=$3
- # Only Go's framing is driver output; t.Log may contain child transcripts.
- event_log="$pipeline_tmp/$label.events"
- python3 -c "import json, sys; events = list(map(json.loads, sys.stdin)); \
-sys.exit(\"pipeline lane reported FAIL or SKIP\") if any(e[\"Action\"] in (\"fail\", \"skip\") for e in events) else None; \
-sys.stdout.writelines(e[\"Output\"] for e in events if e.get(\"OutputType\") == \"frame\")" \
-  <"$test_log" >"$event_log" || return 1
- test_log=$event_log
- pass_names="$pipeline_tmp/$label.pass"
- run_names="$pipeline_tmp/$label.run"
- observed="$pipeline_tmp/$label.observed"
- allowed="$pipeline_tmp/$label.allowed"
- roots="$pipeline_tmp/$label.roots"
- bad=0
- if grep -Eq '^[[:space:]]*--- (FAIL|SKIP)' "$test_log"; then
-  echo "pipeline lane reported FAIL or SKIP" >&2
-  return 1
- fi
- grep -E '^[[:space:]]*--- PASS: ' "$test_log" \
-  | sed -E "s/^[[:space:]]*--- PASS: //; s/ [(].*//" | sort >"$pass_names"
- if [ ! -s "$pass_names" ]; then
-  echo "pipeline $label selected no PASS output" >&2
-  return 1
- fi
- if [ -n "$(uniq -d "$pass_names")" ]; then
-  echo "pipeline $label duplicated a PASS name" >&2
-  return 1
- fi
- grep -E '^[[:space:]]*=== RUN   ' "$test_log" \
-  | sed -E 's/^[[:space:]]*=== RUN   //' | sort >"$run_names"
- if [ -n "$(uniq -d "$run_names")" ]; then
-  echo "pipeline $label duplicated a RUN name" >&2
-  return 1
- fi
- : >"$allowed"
- : >"$roots"
- while IFS= read -r name; do
-  [ -n "$name" ] || continue
-  runs=$(grep -Ec "^[[:space:]]*=== RUN   $name[[:space:]]*$" "$test_log" || true)
-  passes=$(grep -Ec "^[[:space:]]*--- PASS: $name[[:space:]]*[(]" "$test_log" || true)
-  if [ "$runs" -ne 1 ] || [ "$passes" -ne 1 ]; then
-   echo "pipeline $label terminal $name RUN=$runs PASS=$passes, want 1/1" >&2
-   bad=1
-  fi
-  root=${name%%/*}
-  if ! grep -Fqx "$root" "$roots"; then
-   printf "%s\n" "$root" >>"$roots"
-   root_runs=$(grep -Ec "^[[:space:]]*=== RUN   $root[[:space:]]*$" "$test_log" || true)
-   root_passes=$(grep -Ec "^[[:space:]]*--- PASS: $root[[:space:]]*[(]" "$test_log" || true)
-   if [ "$root_runs" -ne 1 ] || [ "$root_passes" -ne 1 ]; then
-    echo "pipeline $label root $root RUN=$root_runs PASS=$root_passes, want 1/1" >&2
-    bad=1
-   fi
-  fi
-  # Only actual t.Run parents are required; a slash in a leaf creates no parent.
-  printf "%s\n" "$root" "$name" >>"$allowed"
- done <"$names"
- { cat "$run_names"; cat "$pass_names"; } | sort -u >"$observed"
- while IFS= read -r name; do
-  [ -n "$name" ] || continue
-  grep -Fqx "$name" "$allowed" || {
-   echo "pipeline $label unexpected terminal $name" >&2
-   bad=1
-  }
-  runs=$(grep -Ec "^[[:space:]]*=== RUN   $name[[:space:]]*$" "$test_log" || true)
-  passes=$(grep -Ec "^[[:space:]]*--- PASS: $name[[:space:]]*[(]" "$test_log" || true)
-  if [ "$runs" -ne 1 ] || [ "$passes" -ne 1 ]; then
-   echo "pipeline $label incomplete terminal $name RUN=$runs PASS=$passes, want 1/1" >&2
-   bad=1
-  fi
- done <"$observed"
- [ "$bad" -eq 0 ]
+ python3 ci/check-test-events.py "$2" "$3"
 }
 
 cat >"$pipeline_tmp/fixture-inputs.names" <<'EOF'

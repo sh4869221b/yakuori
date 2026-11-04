@@ -21,6 +21,8 @@ on:
       - 'internal/unit/**'
       - 'tools/acceptance/testdata/small.w3strings'
       - 'ci/verify.sh'
+      - 'ci/check-test-events.py'
+      - 'ci/test-test-events.py'
       - 'ci/cpu-spike.Dockerfile'
       - 'ci/run-long-context.py'
       - 'ci/test-long-context-supervisor.py'
