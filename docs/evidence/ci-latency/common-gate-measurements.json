@@ -1,0 +1,3576 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-11-04T09:46:06.568934Z",
+  "repository": "sh4869221b/yakuori",
+  "notes": [
+    "Read-only GET requests through gh api; all available attempts and paginated jobs retained.",
+    "Group durations measure earliest start to latest job finish, not the sum of parallel job durations.",
+    "run_created_at is original workflow creation from the run endpoint; attempt_created_at and run_started_at distinguish later attempts.",
+    "GitHub run updated_at is retained as metadata and is not treated as exact workflow completion.",
+    "Maximum single-job time excludes start offsets and is not exact group wall time.",
+    "Incomplete or failed collection yields null group duration; failed completed workflows remain timed.",
+    "by_attempt_number is incomplete when some selected workflows lack that attempt; latest_attempts may mix attempt numbers.",
+    "Runner labels/name do not establish identical CPU hardware or host load."
+  ],
+  "groups": [
+    {
+      "label": "baseline_dfdad2f",
+      "run_ids": [
+        41803096114,
+        41803096269,
+        41803096123,
+        41803096197
+      ],
+      "head_shas": [
+        "dfdad2f7801309b837e351f588102bc5cc303471"
+      ],
+      "latest_attempts": {
+        "complete": true,
+        "all_successful": true,
+        "expected_workflows": 4,
+        "collected_workflows": 4,
+        "earliest_original_run_created_at": "2026-11-04T08:54:21Z",
+        "earliest_attempt_run_started_at": "2026-11-04T09:38:17Z",
+        "first_job_started_at": "2026-11-04T09:38:21Z",
+        "latest_job_completed_at": "2026-11-04T09:42:58Z",
+        "seconds_from_attempt_start_until_all_jobs_finish": 281.0,
+        "seconds_from_first_job_until_all_jobs_finish": 277.0,
+        "seconds_since_original_run_creation": 2917.0,
+        "maximum_single_job_seconds": 274.0,
+        "non_successful_jobs": []
+      },
+      "by_attempt_number": [
+        {
+          "attempt": 1,
+          "complete": true,
+          "all_successful": true,
+          "expected_workflows": 4,
+          "collected_workflows": 4,
+          "earliest_original_run_created_at": "2026-11-04T08:54:21Z",
+          "earliest_attempt_run_started_at": "2026-11-04T08:54:21Z",
+          "first_job_started_at": "2026-11-04T08:54:23Z",
+          "latest_job_completed_at": "2026-11-04T08:59:50Z",
+          "seconds_from_attempt_start_until_all_jobs_finish": 329.0,
+          "seconds_from_first_job_until_all_jobs_finish": 327.0,
+          "seconds_since_original_run_creation": 329.0,
+          "maximum_single_job_seconds": 326.0,
+          "non_successful_jobs": []
+        },
+        {
+          "attempt": 2,
+          "complete": true,
+          "all_successful": true,
+          "expected_workflows": 4,
+          "collected_workflows": 4,
+          "earliest_original_run_created_at": "2026-11-04T08:54:21Z",
+          "earliest_attempt_run_started_at": "2026-11-04T09:22:02Z",
+          "first_job_started_at": "2026-11-04T09:22:07Z",
+          "latest_job_completed_at": "2026-11-04T09:27:18Z",
+          "seconds_from_attempt_start_until_all_jobs_finish": 316.0,
+          "seconds_from_first_job_until_all_jobs_finish": 311.0,
+          "seconds_since_original_run_creation": 1977.0,
+          "maximum_single_job_seconds": 295.0,
+          "non_successful_jobs": []
+        },
+        {
+          "attempt": 3,
+          "complete": true,
+          "all_successful": true,
+          "expected_workflows": 4,
+          "collected_workflows": 4,
+          "earliest_original_run_created_at": "2026-11-04T08:54:21Z",
+          "earliest_attempt_run_started_at": "2026-11-04T09:29:42Z",
+          "first_job_started_at": "2026-11-04T09:29:46Z",
+          "latest_job_completed_at": "2026-11-04T09:35:12Z",
+          "seconds_from_attempt_start_until_all_jobs_finish": 330.0,
+          "seconds_from_first_job_until_all_jobs_finish": 326.0,
+          "seconds_since_original_run_creation": 2451.0,
+          "maximum_single_job_seconds": 326.0,
+          "non_successful_jobs": []
+        },
+        {
+          "attempt": 4,
+          "complete": true,
+          "all_successful": true,
+          "expected_workflows": 4,
+          "collected_workflows": 4,
+          "earliest_original_run_created_at": "2026-11-04T08:54:21Z",
+          "earliest_attempt_run_started_at": "2026-11-04T09:38:17Z",
+          "first_job_started_at": "2026-11-04T09:38:21Z",
+          "latest_job_completed_at": "2026-11-04T09:42:58Z",
+          "seconds_from_attempt_start_until_all_jobs_finish": 281.0,
+          "seconds_from_first_job_until_all_jobs_finish": 277.0,
+          "seconds_since_original_run_creation": 2917.0,
+          "maximum_single_job_seconds": 274.0,
+          "non_successful_jobs": []
+        }
+      ]
+    },
+    {
+      "label": "candidate1_edb421d",
+      "run_ids": [
+        41807403556
+      ],
+      "head_shas": [
+        "edb421dfe57ff6cfe0fae4f2f95ff11df42955dc"
+      ],
+      "latest_attempts": {
+        "complete": true,
+        "all_successful": true,
+        "expected_workflows": 1,
+        "collected_workflows": 1,
+        "earliest_original_run_created_at": "2026-11-04T09:25:40Z",
+        "earliest_attempt_run_started_at": "2026-11-04T09:25:40Z",
+        "first_job_started_at": "2026-11-04T09:25:42Z",
+        "latest_job_completed_at": "2026-11-04T09:29:34Z",
+        "seconds_from_attempt_start_until_all_jobs_finish": 234.0,
+        "seconds_from_first_job_until_all_jobs_finish": 232.0,
+        "seconds_since_original_run_creation": 234.0,
+        "maximum_single_job_seconds": 227.0,
+        "non_successful_jobs": []
+      },
+      "by_attempt_number": [
+        {
+          "attempt": 1,
+          "complete": true,
+          "all_successful": true,
+          "expected_workflows": 1,
+          "collected_workflows": 1,
+          "earliest_original_run_created_at": "2026-11-04T09:25:40Z",
+          "earliest_attempt_run_started_at": "2026-11-04T09:25:40Z",
+          "first_job_started_at": "2026-11-04T09:25:42Z",
+          "latest_job_completed_at": "2026-11-04T09:29:34Z",
+          "seconds_from_attempt_start_until_all_jobs_finish": 234.0,
+          "seconds_from_first_job_until_all_jobs_finish": 232.0,
+          "seconds_since_original_run_creation": 234.0,
+          "maximum_single_job_seconds": 227.0,
+          "non_successful_jobs": []
+        }
+      ]
+    },
+    {
+      "label": "variant2_e2c4c88",
+      "run_ids": [
+        41808576213
+      ],
+      "head_shas": [
+        "e2c4c884e2bf926548c6466a02086792c11d4311"
+      ],
+      "latest_attempts": {
+        "complete": true,
+        "all_successful": true,
+        "expected_workflows": 1,
+        "collected_workflows": 1,
+        "earliest_original_run_created_at": "2026-11-04T09:34:02Z",
+        "earliest_attempt_run_started_at": "2026-11-04T09:42:06Z",
+        "first_job_started_at": "2026-11-04T09:42:10Z",
+        "latest_job_completed_at": "2026-11-04T09:45:40Z",
+        "seconds_from_attempt_start_until_all_jobs_finish": 214.0,
+        "seconds_from_first_job_until_all_jobs_finish": 210.0,
+        "seconds_since_original_run_creation": 698.0,
+        "maximum_single_job_seconds": 205.0,
+        "non_successful_jobs": []
+      },
+      "by_attempt_number": [
+        {
+          "attempt": 1,
+          "complete": true,
+          "all_successful": true,
+          "expected_workflows": 1,
+          "collected_workflows": 1,
+          "earliest_original_run_created_at": "2026-11-04T09:34:02Z",
+          "earliest_attempt_run_started_at": "2026-11-04T09:34:02Z",
+          "first_job_started_at": "2026-11-04T09:34:05Z",
+          "latest_job_completed_at": "2026-11-04T09:37:36Z",
+          "seconds_from_attempt_start_until_all_jobs_finish": 214.0,
+          "seconds_from_first_job_until_all_jobs_finish": 211.0,
+          "seconds_since_original_run_creation": 214.0,
+          "maximum_single_job_seconds": 205.0,
+          "non_successful_jobs": []
+        },
+        {
+          "attempt": 2,
+          "complete": true,
+          "all_successful": true,
+          "expected_workflows": 1,
+          "collected_workflows": 1,
+          "earliest_original_run_created_at": "2026-11-04T09:34:02Z",
+          "earliest_attempt_run_started_at": "2026-11-04T09:38:28Z",
+          "first_job_started_at": "2026-11-04T09:38:32Z",
+          "latest_job_completed_at": "2026-11-04T09:41:27Z",
+          "seconds_from_attempt_start_until_all_jobs_finish": 179.0,
+          "seconds_from_first_job_until_all_jobs_finish": 175.0,
+          "seconds_since_original_run_creation": 445.0,
+          "maximum_single_job_seconds": 169.0,
+          "non_successful_jobs": []
+        },
+        {
+          "attempt": 3,
+          "complete": true,
+          "all_successful": true,
+          "expected_workflows": 1,
+          "collected_workflows": 1,
+          "earliest_original_run_created_at": "2026-11-04T09:34:02Z",
+          "earliest_attempt_run_started_at": "2026-11-04T09:42:06Z",
+          "first_job_started_at": "2026-11-04T09:42:10Z",
+          "latest_job_completed_at": "2026-11-04T09:45:40Z",
+          "seconds_from_attempt_start_until_all_jobs_finish": 214.0,
+          "seconds_from_first_job_until_all_jobs_finish": 210.0,
+          "seconds_since_original_run_creation": 698.0,
+          "maximum_single_job_seconds": 205.0,
+          "non_successful_jobs": []
+        }
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "id": 41803096114,
+      "name": "Go foundation",
+      "path": ".github/workflows/ci.yml",
+      "workflow_id": 372863406,
+      "event": "pull_request",
+      "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+      "head_branch": "codex/ci-latency",
+      "created_at": "2026-11-04T08:54:21Z",
+      "updated_at": "2026-11-04T09:41:39Z",
+      "run_started_at": "2026-11-04T09:38:20Z",
+      "run_attempt": 4,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096114",
+      "attempts": [
+        {
+          "attempt": 1,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096114/attempts/1",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T08:54:21Z",
+          "run_started_at": "2026-11-04T08:54:21Z",
+          "run_updated_at": "2026-11-04T08:57:36Z",
+          "first_job_started_at": "2026-11-04T08:54:23Z",
+          "latest_job_completed_at": "2026-11-04T08:57:35Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 192.0,
+          "run_start_to_all_jobs_finished_seconds": 194.0,
+          "run_start_to_first_job_seconds": 2.0,
+          "jobs": [
+            {
+              "id": 126483398492,
+              "name": "linux-cgo-free",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T08:54:23Z",
+              "completed_at": "2026-11-04T08:57:35Z",
+              "runner_name": "GitHub Actions 1000025948",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096114/job/126483398492",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 192.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:24Z",
+                  "completed_at": "2026-11-04T08:54:25Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:25Z",
+                  "completed_at": "2026-11-04T08:54:26Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:26Z",
+                  "completed_at": "2026-11-04T08:57:32Z",
+                  "duration_seconds": 186.0
+                },
+                {
+                  "number": 6,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:57:32Z",
+                  "completed_at": "2026-11-04T08:57:33Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 7,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:57:33Z",
+                  "completed_at": "2026-11-04T08:57:33Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 2,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096114/attempts/2",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:22:21Z",
+          "run_started_at": "2026-11-04T09:22:20Z",
+          "run_updated_at": "2026-11-04T09:25:25Z",
+          "first_job_started_at": "2026-11-04T09:22:24Z",
+          "latest_job_completed_at": "2026-11-04T09:25:24Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 180.0,
+          "run_start_to_all_jobs_finished_seconds": 184.0,
+          "run_start_to_first_job_seconds": 4.0,
+          "jobs": [
+            {
+              "id": 126496168524,
+              "name": "linux-cgo-free",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 2,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:22:24Z",
+              "completed_at": "2026-11-04T09:25:24Z",
+              "runner_name": "GitHub Actions 1000025954",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096114/job/126496168524",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 180.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:25Z",
+                  "completed_at": "2026-11-04T09:22:26Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:26Z",
+                  "completed_at": "2026-11-04T09:22:27Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:27Z",
+                  "completed_at": "2026-11-04T09:25:21Z",
+                  "duration_seconds": 174.0
+                },
+                {
+                  "number": 6,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:21Z",
+                  "completed_at": "2026-11-04T09:25:21Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 7,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:21Z",
+                  "completed_at": "2026-11-04T09:25:21Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 3,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096114/attempts/3",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:29:46Z",
+          "run_started_at": "2026-11-04T09:29:45Z",
+          "run_updated_at": "2026-11-04T09:32:20Z",
+          "first_job_started_at": "2026-11-04T09:29:49Z",
+          "latest_job_completed_at": "2026-11-04T09:32:19Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 150.0,
+          "run_start_to_all_jobs_finished_seconds": 154.0,
+          "run_start_to_first_job_seconds": 4.0,
+          "jobs": [
+            {
+              "id": 126499648221,
+              "name": "linux-cgo-free",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 3,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:29:49Z",
+              "completed_at": "2026-11-04T09:32:19Z",
+              "runner_name": "GitHub Actions 1000025963",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096114/job/126499648221",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 150.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:50Z",
+                  "completed_at": "2026-11-04T09:29:52Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:52Z",
+                  "completed_at": "2026-11-04T09:29:56Z",
+                  "duration_seconds": 4.0
+                },
+                {
+                  "number": 3,
+                  "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:56Z",
+                  "completed_at": "2026-11-04T09:32:15Z",
+                  "duration_seconds": 139.0
+                },
+                {
+                  "number": 6,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:32:15Z",
+                  "completed_at": "2026-11-04T09:32:15Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 7,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:32:15Z",
+                  "completed_at": "2026-11-04T09:32:15Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 4,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096114/attempts/4",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:38:21Z",
+          "run_started_at": "2026-11-04T09:38:20Z",
+          "run_updated_at": "2026-11-04T09:41:39Z",
+          "first_job_started_at": "2026-11-04T09:38:24Z",
+          "latest_job_completed_at": "2026-11-04T09:41:39Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 195.0,
+          "run_start_to_all_jobs_finished_seconds": 199.0,
+          "run_start_to_first_job_seconds": 4.0,
+          "jobs": [
+            {
+              "id": 126503338006,
+              "name": "linux-cgo-free",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 4,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:38:24Z",
+              "completed_at": "2026-11-04T09:41:39Z",
+              "runner_name": "GitHub Actions 1000025972",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096114/job/126503338006",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 195.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:24Z",
+                  "completed_at": "2026-11-04T09:38:25Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:25Z",
+                  "completed_at": "2026-11-04T09:38:26Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:26Z",
+                  "completed_at": "2026-11-04T09:41:36Z",
+                  "duration_seconds": 190.0
+                },
+                {
+                  "number": 6,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:36Z",
+                  "completed_at": "2026-11-04T09:41:36Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 7,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:36Z",
+                  "completed_at": "2026-11-04T09:41:36Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 41803096269,
+      "name": "CPU inference spike",
+      "path": ".github/workflows/cpu-spike.yml",
+      "workflow_id": 372887509,
+      "event": "pull_request",
+      "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+      "head_branch": "codex/ci-latency",
+      "created_at": "2026-11-04T08:54:21Z",
+      "updated_at": "2026-11-04T09:42:42Z",
+      "run_started_at": "2026-11-04T09:38:17Z",
+      "run_attempt": 4,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096269",
+      "attempts": [
+        {
+          "attempt": 1,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096269/attempts/1",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T08:54:21Z",
+          "run_started_at": "2026-11-04T08:54:21Z",
+          "run_updated_at": "2026-11-04T08:59:51Z",
+          "first_job_started_at": "2026-11-04T08:54:24Z",
+          "latest_job_completed_at": "2026-11-04T08:59:50Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 326.0,
+          "run_start_to_all_jobs_finished_seconds": 329.0,
+          "run_start_to_first_job_seconds": 3.0,
+          "jobs": [
+            {
+              "id": 126483398797,
+              "name": "linux-cpu-gguf",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T08:54:24Z",
+              "completed_at": "2026-11-04T08:59:50Z",
+              "runner_name": "GitHub Actions 1000025950",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096269/job/126483398797",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 326.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:25Z",
+                  "completed_at": "2026-11-04T08:54:25Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:25Z",
+                  "completed_at": "2026-11-04T08:54:26Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Build without native compiler and acquire checksum-pinned test fixture",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:26Z",
+                  "completed_at": "2026-11-04T08:57:43Z",
+                  "duration_seconds": 197.0
+                },
+                {
+                  "number": 4,
+                  "name": "Real CPU generation and failure semantics without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:57:43Z",
+                  "completed_at": "2026-11-04T08:57:46Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 5,
+                  "name": "Production CPU wrapper smoke without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:57:46Z",
+                  "completed_at": "2026-11-04T08:57:49Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 6,
+                  "name": "Production W3 CPU regression without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:57:49Z",
+                  "completed_at": "2026-11-04T08:57:57Z",
+                  "duration_seconds": 8.0
+                },
+                {
+                  "number": 7,
+                  "name": "Bounded 1K and 4K token-counted CPU experiment",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:57:57Z",
+                  "completed_at": "2026-11-04T08:59:48Z",
+                  "duration_seconds": 111.0
+                },
+                {
+                  "number": 8,
+                  "name": "Show bounded long-context evidence even on failure",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:59:48Z",
+                  "completed_at": "2026-11-04T08:59:48Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 16,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:59:48Z",
+                  "completed_at": "2026-11-04T08:59:48Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 17,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:59:48Z",
+                  "completed_at": "2026-11-04T08:59:48Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 2,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096269/attempts/2",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:22:04Z",
+          "run_started_at": "2026-11-04T09:22:02Z",
+          "run_updated_at": "2026-11-04T09:26:42Z",
+          "first_job_started_at": "2026-11-04T09:22:07Z",
+          "latest_job_completed_at": "2026-11-04T09:26:41Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 274.0,
+          "run_start_to_all_jobs_finished_seconds": 279.0,
+          "run_start_to_first_job_seconds": 5.0,
+          "jobs": [
+            {
+              "id": 126496033340,
+              "name": "linux-cpu-gguf",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 2,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:22:07Z",
+              "completed_at": "2026-11-04T09:26:41Z",
+              "runner_name": "GitHub Actions 1000025952",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096269/job/126496033340",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 274.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:08Z",
+                  "completed_at": "2026-11-04T09:22:08Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:08Z",
+                  "completed_at": "2026-11-04T09:22:10Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 3,
+                  "name": "Build without native compiler and acquire checksum-pinned test fixture",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:10Z",
+                  "completed_at": "2026-11-04T09:25:05Z",
+                  "duration_seconds": 175.0
+                },
+                {
+                  "number": 4,
+                  "name": "Real CPU generation and failure semantics without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:05Z",
+                  "completed_at": "2026-11-04T09:25:08Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 5,
+                  "name": "Production CPU wrapper smoke without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:08Z",
+                  "completed_at": "2026-11-04T09:25:10Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 6,
+                  "name": "Production W3 CPU regression without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:10Z",
+                  "completed_at": "2026-11-04T09:25:18Z",
+                  "duration_seconds": 8.0
+                },
+                {
+                  "number": 7,
+                  "name": "Bounded 1K and 4K token-counted CPU experiment",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:18Z",
+                  "completed_at": "2026-11-04T09:26:39Z",
+                  "duration_seconds": 81.0
+                },
+                {
+                  "number": 8,
+                  "name": "Show bounded long-context evidence even on failure",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:26:39Z",
+                  "completed_at": "2026-11-04T09:26:39Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 16,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:26:39Z",
+                  "completed_at": "2026-11-04T09:26:39Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 17,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:26:39Z",
+                  "completed_at": "2026-11-04T09:26:39Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 3,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096269/attempts/3",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:29:43Z",
+          "run_started_at": "2026-11-04T09:29:42Z",
+          "run_updated_at": "2026-11-04T09:35:13Z",
+          "first_job_started_at": "2026-11-04T09:29:46Z",
+          "latest_job_completed_at": "2026-11-04T09:35:12Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 326.0,
+          "run_start_to_all_jobs_finished_seconds": 330.0,
+          "run_start_to_first_job_seconds": 4.0,
+          "jobs": [
+            {
+              "id": 126499630112,
+              "name": "linux-cpu-gguf",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 3,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:29:46Z",
+              "completed_at": "2026-11-04T09:35:12Z",
+              "runner_name": "GitHub Actions 1000025961",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096269/job/126499630112",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 326.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:47Z",
+                  "completed_at": "2026-11-04T09:29:48Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:48Z",
+                  "completed_at": "2026-11-04T09:29:49Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Build without native compiler and acquire checksum-pinned test fixture",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:49Z",
+                  "completed_at": "2026-11-04T09:33:05Z",
+                  "duration_seconds": 196.0
+                },
+                {
+                  "number": 4,
+                  "name": "Real CPU generation and failure semantics without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:33:05Z",
+                  "completed_at": "2026-11-04T09:33:08Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 5,
+                  "name": "Production CPU wrapper smoke without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:33:08Z",
+                  "completed_at": "2026-11-04T09:33:11Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 6,
+                  "name": "Production W3 CPU regression without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:33:11Z",
+                  "completed_at": "2026-11-04T09:33:19Z",
+                  "duration_seconds": 8.0
+                },
+                {
+                  "number": 7,
+                  "name": "Bounded 1K and 4K token-counted CPU experiment",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:33:19Z",
+                  "completed_at": "2026-11-04T09:35:10Z",
+                  "duration_seconds": 111.0
+                },
+                {
+                  "number": 8,
+                  "name": "Show bounded long-context evidence even on failure",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:35:10Z",
+                  "completed_at": "2026-11-04T09:35:10Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 16,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:35:10Z",
+                  "completed_at": "2026-11-04T09:35:10Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 17,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:35:10Z",
+                  "completed_at": "2026-11-04T09:35:10Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 4,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096269/attempts/4",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:38:18Z",
+          "run_started_at": "2026-11-04T09:38:17Z",
+          "run_updated_at": "2026-11-04T09:42:42Z",
+          "first_job_started_at": "2026-11-04T09:38:21Z",
+          "latest_job_completed_at": "2026-11-04T09:42:41Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 260.0,
+          "run_start_to_all_jobs_finished_seconds": 264.0,
+          "run_start_to_first_job_seconds": 4.0,
+          "jobs": [
+            {
+              "id": 126503326867,
+              "name": "linux-cpu-gguf",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 4,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:38:21Z",
+              "completed_at": "2026-11-04T09:42:41Z",
+              "runner_name": "GitHub Actions 1000025970",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096269/job/126503326867",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 260.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:22Z",
+                  "completed_at": "2026-11-04T09:38:22Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:22Z",
+                  "completed_at": "2026-11-04T09:38:23Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Build without native compiler and acquire checksum-pinned test fixture",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:23Z",
+                  "completed_at": "2026-11-04T09:41:02Z",
+                  "duration_seconds": 159.0
+                },
+                {
+                  "number": 4,
+                  "name": "Real CPU generation and failure semantics without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:02Z",
+                  "completed_at": "2026-11-04T09:41:04Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 5,
+                  "name": "Production CPU wrapper smoke without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:04Z",
+                  "completed_at": "2026-11-04T09:41:07Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 6,
+                  "name": "Production W3 CPU regression without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:07Z",
+                  "completed_at": "2026-11-04T09:41:15Z",
+                  "duration_seconds": 8.0
+                },
+                {
+                  "number": 7,
+                  "name": "Bounded 1K and 4K token-counted CPU experiment",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:15Z",
+                  "completed_at": "2026-11-04T09:42:39Z",
+                  "duration_seconds": 84.0
+                },
+                {
+                  "number": 8,
+                  "name": "Show bounded long-context evidence even on failure",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:39Z",
+                  "completed_at": "2026-11-04T09:42:39Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 16,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:39Z",
+                  "completed_at": "2026-11-04T09:42:39Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 17,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:39Z",
+                  "completed_at": "2026-11-04T09:42:39Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 41803096123,
+      "name": "Linux publication probe",
+      "path": ".github/workflows/publication-probe.yml",
+      "workflow_id": 372886440,
+      "event": "pull_request",
+      "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+      "head_branch": "codex/ci-latency",
+      "created_at": "2026-11-04T08:54:21Z",
+      "updated_at": "2026-11-04T09:42:59Z",
+      "run_started_at": "2026-11-04T09:38:18Z",
+      "run_attempt": 4,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096123",
+      "attempts": [
+        {
+          "attempt": 1,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096123/attempts/1",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T08:54:21Z",
+          "run_started_at": "2026-11-04T08:54:21Z",
+          "run_updated_at": "2026-11-04T08:59:05Z",
+          "first_job_started_at": "2026-11-04T08:54:23Z",
+          "latest_job_completed_at": "2026-11-04T08:59:04Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 281.0,
+          "run_start_to_all_jobs_finished_seconds": 283.0,
+          "run_start_to_first_job_seconds": 2.0,
+          "jobs": [
+            {
+              "id": 126483398558,
+              "name": "non-root-filesystems",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T08:54:23Z",
+              "completed_at": "2026-11-04T08:59:04Z",
+              "runner_name": "GitHub Actions 1000025949",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096123/job/126483398558",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 281.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:24Z",
+                  "completed_at": "2026-11-04T08:54:25Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:25Z",
+                  "completed_at": "2026-11-04T08:54:26Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Build pinned CGO-free toolchain image",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:26Z",
+                  "completed_at": "2026-11-04T08:57:25Z",
+                  "duration_seconds": 179.0
+                },
+                {
+                  "number": 4,
+                  "name": "Non-root host filesystem and separate-mount probes",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:57:25Z",
+                  "completed_at": "2026-11-04T08:59:00Z",
+                  "duration_seconds": 95.0
+                },
+                {
+                  "number": 5,
+                  "name": "Upload offline pipeline evidence",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:59:00Z",
+                  "completed_at": "2026-11-04T08:59:01Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 10,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:59:01Z",
+                  "completed_at": "2026-11-04T08:59:02Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 11,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:59:02Z",
+                  "completed_at": "2026-11-04T08:59:02Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 2,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096123/attempts/2",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:22:20Z",
+          "run_started_at": "2026-11-04T09:22:19Z",
+          "run_updated_at": "2026-11-04T09:27:19Z",
+          "first_job_started_at": "2026-11-04T09:22:23Z",
+          "latest_job_completed_at": "2026-11-04T09:27:18Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 295.0,
+          "run_start_to_all_jobs_finished_seconds": 299.0,
+          "run_start_to_first_job_seconds": 4.0,
+          "jobs": [
+            {
+              "id": 126496157166,
+              "name": "non-root-filesystems",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 2,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:22:23Z",
+              "completed_at": "2026-11-04T09:27:18Z",
+              "runner_name": "GitHub Actions 1000025953",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096123/job/126496157166",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 295.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:24Z",
+                  "completed_at": "2026-11-04T09:22:25Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:25Z",
+                  "completed_at": "2026-11-04T09:22:26Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Build pinned CGO-free toolchain image",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:26Z",
+                  "completed_at": "2026-11-04T09:25:33Z",
+                  "duration_seconds": 187.0
+                },
+                {
+                  "number": 4,
+                  "name": "Non-root host filesystem and separate-mount probes",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:33Z",
+                  "completed_at": "2026-11-04T09:27:12Z",
+                  "duration_seconds": 99.0
+                },
+                {
+                  "number": 5,
+                  "name": "Upload offline pipeline evidence",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:27:12Z",
+                  "completed_at": "2026-11-04T09:27:14Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 10,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:27:14Z",
+                  "completed_at": "2026-11-04T09:27:14Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 11,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:27:14Z",
+                  "completed_at": "2026-11-04T09:27:14Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 3,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096123/attempts/3",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:29:45Z",
+          "run_started_at": "2026-11-04T09:29:44Z",
+          "run_updated_at": "2026-11-04T09:34:23Z",
+          "first_job_started_at": "2026-11-04T09:29:47Z",
+          "latest_job_completed_at": "2026-11-04T09:34:22Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 275.0,
+          "run_start_to_all_jobs_finished_seconds": 278.0,
+          "run_start_to_first_job_seconds": 3.0,
+          "jobs": [
+            {
+              "id": 126499641354,
+              "name": "non-root-filesystems",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 3,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:29:47Z",
+              "completed_at": "2026-11-04T09:34:22Z",
+              "runner_name": "GitHub Actions 1000025962",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096123/job/126499641354",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 275.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:48Z",
+                  "completed_at": "2026-11-04T09:29:49Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:49Z",
+                  "completed_at": "2026-11-04T09:29:50Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Build pinned CGO-free toolchain image",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:50Z",
+                  "completed_at": "2026-11-04T09:32:28Z",
+                  "duration_seconds": 158.0
+                },
+                {
+                  "number": 4,
+                  "name": "Non-root host filesystem and separate-mount probes",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:32:28Z",
+                  "completed_at": "2026-11-04T09:34:16Z",
+                  "duration_seconds": 108.0
+                },
+                {
+                  "number": 5,
+                  "name": "Upload offline pipeline evidence",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:16Z",
+                  "completed_at": "2026-11-04T09:34:17Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 10,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:17Z",
+                  "completed_at": "2026-11-04T09:34:18Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 11,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:18Z",
+                  "completed_at": "2026-11-04T09:34:18Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 4,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096123/attempts/4",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:38:20Z",
+          "run_started_at": "2026-11-04T09:38:18Z",
+          "run_updated_at": "2026-11-04T09:42:59Z",
+          "first_job_started_at": "2026-11-04T09:38:24Z",
+          "latest_job_completed_at": "2026-11-04T09:42:58Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 274.0,
+          "run_start_to_all_jobs_finished_seconds": 280.0,
+          "run_start_to_first_job_seconds": 6.0,
+          "jobs": [
+            {
+              "id": 126503336590,
+              "name": "non-root-filesystems",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 4,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:38:24Z",
+              "completed_at": "2026-11-04T09:42:58Z",
+              "runner_name": "GitHub Actions 1000025971",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096123/job/126503336590",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 274.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:24Z",
+                  "completed_at": "2026-11-04T09:38:25Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:25Z",
+                  "completed_at": "2026-11-04T09:38:27Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 3,
+                  "name": "Build pinned CGO-free toolchain image",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:27Z",
+                  "completed_at": "2026-11-04T09:41:09Z",
+                  "duration_seconds": 162.0
+                },
+                {
+                  "number": 4,
+                  "name": "Non-root host filesystem and separate-mount probes",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:09Z",
+                  "completed_at": "2026-11-04T09:42:51Z",
+                  "duration_seconds": 102.0
+                },
+                {
+                  "number": 5,
+                  "name": "Upload offline pipeline evidence",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:51Z",
+                  "completed_at": "2026-11-04T09:42:52Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 10,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:52Z",
+                  "completed_at": "2026-11-04T09:42:53Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 11,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:53Z",
+                  "completed_at": "2026-11-04T09:42:53Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 41803096197,
+      "name": "Independent w3strings spike",
+      "path": ".github/workflows/w3strings-spike.yml",
+      "workflow_id": 372913376,
+      "event": "pull_request",
+      "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+      "head_branch": "codex/ci-latency",
+      "created_at": "2026-11-04T08:54:21Z",
+      "updated_at": "2026-11-04T09:39:03Z",
+      "run_started_at": "2026-11-04T09:38:21Z",
+      "run_attempt": 4,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096197",
+      "attempts": [
+        {
+          "attempt": 1,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096197/attempts/1",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T08:54:21Z",
+          "run_started_at": "2026-11-04T08:54:21Z",
+          "run_updated_at": "2026-11-04T08:55:07Z",
+          "first_job_started_at": "2026-11-04T08:54:24Z",
+          "latest_job_completed_at": "2026-11-04T08:55:06Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 42.0,
+          "run_start_to_all_jobs_finished_seconds": 45.0,
+          "run_start_to_first_job_seconds": 3.0,
+          "jobs": [
+            {
+              "id": 126483398518,
+              "name": "independent-roundtrip",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T08:54:24Z",
+              "completed_at": "2026-11-04T08:55:06Z",
+              "runner_name": "GitHub Actions 1000025951",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096197/job/126483398518",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 42.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:24Z",
+                  "completed_at": "2026-11-04T08:54:25Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:25Z",
+                  "completed_at": "2026-11-04T08:54:26Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Recreate original fixtures and independently read Go roundtrip",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:54:26Z",
+                  "completed_at": "2026-11-04T08:55:05Z",
+                  "duration_seconds": 39.0
+                },
+                {
+                  "number": 6,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:55:05Z",
+                  "completed_at": "2026-11-04T08:55:05Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 7,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T08:55:05Z",
+                  "completed_at": "2026-11-04T08:55:05Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 2,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096197/attempts/2",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:22:23Z",
+          "run_started_at": "2026-11-04T09:22:21Z",
+          "run_updated_at": "2026-11-04T09:23:08Z",
+          "first_job_started_at": "2026-11-04T09:22:25Z",
+          "latest_job_completed_at": "2026-11-04T09:23:07Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 42.0,
+          "run_start_to_all_jobs_finished_seconds": 46.0,
+          "run_start_to_first_job_seconds": 4.0,
+          "jobs": [
+            {
+              "id": 126496179953,
+              "name": "independent-roundtrip",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 2,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:22:25Z",
+              "completed_at": "2026-11-04T09:23:07Z",
+              "runner_name": "GitHub Actions 1000025955",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096197/job/126496179953",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 42.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:26Z",
+                  "completed_at": "2026-11-04T09:22:27Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:27Z",
+                  "completed_at": "2026-11-04T09:22:28Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Recreate original fixtures and independently read Go roundtrip",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:22:28Z",
+                  "completed_at": "2026-11-04T09:23:05Z",
+                  "duration_seconds": 37.0
+                },
+                {
+                  "number": 6,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:23:05Z",
+                  "completed_at": "2026-11-04T09:23:05Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 7,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:23:05Z",
+                  "completed_at": "2026-11-04T09:23:05Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 3,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096197/attempts/3",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:29:48Z",
+          "run_started_at": "2026-11-04T09:29:46Z",
+          "run_updated_at": "2026-11-04T09:30:35Z",
+          "first_job_started_at": "2026-11-04T09:29:51Z",
+          "latest_job_completed_at": "2026-11-04T09:30:34Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 43.0,
+          "run_start_to_all_jobs_finished_seconds": 48.0,
+          "run_start_to_first_job_seconds": 5.0,
+          "jobs": [
+            {
+              "id": 126499666582,
+              "name": "independent-roundtrip",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 3,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:29:51Z",
+              "completed_at": "2026-11-04T09:30:34Z",
+              "runner_name": "GitHub Actions 1000025964",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096197/job/126499666582",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 43.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:52Z",
+                  "completed_at": "2026-11-04T09:29:52Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:52Z",
+                  "completed_at": "2026-11-04T09:29:54Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 3,
+                  "name": "Recreate original fixtures and independently read Go roundtrip",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:54Z",
+                  "completed_at": "2026-11-04T09:30:32Z",
+                  "duration_seconds": 38.0
+                },
+                {
+                  "number": 6,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:30:32Z",
+                  "completed_at": "2026-11-04T09:30:32Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 7,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:30:32Z",
+                  "completed_at": "2026-11-04T09:30:32Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 4,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096197/attempts/4",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T08:54:21Z",
+          "attempt_created_at": "2026-11-04T09:38:22Z",
+          "run_started_at": "2026-11-04T09:38:21Z",
+          "run_updated_at": "2026-11-04T09:39:03Z",
+          "first_job_started_at": "2026-11-04T09:38:25Z",
+          "latest_job_completed_at": "2026-11-04T09:39:02Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 37.0,
+          "run_start_to_all_jobs_finished_seconds": 41.0,
+          "run_start_to_first_job_seconds": 4.0,
+          "jobs": [
+            {
+              "id": 126503343741,
+              "name": "independent-roundtrip",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 4,
+              "head_sha": "dfdad2f7801309b837e351f588102bc5cc303471",
+              "started_at": "2026-11-04T09:38:25Z",
+              "completed_at": "2026-11-04T09:39:02Z",
+              "runner_name": "GitHub Actions 1000025973",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41803096197/job/126503343741",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 37.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:25Z",
+                  "completed_at": "2026-11-04T09:38:26Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:26Z",
+                  "completed_at": "2026-11-04T09:38:27Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Recreate original fixtures and independently read Go roundtrip",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:27Z",
+                  "completed_at": "2026-11-04T09:39:00Z",
+                  "duration_seconds": 33.0
+                },
+                {
+                  "number": 6,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:39:00Z",
+                  "completed_at": "2026-11-04T09:39:00Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 7,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:39:00Z",
+                  "completed_at": "2026-11-04T09:39:00Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 41807403556,
+      "name": "Go foundation",
+      "path": ".github/workflows/ci.yml",
+      "workflow_id": 372863406,
+      "event": "pull_request",
+      "head_sha": "edb421dfe57ff6cfe0fae4f2f95ff11df42955dc",
+      "head_branch": "codex/ci-latency",
+      "created_at": "2026-11-04T09:25:40Z",
+      "updated_at": "2026-11-04T09:29:35Z",
+      "run_started_at": "2026-11-04T09:25:40Z",
+      "run_attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41807403556",
+      "attempts": [
+        {
+          "attempt": 1,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41807403556/attempts/1",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T09:25:40Z",
+          "attempt_created_at": "2026-11-04T09:25:40Z",
+          "run_started_at": "2026-11-04T09:25:40Z",
+          "run_updated_at": "2026-11-04T09:29:35Z",
+          "first_job_started_at": "2026-11-04T09:25:42Z",
+          "latest_job_completed_at": "2026-11-04T09:29:34Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 232.0,
+          "run_start_to_all_jobs_finished_seconds": 234.0,
+          "run_start_to_first_job_seconds": 2.0,
+          "jobs": [
+            {
+              "id": 126497746857,
+              "name": "linux-cgo-free",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "edb421dfe57ff6cfe0fae4f2f95ff11df42955dc",
+              "started_at": "2026-11-04T09:25:43Z",
+              "completed_at": "2026-11-04T09:28:03Z",
+              "runner_name": "GitHub Actions 1000025957",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41807403556/job/126497746857",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 140.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:44Z",
+                  "completed_at": "2026-11-04T09:25:46Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:47Z",
+                  "completed_at": "2026-11-04T09:25:47Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:47Z",
+                  "completed_at": "2026-11-04T09:25:48Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:48Z",
+                  "completed_at": "2026-11-04T09:27:59Z",
+                  "duration_seconds": 131.0
+                },
+                {
+                  "number": 8,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:27:59Z",
+                  "completed_at": "2026-11-04T09:27:59Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 9,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:27:59Z",
+                  "completed_at": "2026-11-04T09:27:59Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126497747185,
+              "name": "independent-roundtrip",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "edb421dfe57ff6cfe0fae4f2f95ff11df42955dc",
+              "started_at": "2026-11-04T09:25:43Z",
+              "completed_at": "2026-11-04T09:26:32Z",
+              "runner_name": "GitHub Actions 1000025956",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41807403556/job/126497747185",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 49.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:43Z",
+                  "completed_at": "2026-11-04T09:25:44Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:44Z",
+                  "completed_at": "2026-11-04T09:25:44Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:44Z",
+                  "completed_at": "2026-11-04T09:25:46Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 4,
+                  "name": "Recreate original fixtures and independently read Go roundtrip",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:46Z",
+                  "completed_at": "2026-11-04T09:26:30Z",
+                  "duration_seconds": 44.0
+                },
+                {
+                  "number": 8,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:26:30Z",
+                  "completed_at": "2026-11-04T09:26:30Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 9,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:26:30Z",
+                  "completed_at": "2026-11-04T09:26:30Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126497747200,
+              "name": "non-root-filesystems",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "edb421dfe57ff6cfe0fae4f2f95ff11df42955dc",
+              "started_at": "2026-11-04T09:25:42Z",
+              "completed_at": "2026-11-04T09:28:53Z",
+              "runner_name": "GitHub Actions 1000025958",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41807403556/job/126497747200",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 191.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:43Z",
+                  "completed_at": "2026-11-04T09:25:44Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:44Z",
+                  "completed_at": "2026-11-04T09:25:44Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:44Z",
+                  "completed_at": "2026-11-04T09:25:45Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Build pinned CGO-free toolchain image",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:45Z",
+                  "completed_at": "2026-11-04T09:27:06Z",
+                  "duration_seconds": 81.0
+                },
+                {
+                  "number": 5,
+                  "name": "Non-root host filesystem and separate-mount probes",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:27:06Z",
+                  "completed_at": "2026-11-04T09:28:47Z",
+                  "duration_seconds": 101.0
+                },
+                {
+                  "number": 6,
+                  "name": "Upload offline pipeline evidence",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:28:47Z",
+                  "completed_at": "2026-11-04T09:28:49Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 12,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:28:49Z",
+                  "completed_at": "2026-11-04T09:28:49Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 13,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:28:49Z",
+                  "completed_at": "2026-11-04T09:28:49Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126497747323,
+              "name": "linux-cpu-gguf",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "edb421dfe57ff6cfe0fae4f2f95ff11df42955dc",
+              "started_at": "2026-11-04T09:25:42Z",
+              "completed_at": "2026-11-04T09:29:29Z",
+              "runner_name": "GitHub Actions 1000025959",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41807403556/job/126497747323",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 227.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:43Z",
+                  "completed_at": "2026-11-04T09:25:44Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:44Z",
+                  "completed_at": "2026-11-04T09:25:44Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:44Z",
+                  "completed_at": "2026-11-04T09:25:45Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Build without native compiler and acquire checksum-pinned test fixture",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:25:45Z",
+                  "completed_at": "2026-11-04T09:27:33Z",
+                  "duration_seconds": 108.0
+                },
+                {
+                  "number": 5,
+                  "name": "Real CPU generation and failure semantics without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:27:33Z",
+                  "completed_at": "2026-11-04T09:27:36Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 6,
+                  "name": "Production CPU wrapper smoke without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:27:36Z",
+                  "completed_at": "2026-11-04T09:27:39Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 7,
+                  "name": "Production W3 CPU regression without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:27:39Z",
+                  "completed_at": "2026-11-04T09:27:49Z",
+                  "duration_seconds": 10.0
+                },
+                {
+                  "number": 8,
+                  "name": "Bounded 1K and 4K token-counted CPU experiment",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:27:49Z",
+                  "completed_at": "2026-11-04T09:29:27Z",
+                  "duration_seconds": 98.0
+                },
+                {
+                  "number": 9,
+                  "name": "Show bounded long-context evidence even on failure",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:27Z",
+                  "completed_at": "2026-11-04T09:29:27Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 18,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:27Z",
+                  "completed_at": "2026-11-04T09:29:27Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 19,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:27Z",
+                  "completed_at": "2026-11-04T09:29:27Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126499514902,
+              "name": "CI complete",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "edb421dfe57ff6cfe0fae4f2f95ff11df42955dc",
+              "started_at": "2026-11-04T09:29:31Z",
+              "completed_at": "2026-11-04T09:29:34Z",
+              "runner_name": "GitHub Actions 1000025960",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41807403556/job/126499514902",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 3.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:32Z",
+                  "completed_at": "2026-11-04T09:29:32Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Require every verification lane",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:32Z",
+                  "completed_at": "2026-11-04T09:29:32Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:29:32Z",
+                  "completed_at": "2026-11-04T09:29:33Z",
+                  "duration_seconds": 1.0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 41808576213,
+      "name": "Go foundation",
+      "path": ".github/workflows/ci.yml",
+      "workflow_id": 372863406,
+      "event": "pull_request",
+      "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+      "head_branch": "codex/ci-latency",
+      "created_at": "2026-11-04T09:34:02Z",
+      "updated_at": "2026-11-04T09:45:40Z",
+      "run_started_at": "2026-11-04T09:42:06Z",
+      "run_attempt": 3,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213",
+      "attempts": [
+        {
+          "attempt": 1,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/attempts/1",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T09:34:02Z",
+          "attempt_created_at": "2026-11-04T09:34:02Z",
+          "run_started_at": "2026-11-04T09:34:02Z",
+          "run_updated_at": "2026-11-04T09:37:37Z",
+          "first_job_started_at": "2026-11-04T09:34:05Z",
+          "latest_job_completed_at": "2026-11-04T09:37:36Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 211.0,
+          "run_start_to_all_jobs_finished_seconds": 214.0,
+          "run_start_to_first_job_seconds": 3.0,
+          "jobs": [
+            {
+              "id": 126501695163,
+              "name": "independent-roundtrip",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:34:06Z",
+              "completed_at": "2026-11-04T09:34:47Z",
+              "runner_name": "GitHub Actions 1000025967",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126501695163",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 41.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:06Z",
+                  "completed_at": "2026-11-04T09:34:07Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:07Z",
+                  "completed_at": "2026-11-04T09:34:07Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:07Z",
+                  "completed_at": "2026-11-04T09:34:08Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Recreate original fixtures and independently read Go roundtrip",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:08Z",
+                  "completed_at": "2026-11-04T09:34:45Z",
+                  "duration_seconds": 37.0
+                },
+                {
+                  "number": 8,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:45Z",
+                  "completed_at": "2026-11-04T09:34:45Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 9,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:45Z",
+                  "completed_at": "2026-11-04T09:34:45Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126501695423,
+              "name": "linux-cpu-gguf",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:34:06Z",
+              "completed_at": "2026-11-04T09:36:20Z",
+              "runner_name": "GitHub Actions 1000025965",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126501695423",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 134.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:06Z",
+                  "completed_at": "2026-11-04T09:34:07Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:07Z",
+                  "completed_at": "2026-11-04T09:34:07Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:07Z",
+                  "completed_at": "2026-11-04T09:34:08Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Build without native compiler and acquire checksum-pinned test fixture",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:08Z",
+                  "completed_at": "2026-11-04T09:35:06Z",
+                  "duration_seconds": 58.0
+                },
+                {
+                  "number": 5,
+                  "name": "Real CPU generation and failure semantics without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:35:06Z",
+                  "completed_at": "2026-11-04T09:35:09Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 6,
+                  "name": "Production CPU wrapper smoke without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:35:09Z",
+                  "completed_at": "2026-11-04T09:35:11Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 7,
+                  "name": "Production W3 CPU regression without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:35:11Z",
+                  "completed_at": "2026-11-04T09:35:18Z",
+                  "duration_seconds": 7.0
+                },
+                {
+                  "number": 8,
+                  "name": "Bounded 1K and 4K token-counted CPU experiment",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:35:18Z",
+                  "completed_at": "2026-11-04T09:36:19Z",
+                  "duration_seconds": 61.0
+                },
+                {
+                  "number": 9,
+                  "name": "Show bounded long-context evidence even on failure",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:36:19Z",
+                  "completed_at": "2026-11-04T09:36:19Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 18,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:36:19Z",
+                  "completed_at": "2026-11-04T09:36:19Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 19,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:36:19Z",
+                  "completed_at": "2026-11-04T09:36:19Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126501695455,
+              "name": "non-root-filesystems",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:34:05Z",
+              "completed_at": "2026-11-04T09:37:30Z",
+              "runner_name": "GitHub Actions 1000025966",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126501695455",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 205.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:07Z",
+                  "completed_at": "2026-11-04T09:34:07Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:07Z",
+                  "completed_at": "2026-11-04T09:34:08Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:08Z",
+                  "completed_at": "2026-11-04T09:34:09Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Build pinned CGO-free toolchain image",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:09Z",
+                  "completed_at": "2026-11-04T09:35:44Z",
+                  "duration_seconds": 95.0
+                },
+                {
+                  "number": 5,
+                  "name": "Non-root host filesystem and separate-mount probes",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:35:44Z",
+                  "completed_at": "2026-11-04T09:37:24Z",
+                  "duration_seconds": 100.0
+                },
+                {
+                  "number": 6,
+                  "name": "Upload offline pipeline evidence",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:37:24Z",
+                  "completed_at": "2026-11-04T09:37:26Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 12,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:37:26Z",
+                  "completed_at": "2026-11-04T09:37:26Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 13,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:37:26Z",
+                  "completed_at": "2026-11-04T09:37:26Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126501695574,
+              "name": "linux-cgo-free",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:34:06Z",
+              "completed_at": "2026-11-04T09:36:57Z",
+              "runner_name": "GitHub Actions 1000025968",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126501695574",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 171.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:07Z",
+                  "completed_at": "2026-11-04T09:34:08Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:08Z",
+                  "completed_at": "2026-11-04T09:34:08Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:08Z",
+                  "completed_at": "2026-11-04T09:34:09Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:34:09Z",
+                  "completed_at": "2026-11-04T09:36:54Z",
+                  "duration_seconds": 165.0
+                },
+                {
+                  "number": 8,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:36:54Z",
+                  "completed_at": "2026-11-04T09:36:55Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 9,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:36:55Z",
+                  "completed_at": "2026-11-04T09:36:55Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126503062713,
+              "name": "CI complete",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 1,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:37:33Z",
+              "completed_at": "2026-11-04T09:37:36Z",
+              "runner_name": "GitHub Actions 1000025969",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126503062713",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 3.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:37:33Z",
+                  "completed_at": "2026-11-04T09:37:34Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Require every verification lane",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:37:34Z",
+                  "completed_at": "2026-11-04T09:37:34Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:37:34Z",
+                  "completed_at": "2026-11-04T09:37:34Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 2,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/attempts/2",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T09:34:02Z",
+          "attempt_created_at": "2026-11-04T09:38:29Z",
+          "run_started_at": "2026-11-04T09:38:28Z",
+          "run_updated_at": "2026-11-04T09:41:28Z",
+          "first_job_started_at": "2026-11-04T09:38:32Z",
+          "latest_job_completed_at": "2026-11-04T09:41:27Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 175.0,
+          "run_start_to_all_jobs_finished_seconds": 179.0,
+          "run_start_to_first_job_seconds": 4.0,
+          "jobs": [
+            {
+              "id": 126503385452,
+              "name": "linux-cgo-free",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 2,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:38:32Z",
+              "completed_at": "2026-11-04T09:40:41Z",
+              "runner_name": "GitHub Actions 1000025974",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126503385452",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 129.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:33Z",
+                  "completed_at": "2026-11-04T09:38:33Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:33Z",
+                  "completed_at": "2026-11-04T09:38:33Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:33Z",
+                  "completed_at": "2026-11-04T09:38:34Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:34Z",
+                  "completed_at": "2026-11-04T09:40:39Z",
+                  "duration_seconds": 125.0
+                },
+                {
+                  "number": 8,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:40:39Z",
+                  "completed_at": "2026-11-04T09:40:39Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 9,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:40:39Z",
+                  "completed_at": "2026-11-04T09:40:39Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126503385768,
+              "name": "non-root-filesystems",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 2,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:38:33Z",
+              "completed_at": "2026-11-04T09:40:58Z",
+              "runner_name": "GitHub Actions 1000025975",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126503385768",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 145.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:34Z",
+                  "completed_at": "2026-11-04T09:38:37Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:37Z",
+                  "completed_at": "2026-11-04T09:38:37Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:37Z",
+                  "completed_at": "2026-11-04T09:38:38Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Build pinned CGO-free toolchain image",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:38Z",
+                  "completed_at": "2026-11-04T09:39:42Z",
+                  "duration_seconds": 64.0
+                },
+                {
+                  "number": 5,
+                  "name": "Non-root host filesystem and separate-mount probes",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:39:42Z",
+                  "completed_at": "2026-11-04T09:40:53Z",
+                  "duration_seconds": 71.0
+                },
+                {
+                  "number": 6,
+                  "name": "Upload offline pipeline evidence",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:40:53Z",
+                  "completed_at": "2026-11-04T09:40:55Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 12,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:40:55Z",
+                  "completed_at": "2026-11-04T09:40:55Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 13,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:40:55Z",
+                  "completed_at": "2026-11-04T09:40:55Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126503386101,
+              "name": "linux-cpu-gguf",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 2,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:38:32Z",
+              "completed_at": "2026-11-04T09:41:21Z",
+              "runner_name": "GitHub Actions 1000025976",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126503386101",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 169.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:33Z",
+                  "completed_at": "2026-11-04T09:38:33Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:33Z",
+                  "completed_at": "2026-11-04T09:38:33Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:33Z",
+                  "completed_at": "2026-11-04T09:38:34Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Build without native compiler and acquire checksum-pinned test fixture",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:34Z",
+                  "completed_at": "2026-11-04T09:39:44Z",
+                  "duration_seconds": 70.0
+                },
+                {
+                  "number": 5,
+                  "name": "Real CPU generation and failure semantics without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:39:44Z",
+                  "completed_at": "2026-11-04T09:39:47Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 6,
+                  "name": "Production CPU wrapper smoke without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:39:47Z",
+                  "completed_at": "2026-11-04T09:39:49Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 7,
+                  "name": "Production W3 CPU regression without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:39:49Z",
+                  "completed_at": "2026-11-04T09:39:58Z",
+                  "duration_seconds": 9.0
+                },
+                {
+                  "number": 8,
+                  "name": "Bounded 1K and 4K token-counted CPU experiment",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:39:58Z",
+                  "completed_at": "2026-11-04T09:41:19Z",
+                  "duration_seconds": 81.0
+                },
+                {
+                  "number": 9,
+                  "name": "Show bounded long-context evidence even on failure",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:19Z",
+                  "completed_at": "2026-11-04T09:41:19Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 18,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:19Z",
+                  "completed_at": "2026-11-04T09:41:20Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 19,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:20Z",
+                  "completed_at": "2026-11-04T09:41:20Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126503387044,
+              "name": "independent-roundtrip",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 2,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:38:32Z",
+              "completed_at": "2026-11-04T09:39:14Z",
+              "runner_name": "GitHub Actions 1000025977",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126503387044",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 42.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:33Z",
+                  "completed_at": "2026-11-04T09:38:34Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:34Z",
+                  "completed_at": "2026-11-04T09:38:34Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:34Z",
+                  "completed_at": "2026-11-04T09:38:36Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 4,
+                  "name": "Recreate original fixtures and independently read Go roundtrip",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:38:36Z",
+                  "completed_at": "2026-11-04T09:39:12Z",
+                  "duration_seconds": 36.0
+                },
+                {
+                  "number": 8,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:39:12Z",
+                  "completed_at": "2026-11-04T09:39:12Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 9,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:39:12Z",
+                  "completed_at": "2026-11-04T09:39:12Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126504281828,
+              "name": "CI complete",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 2,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:41:24Z",
+              "completed_at": "2026-11-04T09:41:27Z",
+              "runner_name": "GitHub Actions 1000025978",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126504281828",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 3.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:25Z",
+                  "completed_at": "2026-11-04T09:41:25Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Require every verification lane",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:25Z",
+                  "completed_at": "2026-11-04T09:41:25Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:41:25Z",
+                  "completed_at": "2026-11-04T09:41:25Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "attempt": 3,
+          "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/attempts/3",
+          "status": "completed",
+          "conclusion": "success",
+          "run_created_at": "2026-11-04T09:34:02Z",
+          "attempt_created_at": "2026-11-04T09:42:07Z",
+          "run_started_at": "2026-11-04T09:42:06Z",
+          "run_updated_at": "2026-11-04T09:45:41Z",
+          "first_job_started_at": "2026-11-04T09:42:10Z",
+          "latest_job_completed_at": "2026-11-04T09:45:40Z",
+          "all_jobs_terminal": true,
+          "job_execution_span_seconds": 210.0,
+          "run_start_to_all_jobs_finished_seconds": 214.0,
+          "run_start_to_first_job_seconds": 4.0,
+          "jobs": [
+            {
+              "id": 126504512089,
+              "name": "linux-cpu-gguf",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 3,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:42:10Z",
+              "completed_at": "2026-11-04T09:45:30Z",
+              "runner_name": "GitHub Actions 1000025979",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126504512089",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 200.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:11Z",
+                  "completed_at": "2026-11-04T09:42:11Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:11Z",
+                  "completed_at": "2026-11-04T09:42:11Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:11Z",
+                  "completed_at": "2026-11-04T09:42:12Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Build without native compiler and acquire checksum-pinned test fixture",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:12Z",
+                  "completed_at": "2026-11-04T09:43:23Z",
+                  "duration_seconds": 71.0
+                },
+                {
+                  "number": 5,
+                  "name": "Real CPU generation and failure semantics without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:43:23Z",
+                  "completed_at": "2026-11-04T09:43:26Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 6,
+                  "name": "Production CPU wrapper smoke without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:43:26Z",
+                  "completed_at": "2026-11-04T09:43:29Z",
+                  "duration_seconds": 3.0
+                },
+                {
+                  "number": 7,
+                  "name": "Production W3 CPU regression without network",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:43:29Z",
+                  "completed_at": "2026-11-04T09:43:38Z",
+                  "duration_seconds": 9.0
+                },
+                {
+                  "number": 8,
+                  "name": "Bounded 1K and 4K token-counted CPU experiment",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:43:38Z",
+                  "completed_at": "2026-11-04T09:45:28Z",
+                  "duration_seconds": 110.0
+                },
+                {
+                  "number": 9,
+                  "name": "Show bounded long-context evidence even on failure",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:45:28Z",
+                  "completed_at": "2026-11-04T09:45:28Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 18,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:45:28Z",
+                  "completed_at": "2026-11-04T09:45:28Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 19,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:45:28Z",
+                  "completed_at": "2026-11-04T09:45:28Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126504512420,
+              "name": "non-root-filesystems",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 3,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:42:10Z",
+              "completed_at": "2026-11-04T09:45:35Z",
+              "runner_name": "GitHub Actions 1000025980",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126504512420",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 205.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:12Z",
+                  "completed_at": "2026-11-04T09:42:12Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:13Z",
+                  "completed_at": "2026-11-04T09:42:13Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:13Z",
+                  "completed_at": "2026-11-04T09:42:14Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Build pinned CGO-free toolchain image",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:14Z",
+                  "completed_at": "2026-11-04T09:43:43Z",
+                  "duration_seconds": 89.0
+                },
+                {
+                  "number": 5,
+                  "name": "Non-root host filesystem and separate-mount probes",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:43:43Z",
+                  "completed_at": "2026-11-04T09:45:29Z",
+                  "duration_seconds": 106.0
+                },
+                {
+                  "number": 6,
+                  "name": "Upload offline pipeline evidence",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:45:29Z",
+                  "completed_at": "2026-11-04T09:45:30Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 12,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:45:30Z",
+                  "completed_at": "2026-11-04T09:45:31Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 13,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:45:31Z",
+                  "completed_at": "2026-11-04T09:45:31Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126504513648,
+              "name": "independent-roundtrip",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 3,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:42:10Z",
+              "completed_at": "2026-11-04T09:42:46Z",
+              "runner_name": "GitHub Actions 1000025981",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126504513648",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 36.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:11Z",
+                  "completed_at": "2026-11-04T09:42:12Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:12Z",
+                  "completed_at": "2026-11-04T09:42:12Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:12Z",
+                  "completed_at": "2026-11-04T09:42:13Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 4,
+                  "name": "Recreate original fixtures and independently read Go roundtrip",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:13Z",
+                  "completed_at": "2026-11-04T09:42:44Z",
+                  "duration_seconds": 31.0
+                },
+                {
+                  "number": 8,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:44Z",
+                  "completed_at": "2026-11-04T09:42:44Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 9,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:44Z",
+                  "completed_at": "2026-11-04T09:42:44Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126504563597,
+              "name": "linux-cgo-free",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 3,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:42:19Z",
+              "completed_at": "2026-11-04T09:44:21Z",
+              "runner_name": "GitHub Actions 1000025982",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126504563597",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 122.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:20Z",
+                  "completed_at": "2026-11-04T09:42:22Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 2,
+                  "name": "Record runner conditions",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:22Z",
+                  "completed_at": "2026-11-04T09:42:22Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 3,
+                  "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:22Z",
+                  "completed_at": "2026-11-04T09:42:24Z",
+                  "duration_seconds": 2.0
+                },
+                {
+                  "number": 4,
+                  "name": "Clean Linux amd64 build, test, vet and Linux arm64 cross-build",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:42:24Z",
+                  "completed_at": "2026-11-04T09:44:19Z",
+                  "duration_seconds": 115.0
+                },
+                {
+                  "number": 8,
+                  "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:44:19Z",
+                  "completed_at": "2026-11-04T09:44:19Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 9,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:44:19Z",
+                  "completed_at": "2026-11-04T09:44:19Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            },
+            {
+              "id": 126505667049,
+              "name": "CI complete",
+              "status": "completed",
+              "conclusion": "success",
+              "run_attempt": 3,
+              "head_sha": "e2c4c884e2bf926548c6466a02086792c11d4311",
+              "started_at": "2026-11-04T09:45:38Z",
+              "completed_at": "2026-11-04T09:45:40Z",
+              "runner_name": "GitHub Actions 1000025983",
+              "runner_group_name": "GitHub Actions",
+              "url": "https://github.com/sh4869221b/yakuori/actions/runs/41808576213/job/126505667049",
+              "runner_labels": [
+                "ubuntu-24.04"
+              ],
+              "duration_seconds": 2.0,
+              "steps": [
+                {
+                  "number": 1,
+                  "name": "Set up job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:45:38Z",
+                  "completed_at": "2026-11-04T09:45:38Z",
+                  "duration_seconds": 0.0
+                },
+                {
+                  "number": 2,
+                  "name": "Require every verification lane",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:45:38Z",
+                  "completed_at": "2026-11-04T09:45:39Z",
+                  "duration_seconds": 1.0
+                },
+                {
+                  "number": 3,
+                  "name": "Complete job",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "started_at": "2026-11-04T09:45:39Z",
+                  "completed_at": "2026-11-04T09:45:39Z",
+                  "duration_seconds": 0.0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
