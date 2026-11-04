@@ -8,4 +8,4 @@ timeout=$3
 selector=$4
 cd "$package"
 exec go tool test2json -t -p "github.com/sh4869221b/yakuori/$package" \
- "$binary" -test.v=test2json -test.count=1 "-test.timeout=$timeout" "-test.run=$selector"
+ "$binary" -test.paniconexit0 -test.v=test2json -test.count=1 "-test.timeout=$timeout" "-test.run=$selector"
