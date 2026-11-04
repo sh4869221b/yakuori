@@ -47,10 +47,9 @@ go vet ./...
 pipeline_tmp=$(mktemp -d)
 trap 'rm -rf "$fixture" "$offline_evidence" "$pipeline_tmp"' EXIT
 go vet -tags pipelinefaults ./internal/localize ./internal/publication ./internal/cli ./internal/tm
-for pipeline_pkg in localize publication cli tm; do
- go test -c -o "$pipeline_tmp/$pipeline_pkg-normal.test" "./internal/$pipeline_pkg"
- go test -c -tags pipelinefaults -o "$pipeline_tmp/$pipeline_pkg.test" "./internal/$pipeline_pkg"
-done
+mkdir "$pipeline_tmp/normal"
+go test -c -o "$pipeline_tmp/normal/" ./internal/localize ./internal/publication ./internal/cli ./internal/tm
+go test -c -tags pipelinefaults -o "$pipeline_tmp/" ./internal/localize ./internal/publication ./internal/cli ./internal/tm
 echo 'pipelinefaults compile-only: normal/tagged test binaries built; not a behavior PASS'
 
 pipeline_require() {
@@ -112,14 +111,12 @@ TestPipelineTMCommitHooks/private-callback
 TestPipelineTMCommitHooks/ineligible-run
 TestPipelineTMCommitHooks/dml-error
 EOF
-if ! go test -count=1 -timeout 10m ./internal/tm \
- -run '^(TestPipelineTMCommitCheckpoint|TestPipelineTMCommitStoppedProcess|TestCommitConcurrentKey|TestCommitBusyAndDeadline|TestCommitCleanupFailure)$' \
- -json >"$pipeline_tmp/tm-component.log" 2>&1; then
+if ! sh ci/run-test-binary.sh "$pipeline_tmp/normal/tm.test" internal/tm 10m '^(TestPipelineTMCommitCheckpoint|TestPipelineTMCommitStoppedProcess|TestCommitConcurrentKey|TestCommitBusyAndDeadline|TestCommitCleanupFailure)$' \
+ >"$pipeline_tmp/tm-component.log" 2>&1; then
  cat "$pipeline_tmp/tm-component.log" >&2; exit 1; fi
 pipeline_require tm-component "$pipeline_tmp/tm-component.names" "$pipeline_tmp/tm-component.log"
 cat "$pipeline_tmp/tm-component.log"
-if ! go test -count=1 -timeout 10m -tags pipelinefaults ./internal/tm \
- -run '^TestPipelineTMCommitHooks$' -json >"$pipeline_tmp/tm-hooks.log" 2>&1; then
+if ! sh ci/run-test-binary.sh "$pipeline_tmp/tm.test" internal/tm 10m '^TestPipelineTMCommitHooks$' >"$pipeline_tmp/tm-hooks.log" 2>&1; then
  cat "$pipeline_tmp/tm-hooks.log" >&2; exit 1; fi
 pipeline_require tm-hooks "$pipeline_tmp/tm-hooks.names" "$pipeline_tmp/tm-hooks.log"
 cat "$pipeline_tmp/tm-hooks.log"
@@ -159,8 +156,7 @@ pipeline_fs_independent() {
  selector=$2
  names=$3
  log="$pipeline_tmp/$label.log"
- if ! go test -count=1 -timeout 180s -tags pipelinefaults ./internal/localize \
-  -run "$selector" -json >"$log" 2>&1; then
+ if ! sh ci/run-test-binary.sh "$pipeline_tmp/localize.test" internal/localize 180s "$selector" >"$log" 2>&1; then
   cat "$log" >&2; echo "pipeline lane $label failed" >&2; exit 1; fi
  pipeline_require "$label" "$names" "$log"
  cat "$log"
@@ -184,8 +180,7 @@ tmpfs|overlayfs) ;;
 *) echo "/tmp is $tmp_fs, not a verified tmpfs/overlay" >&2; exit 1 ;;
 esac
 echo "unsupported-filesystem refusal lane filesystem: $tmp_fs"
-if ! TMPDIR=/tmp GOTMPDIR=/tmp go test -count=1 -timeout 180s -tags pipelinefaults \
- ./internal/localize -run '^TestPipelineUnsupportedFilesystem$' -json \
+if ! TMPDIR=/tmp GOTMPDIR=/tmp sh ci/run-test-binary.sh "$pipeline_tmp/localize.test" internal/localize 180s '^TestPipelineUnsupportedFilesystem$' \
  >"$pipeline_tmp/refusal.log" 2>&1; then
  cat "$pipeline_tmp/refusal.log" >&2; echo 'unsupported-filesystem refusal lane failed' >&2; exit 1; fi
 pipeline_require refusal "$pipeline_tmp/refusal.names" "$pipeline_tmp/refusal.log"

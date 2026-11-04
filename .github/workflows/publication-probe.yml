@@ -397,12 +397,17 @@ jobs:
                 python3 ci/check-test-events.py "$2" "$3"
               }
 
+              # Compile once per build-tag set; run every selected test anew.
+              mkdir -p /evidence/test-binaries
+              go test -c -tags pipelinefaults -o /evidence/test-binaries/ \
+                ./internal/localize ./internal/publication ./internal/cli ./internal/tm
+
               run_required() {
                 label=$1
                 names=$2
                 shift 2
                 log=/evidence/"$label".log
-                if ! "$@" -json >"$log" 2>&1; then
+                if ! "$@" >"$log" 2>&1; then
                   cat "$log"
                   return 1
                 fi
@@ -424,7 +429,7 @@ jobs:
                 YAKUORI_PIPELINE_EVIDENCE=/evidence/offline95/pipeline \
                 run_required offline95 /evidence/names/offline95 \
                   python3 -c "import os,sys; os.sched_setaffinity(0, {min(os.sched_getaffinity(0))}); os.execvp(sys.argv[1], sys.argv[1:])" \
-                  go test -count=1 -timeout 15m -tags offlinesmoke,pipelinefaults ./internal/cli -run "^TestOfflinePipelineMatrix$|^TestOfflinePipelineCanaryDetection$" -v; then
+                  go test -count=1 -timeout 15m -tags offlinesmoke,pipelinefaults ./internal/cli -run "^TestOfflinePipelineMatrix$|^TestOfflinePipelineCanaryDetection$" -json; then
                 cp /evidence/offline95.log /evidence/offline95/test.jsonl
               else
                 cp /evidence/offline95.log /evidence/offline95/test.jsonl
@@ -434,72 +439,72 @@ jobs:
               printf "%s\n" TestPipelineStdoutBoundaries/normal TestPipelineStdoutBoundaries/cancel-before TestPipelineStdoutBoundaries/cancel-after > /evidence/names/stdout-boundaries
               printf "%s\n" TestPipelineCLIStdoutExit/normal TestPipelineCLIStdoutExit/short TestPipelineCLIStdoutExit/partial TestPipelineCLIStdoutExit/epipe TestPipelineCLIStdoutExit/diagnostic > /evidence/names/cli-stdout-exit
               run_required stdout-boundaries /evidence/names/stdout-boundaries \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineStdoutBoundaries$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelineStdoutBoundaries$"
               run_required cli-stdout-exit /evidence/names/cli-stdout-exit \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelineCLIStdoutExit$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/cli.test internal/cli 10m "^TestPipelineCLIStdoutExit$"
               run_required bridge /evidence/names/bridge \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/publication -run "^TestPipelineFaultBridge$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/publication.test internal/publication 10m "^TestPipelineFaultBridge$"
               run_required fixture-inputs /evidence/names/fixture-inputs \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineFixtureInputs$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelineFixtureInputs$"
               run_required fixture /evidence/names/fixture \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineFixture$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelineFixture$"
               run_required boundaries /evidence/names/boundaries \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessBoundaries$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelineHarnessBoundaries$"
               run_required state /evidence/names/state \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessState$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelineHarnessState$"
               run_required barrier /evidence/names/barrier \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessBarrier$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelineHarnessBarrier$"
               run_required guards /evidence/names/guards \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessGuards$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelineHarnessGuards$"
               run_required fault /evidence/names/fault \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineHarnessFault$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelineHarnessFault$"
               run_required cli /evidence/names/cli \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelineHarnessCLI$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/cli.test internal/cli 10m "^TestPipelineHarnessCLI$"
               # Each new root is required separately; the signal child is not a lane.
               run_required precommit-contract /evidence/names/precommit-contract \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitContract$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelinePrecommitContract$"
               run_required precommit-inference /evidence/names/precommit-inference \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitInference$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelinePrecommitInference$"
               run_required precommit-segmented /evidence/names/precommit-segmented \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitSegmented$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelinePrecommitSegmented$"
               run_required precommit-final /evidence/names/precommit-final \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelinePrecommitFinal$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelinePrecommitFinal$"
               run_required precommit-cli /evidence/names/precommit-cli \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelinePrecommitCLI$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/cli.test internal/cli 10m "^TestPipelinePrecommitCLI$"
               YAKUORI_SIGNAL_STATE=/evidence/pipeline-evidence/precommit-signals-state.json \
                 run_required precommit-signals /evidence/names/precommit-signals \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/cli -run "^TestPipelinePrecommitSignals$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/cli.test internal/cli 10m "^TestPipelinePrecommitSignals$"
 
               run_required process-recovery /evidence/names/process-recovery \
-                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineProcessRecovery$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 15m "^TestPipelineProcessRecovery$"
               run_required cli-process-recovery /evidence/names/cli-process-recovery \
-                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/cli -run "^TestPipelineCLIProcessRecovery$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/cli.test internal/cli 15m "^TestPipelineCLIProcessRecovery$"
 
               run_required commit-state /evidence/names/commit-state \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineCommitPublicationState$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelineCommitPublicationState$"
               run_required tm-core /evidence/names/tm-core \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/tm -run "^TestPipelineTMCommitHooksCore$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/tm.test internal/tm 10m "^TestPipelineTMCommitHooksCore$"
               run_required tm-transactions /evidence/names/tm-transactions \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineTMTransactionFailures$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelineTMTransactionFailures$"
               run_required tm-cancellation /evidence/names/tm-cancellation \
-                go test -count=1 -timeout 10m -tags pipelinefaults ./internal/localize -run "^TestPipelineTMCommitCancellation$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestPipelineTMCommitCancellation$"
               run_required publication-failures /evidence/names/publication-failures \
-                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelinePublicationFailures$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 15m "^TestPipelinePublicationFailures$"
               run_required cli-publication-exit /evidence/names/cli-publication-exit \
-                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/cli -run "^TestPipelineCLIPublicationExit$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/cli.test internal/cli 15m "^TestPipelineCLIPublicationExit$"
               run_required failure-rerun /evidence/names/failure-rerun \
-                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineFailureRerunAndTMRevalidation$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 15m "^TestPipelineFailureRerunAndTMRevalidation$"
               run_required concurrent-process /evidence/names/concurrent-process \
-                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineConcurrentProcess$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 15m "^TestPipelineConcurrentProcess$"
               run_required filesystem-safety /evidence/names/filesystem-safety \
-                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineFilesystem$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 15m "^TestPipelineFilesystem$"
               run_required no-clobber /evidence/names/no-clobber \
-                go test -count=1 -timeout 15m -tags pipelinefaults ./internal/localize -run "^TestPipelineNoClobber$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 15m "^TestPipelineNoClobber$"
 
               test "$(stat -f -c %T /tmp)" = tmpfs
               echo "unsupported-filesystem lane: TMPDIR=/tmp GOTMPDIR=/tmp filesystem=tmpfs"
               TMPDIR=/tmp GOTMPDIR=/tmp run_required precommit-refusal /evidence/names/precommit-refusal \
-                go test -count=1 -timeout 180s -tags pipelinefaults ./internal/localize -run "^TestPipelineUnsupportedFilesystem$" -v
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 180s "^TestPipelineUnsupportedFilesystem$"
               if TMPDIR=/tmp GOTMPDIR=/tmp \
                 YAKUORI_PIPELINE_EVIDENCE="$YAKUORI_PIPELINE_EVIDENCE/unsupported-positive" \
                 go test -count=1 -timeout 180s -tags pipelinefaults \

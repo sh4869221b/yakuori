@@ -23,6 +23,7 @@ on:
       - 'ci/verify.sh'
       - 'ci/check-test-events.py'
       - 'ci/test-test-events.py'
+      - 'ci/run-test-binary.sh'
       - 'ci/cpu-spike.Dockerfile'
       - 'ci/run-long-context.py'
       - 'ci/test-long-context-supervisor.py'
