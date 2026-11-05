@@ -1,10 +1,18 @@
 # W3 acceptance fixtures and criteria
 
-The user approved `fixtures.json` (`fixture-candidates-v2`) and `criteria.json`
-(`criteria-candidates-v3`) for Issue #85. This decision is not a v1 acceptance
-result. The checker reads local originals and reports readiness; it does not
-translate or judge quality. #86, #99 and #87 own the GPU run, performance
-measurement and human review respectively.
+The current selection is `fixtures.json` (`fixture-candidates-v2`) and
+`criteria.json` (`criteria-candidates-v4`). On 2026-11-05 the user directed
+memory ceilings to match the main PC: 32 GB RAM and an RTX 4070 with 12 GB
+VRAM. The resulting comparison ceilings are **24 GiB worker RSS and 10 GiB
+sampled worker VRAM**, with one active model/worker. The 60-second ceiling,
+fixture selection and human quality rules are unchanged.
+
+The original Issue #85 decision and v3 criteria are preserved in
+[`criteria-v3.json`](criteria-v3.json). Neither a criteria decision nor this
+memory revision establishes a v1 acceptance or translation-quality result.
+The checker reads local originals and reports readiness; it does not translate
+or judge quality. #86, #99 and #87 own the GPU run, performance measurement
+and human review respectively.
 
 The [2026-11-03 shared GPU run](gpu-run-2026-11-03.md) records the first
 approved fixture measurement and its remaining acceptance limits.
@@ -55,7 +63,8 @@ All selected artifacts fit the checker's product input bounds per file: 1,495
 binary bytes, 76 units, 980 UTF-8 bytes per unit and 1,036 total text bytes.
 The product also limits each file to 76 segments. The checker does not establish
 the actual segment count or whether translated output and inference will fit.
-Product execution remains unmeasured. The older authored `en`/`jp` format fixtures remain unselected:
+The checker does not measure product execution; the dated GPU records above
+report the observed product runs. The older authored `en`/`jp` format fixtures remain unselected:
 each exceeds the product artifact, per-unit and total-text budgets, and the
 `en` header contains Japanese research text. Their explicit research limits
 are for inspection only and do not expand product support.
@@ -123,8 +132,16 @@ approved ceilings, with equality allowed:
 | Criterion | Record and boundary | Impact |
 | --- | --- | --- |
 | 60 s wall time | Fixture run `measurement_wall_seconds`: fresh mode from fixture setup through model snapshot/load, production pipeline, validation, TM commit, publication, independent reader and normal reaping. | A breach is a criterion failure; no averaging or retry to hide it. |
-| 5 GiB (5,368,709,120 bytes) RAM | `measurement.rss_bytes`: Linux translation-child `wait4`/`getrusage` RSS high-water, converted from KiB. | This is process RSS, not host-wide RAM capacity or combined RAM and VRAM. Record host RAM and other workload; no host-wide ceiling is proposed. |
-| 3 GiB (3,221,225,472 bytes) VRAM | `measurement.process_vram_sampled_max_bytes`: selected GPU UUID and worker PID, nominal 100 ms interval plus query latency. | A sampled process maximum, not a continuous peak, device-wide total or minimum device capacity. |
+| 24 GiB (25,769,803,776 bytes) RAM | `measurement.rss_bytes`: Linux translation-child `wait4`/`getrusage` RSS high-water, converted from KiB. | This is process RSS, not host-wide RAM capacity or combined RAM and VRAM. Record host RAM and other workload; no host-wide ceiling is proposed. |
+| 10 GiB (10,737,418,240 bytes) VRAM | `measurement.process_vram_sampled_max_bytes`: selected GPU UUID and worker PID, nominal 100 ms interval plus query latency. | A sampled process maximum, not a continuous peak, device-wide total or minimum device capacity. |
+
+The assistant selected 24/10 GiB to implement the user's main-PC sizing
+request, reserving approximately 7-8 GiB of host RAM and 2 GiB of VRAM for
+the OS, desktop and other processes. These are engineering choices, not
+numeric limits directly quoted from the user or measured guarantees for a
+candidate. Use one active model/worker, check actual available RAM and free
+VRAM before each run, and record concurrent workload. These criteria do not
+enforce a cgroup, allocator or GPU allocation cap.
 
 The existing supervisor collects measurements but does **not** compare them to
 these criteria: the later evaluator must compare the recorded values. Require
@@ -146,8 +163,11 @@ the authored fixture has the most source text (445 bytes) and largest single
 unit (238 bytes). These are maxima **within the selected set**, not product
 capacity. The separate #76 CPU regression uses its own criteria.
 
-The approved 60 s / 5 GiB / 3 GiB limits were derived from a **different
-goinfer/cuda v0.22 workload**, not v0.23 product E2E measurements:
+The original v3 limits of 60 s / 5 GiB / 3 GiB, preserved in
+[`criteria-v3.json`](criteria-v3.json), were derived from a **different
+goinfer/cuda v0.22 workload**, not v0.23 product E2E measurements. The table
+below explains that historical decision; its 5/3 GiB margins are not the
+current v4 memory ceilings:
 
 | Historical reference | Observed value | Manual candidate margin |
 | --- | --- | --- |
@@ -175,13 +195,23 @@ On 2026-11-03 at 10:08:41 +09:00, user `sh4869221b` approved the pinned
 mixed set and its real-MOD coverage limits, 56-row/six-category quality rules
 and required terms, and the three numerical ceilings, per-fresh measurement
 boundaries, single repetition and reference conditions. The decision is
-recorded as `confirmed` and `approved` in `criteria.json`, bound to
-`fixture-candidates-v2` and `criteria-candidates-v3`. This approval is a
+recorded as `confirmed` and `approved` in the archived
+[`criteria-v3.json`](criteria-v3.json), bound to `fixture-candidates-v2` and
+`criteria-candidates-v3`. This approval is a
 selection decision, not evidence that any later GPU run, measurement or human
 review has passed.
 
-#86, #99, #87 and the evidence index should reference the same confirmed
-manifest and criteria versions and the relevant fixture/model/run/output.
+On 2026-11-05 the user requested: "メモリ使用量上限はメインpcに合わせて下さい".
+The assistant implemented that request as the 24 GiB worker RSS / 10 GiB
+sampled worker VRAM ceilings described above. The v4 confirmation records
+this delegated sizing decision under the assistant's reviewer identity; it
+does not claim that the user directly specified these two numbers. The fixture
+manifest, 60-second value and human quality rules are unchanged. The new
+memory budget does not establish that any new model fits or passes.
+
+For each evaluation, reference the same confirmed manifest and criteria
+versions and the relevant fixture/model/run/output. The completed #86/#99
+records remain bound to v3. New comparisons for #87 use v4.
 Fixture, model, pipeline or measurement-condition changes require the affected
 generation, measurement and quality evidence to be reassessed and missing
 observations obtained. A threshold-only change can recompare complete raw
@@ -191,6 +221,12 @@ summaries. Existing tools bind records and sheets to versions: do not rewrite
 old records to present them as the new version; produce new bound runs/sheets
 when the tool requires them. A candidate breach remains visible for a user
 decision rather than being silently replaced with a measured value.
+
+To generate or summarize reviews for original v3 runs, explicitly pass
+`--criteria docs/evidence/acceptance/criteria-v3.json` (or use the original
+pinned checkout). Keep the original run records, sheets, values and decisions.
+Use the current `criteria.json` for new v4 runs and new bound review sheets;
+do not edit a v3 run or sheet's version to relabel it as v4.
 
 ## Check local files
 
@@ -230,8 +266,9 @@ the selected fixtures, all criteria have values and confirmation has `status: co
 and RFC 3339 date/time. Missing real-MOD categories remain visible for the #85
 representativeness decision; synthetic coverage does not establish real-MOD
 coverage. The approved selection passes this readiness check when the local
-originals match their recorded metadata. The confirmation record represents a
-user decision obtained in #85; the checker does not solicit or make it. Neither
+originals match their recorded metadata. The confirmation record represents the
+original #85 selection decision plus the user-directed v4 memory revision
+described above; the checker does not solicit or make those decisions. Neither
 checker mode executes GPU or CPU inference, establishes quality, or completes
 v1 acceptance.
 
@@ -455,6 +492,10 @@ unknown. A separate helper exits immediately after supervision returns, and
 the parent test verifies that the TERM-ignoring query no longer exists.
 
 ## Human review sheets
+
+The criteria file must match the run and sheet: use `criteria-v3.json` for
+existing v3 evidence and `criteria.json` for new v4 evidence. Keep their
+results separate; the examples below use the current v4 criteria.
 
 `tools/acceptance/cmd/review` consumes the runner's `run.json`. It does not
 perform a human evaluation. Keep the original fixtures, published outputs and

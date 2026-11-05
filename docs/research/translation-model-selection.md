@@ -1,14 +1,16 @@
 # Yakuoriの翻訳モデル選定
 
-調査日: 2026年11月5日。実装の確認対象は main の [a3742255](https://github.com/sh4869221b/yakuori/commit/a3742255fb93667e4285ecff61dd086465900ad8)。対象は、ローカルで行う英語から日本語へのゲーム文章・UIの翻訳です。
+調査日・メインPC向け資源条件の更新日: 2026年11月5日。実装の確認対象は main の [a3742255](https://github.com/sh4869221b/yakuori/commit/a3742255fb93667e4285ecff61dd086465900ad8)。対象は、ローカルで行う英語から日本語へのゲーム文章・UIの翻訳です。
 
 ## 推奨
 
-**新しく比較する第一候補は CAT-Translate-1.4b 正式版とする。現在の運用基準は Index-Translate-2B Q4_K_M を維持し、同じ条件で品質と資源使用量を確認してから置換を判断する。**
+**メインPCの32 GB RAM・RTX 4070 12 GBを前提に、比較・受入れの上限をworker RSS 24 GiB、サンプルGPUメモリ10 GiBとする。最初の同系列比較はIndex-Translate-9B Q4_K_M、日英専用の主比較はCAT-Translate-3.3b正式版とする。**
 
-CAT-Translate-1.4bは日英翻訳に特化し、英日方向の公開評価があり、小型であることから優先します。次の候補はCAT-Translate-3.3b正式版です。ただし、両者が現行Indexよりゲーム翻訳に優れるという直接比較はありません。今回の選定は公開資料とコードの確認に基づく評価順であり、新モデルの実推論・GPU計測・56行の人手採点は実施していません。
+2026年11月5日の「メモリ使用量上限はメインpcに合わせて下さい」という依頼に基づき、OS・デスクトップ等の余裕を見込んで24/10 GiBを選定しました。具体値は依頼を実行するための設計値で、ユーザーが24/10を直接指定したという記録でも、当該モデルの実測合格でもありません。旧5/3 GiBを前提にCAT-1.4bを優先した判断を更新します。
 
-[Issue #87](https://github.com/sh4869221b/yakuori/issues/87)の順序に従い、まず現行モデルで辞書接続・限定した保護・必要な指示や文脈を切り分けます。モデルの変更だけで、通常経路に渡っていない用語集や不足した文脈が補われるとは考えません。翻訳精度と人手意味品質の改善は[Issue #1](https://github.com/sh4869221b/yakuori/issues/1)でv1後に位置付けられており、この調査でv1の完了条件を変更しません。
+Index-9Bは現行2Bと同じQwen3.5系列で、[公式比較][index-9-card]では同じ評価内の翻訳・指示追従に改善が見られます。CAT-3.3bは英日翻訳に特化した別系列の主比較候補です。CAT-1.4bは軽量・速度の比較対照として残します。現在のIndex-2Bを基準に、同じ原文・辞書・品質基準と新しい資源条件で採否を決めます。新モデルの実推論・GPU計測・56行の人手採点は未実施です。
+
+[Issue #87](https://github.com/sh4869221b/yakuori/issues/87)の順序に従い、まず現行モデルで辞書接続・限定した保護・必要な指示や文脈を切り分けます。モデルの変更だけで、通常経路に渡っていない用語集や不足した文脈が補われるとは考えません。翻訳精度と人手意味品質の改善は[Issue #1](https://github.com/sh4869221b/yakuori/issues/1)でv1後に位置付けられており、この更新でv1の完了条件や品質基準を変更しません。
 
 ## 現行実装と維持する条件
 
@@ -17,14 +19,18 @@ CAT-Translate-1.4bは日英翻訳に特化し、英日方向の公開評価が�
 | 項目 | 比較で維持する条件 |
 | --- | --- |
 | 主用途 | .w3strings version162の英語入力から日本語出力。短いUIに加え、用語・台詞・長文・保護文字列を評価 |
-| 正式評価セット | fixture-candidates-v2 / criteria-candidates-v3、3つのfresh出力、全56行・6カテゴリ |
+| 正式評価セット | fixture-candidates-v2 / criteria-candidates-v4、3つのfresh出力、全56行・6カテゴリ |
 | 処理時間 | 各fresh fixtureの measurement_wall_seconds が60秒以内 |
-| メインメモリ | 各workerのRSS high-waterが5 GiB以内 |
-| GPUメモリ | 選択GPU・worker PIDに帰属するサンプル最大値が3 GiB以内 |
+| メインメモリ | 各workerのRSS high-waterが24 GiB（25,769,803,776 bytes）以内 |
+| GPUメモリ | 選択GPU・worker PIDに帰属するサンプル最大値が10 GiB（10,737,418,240 bytes）以内 |
 | 現行生成条件 | 実効context 4,096、最大出力2,048 tokens、1 request 30秒、greedy、temperature 0、seed 0、thinking無効 |
 | 安全性 | 全unitと最終artifactの検証、独立reader、完全一致の翻訳メモリと再検証、部分公開・自動再生成なし |
 
-時間は3ファイルの合計や平均で判定しません。GPUメモリもGPU全体の使用量や連続観測した真のピークではありません。欠測・部分観測を合格にせず、12 GBのGPUを使用できても3 GiBの既存基準は維持します。詳細は[承認済みcriteria][project-criteria]と[受入れ手順][project-acceptance]が基準です。
+この予算は同時に1モデル・1推論workerを動かす条件です。主機のRAMにはおおむね7〜8 GiB、GPUメモリには約2 GiBの余裕を見込みますが、実際の空き容量は他のアプリの使用量に依存します。実行前に利用可能RAM・空きGPUメモリを確認し、別のLLMやゲームを同時実行して予算を重ねないようにします。
+
+時間は3ファイルの合計や平均で判定しません。GPUメモリもGPU全体の使用量や連続観測した真のピークではありません。欠測・部分観測を合格にせず、超過は記録します。24/10 GiBは比較・受入れの上限であり、メモリ確保やプロセスを強制的に制限する設定ではありません。詳細は[現在のcriteria][project-criteria]と[受入れ手順][project-acceptance]が基準です。
+
+旧criteria-candidates-v3は[criteria-v3.json][project-criteria-v3]へそのまま保存します。2026年11月3日の実測や旧レビュー票はv3のまま扱い、v4へversionを書き換えません。新しいモデル比較はv4に結び付けた新しいrun・レビュー票を作成します。60秒、56行・6カテゴリ、意味品質・用語・構造検証の条件は維持します。
 
 ### 現行Indexの基準値
 
@@ -45,8 +51,9 @@ CAT-Translate-1.4bは日英翻訳に特化し、英日方向の公開評価が�
 | 候補 | 役割 | 強みと根拠 | 現行Yakuoriへの適合性 |
 | --- | --- | --- | --- |
 | [Index-Translate-2B][index-card] | 運用基準・比較対照 | 翻訳専用。用語・文体・構造などの制約を扱う。Apache-2.0 | 固定GGUFのCPU/CUDA経路と資源実測がある。意味品質は別判定 |
-| [CAT-Translate-1.4b][cat-14-card] | **最優先の新候補** | 日英特化、Sarashina2.2系、MIT。英日方向の評価がある | Llama系列の基礎対応はあるが、Sarashinaテンプレートとtokenizerの検証が必要。資源・品質は未測定 |
-| [CAT-Translate-3.3b][cat-33-card] | 次の品質比較候補 | 同じ日英特化系列。MIT | 正式版のGGUFを確定する必要がある。1.4bより資源余裕が少なく、3 GiB条件は未確認 |
+| [Index-Translate-9B][index-9-card] | **最初の同系列比較** | 現行2Bと同じQwen3.5系列。用語・構造・文脈の制約を扱う。Apache-2.0 | 公式Q4_K_Mを優先。系列の基礎対応はあるが、対象template/tokenizerと24/10 GiB・60秒の実測が必要 |
+| [CAT-Translate-3.3b][cat-33-card] | **日英専用の主比較** | 日英特化、Sarashina2.2系、MIT。英日方向の評価がある | 正式版GGUFの固定とSarashinaテンプレート・tokenizer対応が必要。10 GiB条件で実測する |
+| [CAT-Translate-1.4b][cat-14-card] | 軽量・速度の比較対照 | 同じ日英特化系列。MIT | CAT-3.3bとの品質・速度・資源差を比較する。小型であることだけでは標準にしない |
 | [Hy-MT2-1.8B][hymt-card] | 推論基盤の対応後に比較 | 日本語を含む多言語翻訳。用語・文脈・文体・構造保持の指示例と公式GGUF。Apache-2.0 | hunyuan_v1_dense / Hunyuanの登録をgoinfer v0.23.0で確認できない。アーキテクチャ対応から必要 |
 | [TranslateGemma-4b-it][tg-card] | 条件付きの追加対照 | 翻訳専用、Gemma 3系、Gemma利用条件 | 専用翻訳テンプレートが必要。公式の総入力2K、User/Assistantのみという条件を考慮する |
 
@@ -54,11 +61,11 @@ Hy-MT2は[公式プロンプト例][hymt-repo]に用語・文脈の扱いが明�
 
 TranslateGemmaの標準入力では、翻訳元・先の言語コードと翻訳本文を専用形式で渡します。既存のsystem指示・用語集を通常のGemmaテンプレートへ流すだけでは同じ条件になりません。拡張プロンプトを試す場合も、公式入力を再現する対照と分けて扱います。
 
-7B以上のモデルや汎用モデルを初回比較へ多数追加する根拠はありません。現在の小型候補で未達の原因が残り、具体的な改善幅を確認したい場合に比較対象を広げます。パラメーター数、公開順位、MoEのactive parameter数だけで、必要メモリやゲーム翻訳の優劣を決めません。
+新しい予算では9B級の量子化モデルも比較対象に含めます。初回の主比較はIndex-9BとCAT-3.3bに絞り、具体的な未達原因が残る場合に追加候補を広げます。パラメーター数、公開順位、MoEのactive parameter数だけで、必要メモリやゲーム翻訳の優劣を決めません。
 
 ## 公開評価から判断できること
 
-### CATを最初に比較する理由
+### CATを日英専用の主比較にする理由
 
 CyberAgentの[公式比較表][cat-14-card]では、英語から日本語への平均BLEUが次のように報告されています。
 
@@ -71,9 +78,15 @@ CyberAgentの[公式比較表][cat-14-card]では、英語から日本語への�
 
 これは同じ公開表における作者の評価で、業務対話・医学・金融・特許などが対象です。BLEUは参照訳との一致を測る指標であり、この数値を「正解率」とは読みません。Indexはこの表に含まれず、ゲーム台詞・固有名・保護文字列の評価でもありません。英日用途に近い候補を絞る根拠として使用します。
 
-3.3bは1.4bよりこの平均が0.61高い一方、後述のメモリ見積もりには差があります。したがって、資源制約を保った導入順は1.4bを先とし、3.3bを無条件に標準へ選びません。
+3.3bは1.4bよりこの平均が0.61高く、新しい10 GiB予算では旧3 GiB制限を理由に後回しにしません。3.3bを日英品質の主比較とし、1.4bで速度と品質の差を確認します。公開評価の差だけでゲーム翻訳の標準モデルを確定しません。
 
-### Indexを基準から外さない理由
+### Index-9Bを最初の同系列比較にする理由
+
+[Index-9Bの公式カード][index-9-card]では、同一作者の比較でFLORES COMET-22が9B 0.8789 / 2B 0.8655、IFMTBenchの指示追従指標が9B 0.8760 / 2B 0.7584です。多言語集計であり、CATとの英日ゲーム翻訳の直接比較ではありませんが、現行モデルと近い構成で改善幅を調べる候補になります。
+
+[公式GGUF][index-9-gguf]のQ4_K_Mは配布表で5.78 GBです。これは保存ファイルの容量で、実行時のGPUメモリやロード時RSSではありません。対象GGUFのchat_template全文、tokenizer、終了トークン、thinking無効化、実効CUDA経路を確認し、24/10 GiBと60秒に収まるか測定します。同じモデル系列という理由だけで現在のloaderに受理されるとは断定しません。
+
+### Index-2Bを比較基準として維持する理由
 
 [Indexの公式カード][index-card]は、同一評価内のFLORES COMET-22でIndex-Translate-2Bを0.8655、Hy-MT2-1.8Bを0.8522と報告しています。これは多言語集計であり、英日ゲーム翻訳の順位ではありませんが、Hy-MT2へ替えれば自動的に改善するという根拠にもなりません。
 
@@ -107,9 +120,9 @@ CATのBLEUとIndexのCOMETを並べて順位付けしません。既存Index、C
 
 これは直ちにCUDA非対応という意味ではありません。同時に、Indexや通常のhead_dimでの速度をCATへ流用もできません。ロード、生成、実効CUDA・resident状態、終了・取消し、最終出力まで確認し、既存runnerで時間・RSS・GPUメモリを測ります。
 
-### 4. 1.4bを先にするメモリ上の理由
+### 4. CATのメモリ概算
 
-次は、公式configから計算した**評価順を決めるための概算**です。バッチ1、全layerで4,096 tokens分のK/Vをf32で保持する場合を仮定しています。
+次は、公式configから計算した**資源比較のための概算**です。バッチ1、全layerで4,096 tokens分のK/Vをf32で保持する場合を仮定しています。
 
 KV bytes = 2 × layers × tokens × KV heads × head dimension × 4 bytes
 
@@ -118,7 +131,7 @@ KV bytes = 2 × layers × tokens × KV heads × head dimension × 4 bytes
 | CAT-Translate-1.4b | 0.65625 GiB | 約0.65 GiB | 約1.31 GiB |
 | CAT-Translate-3.3b | 1.25 GiB | 約1.54 GiB | 約2.79 GiB |
 
-量子化scale、embeddingなどを4bitより高精度で保持する場合の差分、計算buffer、CUDA管理領域などを加える前の値です。公称モデル規模も丸め値であり、実際の割当てや常駐量を表しません。ロード時のCPU側の保持・変換によるRSSも別です。3.3bはこの仮定でも3 GiBまでの余裕が小さいため、1.4bから評価する判断になります。
+量子化scale、embeddingなどを4bitより高精度で保持する場合の差分、計算buffer、CUDA管理領域などを加える前の値です。公称モデル規模も丸め値であり、実際の割当てや常駐量を表しません。ロード時のCPU側の保持・変換によるRSSも別です。新しい10 GiB予算では、この概算を3.3bの除外理由にはしません。正式版の実体を使ったロード時RSS・実効GPUメモリ・速度の確認が必要です。
 
 KV精度やcontextを変更した別条件を測る場合は、変更を明記し、出力予約や本文を黙って削らず、翻訳profileと資源・品質の証拠を更新します。Indexで観測したf32 KVを、CATでも既に確認した値として扱いません。
 
@@ -137,10 +150,10 @@ KV精度やcontextを変更した別条件を測る場合は、変更を明記�
 ## 比較を進める順序と採用条件
 
 1. **現行Indexの基準を固定する。** Issue #87の不合格票と試行差分を照合し、辞書・保護・指示・文脈の問題を切り分ける。変更後のIndexを比較対照にする場合も、その出力・profileを新しく記録する。
-2. **CAT-Translate-1.4bの最小限の対応を確認する。** 正式版のGGUF、テンプレート、tokenizer、終了理由、明示CPU/CUDAの共通契約を確認する。既存の保護・辞書・翻訳メモリ機構を再実装しない。
+2. **Index-9BとCAT-3.3bの最小限の対応を確認する。** Index-9Bは公式Q4_K_Mと既存loaderの一致を先に確認する。CAT-3.3bは正式版GGUFとSarashinaテンプレートの対応を確認する。両方でtokenizer、終了理由、明示CPU/CUDAの共通契約を確認し、既存の保護・辞書・翻訳メモリ機構を再実装しない。
 3. **同じ意味条件で比較する。** 原文・辞書・保護・使用文脈・資源基準を揃え、各モデルの公式形式に沿った入力を作る。テンプレートとtokenizerが違うためtoken数まで同じになるとは仮定しない。モデルと必要な入力形式を一つの候補として記録し、追加の指示調整や量子化差は別試行にする。
-4. **有望な候補を全56行で確認する。** 各候補は空の翻訳メモリからfresh出力を作り、別のreuse実行も確認する。既存レビュー票を使い、実際の評価者が誤訳・省略・読みやすさ・対象用語を採点する。必要に応じてCAT-3.3b正式版へ進む。
-5. **品質と性能の両方で採否を決める。** 各fresh fixtureの60秒・RSS 5 GiB・サンプルGPUメモリ3 GiBを満たし、共通検証・独立reader・翻訳メモリ再検証と全56行の品質基準を満たすこと。どの候補も満たさなければ置換を確定せず、未達の原因と次の比較を残す。
+4. **有望な候補を全56行で確認する。** 各候補は空の翻訳メモリからfresh出力を作り、別のreuse実行も確認する。既存レビュー票を使い、実際の評価者が誤訳・省略・読みやすさ・対象用語を採点する。CAT-1.4bは軽量・速度の対照として必要に応じて比較する。
+5. **品質と性能の両方で採否を決める。** 各fresh fixtureの60秒・RSS 24 GiB・サンプルGPUメモリ10 GiBを満たし、共通検証・独立reader・翻訳メモリ再検証と全56行の品質基準を満たすこと。どの候補も満たさなければ置換を確定せず、未達の原因と次の比較を残す。
 
 正式品質判定では、主体・動作・否定・数・条件の重大な変更、命題・指示・制限の重大な省略、理解できない訳文を許容しません。全56行がpassで、6カテゴリの対象行すべてが評価済みの場合だけ合格とします。8503/8504の「信号灯」「夜警」、8506の `<b>`・`</b>`・`{player}` が各1回現れることと元の入れ子、8507の空出力を確認します。未評価・hold・出力不成立をpassへ変換せず、候補間の成功行だけを混ぜません。failとhold・未評価が併存して集計がincompleteになっても、fail件数と理由区分を保持します。[criteria][project-criteria]と[人手評価規則][project-acceptance]を変更せずに使います。
 
@@ -157,6 +170,7 @@ KV精度やcontextを変更した別条件を測る場合は、変更を明記�
 - [現行実装の依存pin][project-go-mod] / [loader][project-load] / [Index用プロンプト][project-index-prompt]
 - [受入れcriteria][project-criteria] / [受入れ手順][project-acceptance] / [2026年11月3日GPU実測][project-gpu-run]
 - [Index-Translate-2B公式カード][index-card] / [公式GGUF][index-gguf]
+- [Index-Translate-9B公式カード][index-9-card] / [公式GGUF][index-9-gguf]
 - [CAT-Translate-1.4b公式カード][cat-14-card] / [CAT-Translate-3.3b公式カード][cat-33-card]
 - [CAT-1.4b config][cat-14-config] / [CAT-3.3b config][cat-33-config] / [CAT tokenizer][cat-tokenizer]
 - [Hy-MT2公式リポジトリ][hymt-repo] / [1.8B公式カード][hymt-card] / [公式GGUF][hymt-gguf]
@@ -167,10 +181,13 @@ KV精度やcontextを変更した別条件を測る場合は、変更を明記�
 [project-load]: https://github.com/sh4869221b/yakuori/blob/a3742255fb93667e4285ecff61dd086465900ad8/internal/inference/goinfer/load.go
 [project-index-prompt]: https://github.com/sh4869221b/yakuori/blob/a3742255fb93667e4285ecff61dd086465900ad8/internal/prompt/index.go
 [project-criteria]: ../evidence/acceptance/criteria.json
+[project-criteria-v3]: ../evidence/acceptance/criteria-v3.json
 [project-acceptance]: ../evidence/acceptance/README.md#approved-human-quality-criteria
 [project-gpu-run]: ../evidence/acceptance/gpu-db-run-2026-11-03.md
 [index-card]: https://huggingface.co/IndexTeam/Index-Translate-2B
 [index-gguf]: https://huggingface.co/IndexTeam/Index-Translate-2B-GGUF
+[index-9-card]: https://huggingface.co/IndexTeam/Index-Translate-9B
+[index-9-gguf]: https://huggingface.co/IndexTeam/Index-Translate-9B-GGUF
 [cat-14-card]: https://huggingface.co/cyberagent/CAT-Translate-1.4b
 [cat-33-card]: https://huggingface.co/cyberagent/CAT-Translate-3.3b
 [cat-14-files]: https://huggingface.co/cyberagent/CAT-Translate-1.4b/tree/main
