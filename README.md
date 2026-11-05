@@ -7,6 +7,7 @@
 #2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDAを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。`localize --format w3strings` も同じ選択済みmodel・canonical profile・SQLite TM・Core・公開処理へ接続され、同一原文の再実行では検証済みTM候補を再利用します。CLI接続の訳文は制御用Engine（test seam）のQAで、特定の実model・実GPUによる推論品質は未確認です。人手による訳質確認、releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
+- [翻訳モデルの選定と比較条件](docs/research/translation-model-selection.md)（2026年11月5日：現行Indexの基準とCAT-Translate等の評価候補）
 
 このrepoはコードと再現用技術資料を扱います。非公開の設計資料の全文は含みません。実装済みの契約・再現手順・制限は、このREADMEとリンク先のrepo内ドキュメントを参照してください。
 
