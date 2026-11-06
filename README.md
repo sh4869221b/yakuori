@@ -4,9 +4,10 @@
 
 ## 状態
 
-#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDAを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。`localize --format w3strings` も同じ選択済みmodel・canonical profile・SQLite TM・Core・公開処理へ接続され、同一原文の再実行では検証済みTM候補を再利用します。CLI接続の訳文は制御用Engine（test seam）のQAで、特定の実model・実GPUによる推論品質は未確認です。人手による訳質確認、releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。Engineは同じGGUFのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
+#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDAを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。`localize --format w3strings` も同じ選択済みmodel・canonical profile・SQLite TM・Core・公開処理へ接続され、同一原文の再実行では検証済みTM候補を再利用します。PLaMo 3 Translate 0.8Bは実modelのCPU int4で英日・日英とTM再利用を確認済みです。実GPUと実MODの訳質は未確認です。人手による訳質確認、releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。Engineは同じmodel snapshotのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
+- [PLaMo 3 Translateの導入・実モデル検証](docs/plamo3.md)（Built with PLaMo）
 - [翻訳モデルの選定と比較条件](docs/research/translation-model-selection.md)（2026年11月5日：現行Indexの基準とCAT-Translate等の評価候補）
 
 このrepoはコードと再現用技術資料を扱います。非公開の設計資料の全文は含みません。実装済みの契約・再現手順・制限は、このREADMEとリンク先のrepo内ドキュメントを参照してください。
@@ -20,7 +21,7 @@
 - 最終staged artifact検証 → 短いTM commit → 安全なpublish。既存outputは既定拒否、明示時のみ置換
 - 同一pathでは原文backupをrenameして保持。2 rename全体は非atomicで、backup上書きや復旧先の他fileの自動置換は禁止
 - 通常I/O失敗とプロセス停止からの安全な復旧を対象とし、電源断耐性はv1の正式保証外
-- 通常処理はoffline。取得は明示的な `models pull`（絶対HTTPS URL、期待size・SHA-256・digest出所指定）と、指定されたローカルfileだけを読む `models import` の2経路のみ。自動取得・更新や既存IDの上書きはなく、通常処理は一切通信しない。取得元・期待値・digest出所の意味と取得履歴・失敗・取消し・残骸の扱いは「ローカルmodelの登録」を参照。MVP完了には実MODの独立読み取りと代表訳の人手確認が必要
+- 通常処理はoffline。取得は明示的な `models pull`（絶対HTTPS URL、期待size・SHA-256・digest出所指定）と、指定されたローカルfileまたはPLaMo 3 checkpoint directoryを読む `models import` の2経路のみ。自動取得・更新や既存IDの上書きはなく、通常処理は一切通信しない。取得元・期待値・digest出所の意味と取得履歴・失敗・取消し・残骸の扱いは「ローカルmodelの登録」を参照。MVP完了には実MODの独立読み取りと代表訳の人手確認が必要
 
 CLI・XDG namespaceは`yakuori`。旧Kotobaのコード・設定・TM・registryを暗黙移行しません。single binaryはmodel本体やGPU driverの内包を意味しません。
 
@@ -94,7 +95,7 @@ go test -count=1 -tags cuda,offlinesmoke ./internal/cli \
 
 ## ローカルmodelの登録
 
-GGUFはsourceから個人用の管理copyへ登録します。sourceは変更・削除せず、登録IDは一意で既存IDを置換できません。importだけでは選択されないため、使うIDを明示してください。`models verify` は管理copyの登録時SHA-256とsizeを照合し、Engineも実際のload snapshotを同じ登録SHA-256と照合します。CPU/CUDAは同じGGUFと埋込みtokenizerを使います。
+GGUFとPLaMo 3 checkpointはsourceから個人用の管理copyへ登録します。PLaMoはdirectoryを指定し、tokenizer・template・license・weightsを一つのartifactへ封入します。[対応形式と取得手順](docs/plamo3.md)を参照してください。sourceは変更・削除せず、登録IDは一意で既存IDを置換できません。importだけでは選択されないため、使うIDを明示してください。`models verify` は管理copyの登録時SHA-256とsizeを照合し、Engineも実際のload snapshotを同じ登録SHA-256と照合します。CPU/CUDAは同じ登録artifactのmodel・tokenizerを使います。
 
 `models pull` は絶対HTTPS URLからGGUFを一度だけ取得します。`--id`・`--sha256`（64桁小文字hex）・`--size`（正のbyte数）・`--digest-source`（空白を不可とする出所の申告）をURLより前に置き、位置引数はURL一個です。URLはhost必須でuserinfo・fragmentは不可、redirectはHTTPSのみ・最大10要求、HTTPは200のみ、1回の取得は30分で打ち切ります。retryと中断resumeはなく、半端なstageは再接続せず消します。受信bytesの実測が期待size・期待SHA-256（Content-Lengthは補助情報であり受入れ根拠ではない）に一致し、そのstageがCPU loader・tokenizerに受理されてCloseできるときだけ登録します。`--digest-source` は出所を示す利用者の申告で、独立検証済みの配布保証としては扱えません。取得は自動Useせず、選択済みmodelも既存IDも変えません。取得前にstderrへ引用・エスケープした期待値を一度だけ出力し、この出力に失敗したら通信しません。通常の失敗とSIGINT/SIGTERM取消しは当該実行のstageだけを削除し、旧model・旧選択を保持します。commitがregistry renameを通した後は取消し・出力失敗でも巻き戻さず、登録済みであることを区別して報告します。SIGKILL等の残骸は `<Data>/models/.pull-*` に保持され、自動公開・自動削除はしません。
 
@@ -110,7 +111,7 @@ GGUFはsourceから個人用の管理copyへ登録します。sourceは変更・
 ./yakuori doctor --check-model --backend cuda
 ```
 
-`import` はローカルFILEを指定する構文で、`--id` はFILEより前に置きます。CUDA確認にはLinux/amd64向け `-tags cuda` buildと実行時のNVIDIA driver (`libcuda.so.1`) が必要です。CUDAが利用できない場合は失敗し、CPUへ暗黙に切り替えません。通常の `doctor` は保存先と登録状態を確認します。`--check-model` は選択済みmodelをCPU（既定）または明示backendで開いて `Engine.Info` を出し、生成せず閉じます。設定contextは既存の4096 token候補で、実効値はEngineから報告します。registryに登録されたmodelの管理fileが欠落している場合、通常doctorは `[missing]` を表示します。管理copyのhash照合は `models verify ID` または `--check-model` で行います。
+`import` はローカルFILEまたはPLaMo 3 checkpoint DIRECTORYを指定する構文で、`--id` は位置引数より前に置きます。CUDA確認にはLinux/amd64向け `-tags cuda` buildと実行時のNVIDIA driver (`libcuda.so.1`) が必要です。CUDAが利用できない場合は失敗し、CPUへ暗黙に切り替えません。通常の `doctor` は保存先と登録状態を確認します。`--check-model` は選択済みmodelをCPU（既定）または明示backendで開いて `Engine.Info` を出し、生成せず閉じます。設定contextは既存の4096 token候補で、実効値はEngineから報告します。registryに登録されたmodelの管理fileが欠落している場合、通常doctorは `[missing]` を表示します。管理copyのhash照合は `models verify ID` または `--check-model` で行います。
 
 各XDG base directoryには `/yakuori` が追加され、相対または空のoverrideは既定値へ戻ります。
 
@@ -125,7 +126,7 @@ GGUFはsourceから個人用の管理copyへ登録します。sourceは変更・
 | Load snapshots | `<Cache>/model-snapshots` | Engine load時に作成し、load完了時にunlinkするtransient snapshot |
 | State | `<State>` | 現時点で保存物なし |
 
-Private directoryはmode `0700`、Config/Registry/lockとmanaged `model.gguf` は `0600`、Engine snapshotは `0400` です。登録には管理copy分の保存容量が別途必要で、model読込み時はtransient snapshot分も必要です。hardlinkは使いません。たとえば既存の研究用modelが `$HOME/.cache/yakuori/models/` にあっても、それは外部source fileです。登録先の `<Data>/models/` やtransient用 `<Cache>/model-snapshots/` と混同せず、cache全体を削除しないでください。
+Private directoryはmode `0700`、Config/Registry/lockとmanaged `model.gguf` は `0600`、Engine snapshotは `0400` です。PLaMoのdirectory展開分にも別途一式分の一時容量が必要です。登録には管理copy分の保存容量が別途必要で、model読込み時はtransient snapshot分も必要です。hardlinkは使いません。たとえば既存の研究用modelが `$HOME/.cache/yakuori/models/` にあっても、それは外部source fileです。登録先の `<Data>/models/` やtransient用 `<Cache>/model-snapshots/` と混同せず、cache全体を削除しないでください。
 provenance.json も `0600` です。取得中は `<Data>/models/.pull-*` に取得stage（model本体＋取得履歴）が加わり、CPU loaderでの検証時の容量peakは既存分＋取得stage＋load snapshotです。
 
 modelを手動削除するときは、先にすべてのYakuori processを停止します。`models remove` commandはありません。削除するIDが現在の `selected_model` と一致するときだけconfig fileを取り除き、`<Data>/models/<ID>/` の中身（`model.gguf`、`models pull` で取得した場合は `provenance.json` も含む）を削除して、ID directoryが空なら取り除いてから、registry JSONのそのIDだけを削除します。他IDのentryは保持し、最後の1件を消す場合はschema 1の空 `models` objectを残します。registryだけ先に消すと未登録directoryが残るため、その状態を作らないでください。directoryに予期しないfileがある場合や、中断したimportでregistryにないdirectoryがある場合は自動削除せず、個別に内容を確認してください。source modelは残します。 `.pull-*` directoryは強制停止等で中断した取得の残骸として保持され、registryには登録されず、次の取得の実行でも残ります。不要になったら内容を確認の上で手動削除してください。

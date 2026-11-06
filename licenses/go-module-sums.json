@@ -1,5 +1,11 @@
 [
   {
+    "Path": "github.com/dustin/go-humanize",
+    "Version": "v1.1.0",
+    "Sum": "h1:dbKTrvD0klcbBV/h4AWJdMuZogJACoMlvWIWZ5b2xWg=",
+    "GoModSum": "h1:hc1CvRkJMsgxqjmjMQF3QNRAZBwY8AXBAzKYoSX9sFI="
+  },
+  {
     "Path": "github.com/ebitengine/purego",
     "Version": "v0.11.2",
     "Sum": "h1:WWiTx8rD8zYdOwSj8O/NiNbsOvSAgJMTlyV1XlbUSeU=",
@@ -10,36 +16,6 @@
     "Version": "v0.3.2",
     "Sum": "h1:zjRj3gRSfmbxbQkt1jXSTdGKHPwL1R912qovXnOPUlE=",
     "GoModSum": "h1:nA+ytiB8A1YvVSHzBQbn+Be+BGR4gAGVIP+7chLn+O4="
-  },
-  {
-    "Path": "github.com/townsendmerino/goinfer",
-    "Version": "v0.23.0",
-    "Sum": "h1:HcqBYAx7QqQptzlYdfYP8c9HalFhsRHWz1GYlxA1ezI=",
-    "GoModSum": "h1:Pk0kSX6D2trUn9EARRcns/RHMx62C1YDFUXvPUUTwHM="
-  },
-  {
-    "Path": "github.com/townsendmerino/goinfer/cuda",
-    "Version": "v0.23.0",
-    "Sum": "h1:d3fXJ4aL5IxYJ0X2digTnCbLQpoYdteBWD5Y30N23ig=",
-    "GoModSum": "h1:1952t6VjEK/U/z0fjJj+bKV+pWRC6DfbGjZKcGMwe1A="
-  },
-  {
-    "Path": "golang.org/x/sys",
-    "Version": "v0.49.0",
-    "Sum": "h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=",
-    "GoModSum": "h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og="
-  },
-  {
-    "Path": "modernc.org/sqlite",
-    "Version": "v1.61.1",
-    "Sum": "h1:TBEE49wz7VlxS+qXRXMQiPUZYOXHJ4ku83daYv1fe04=",
-    "GoModSum": "h1:f4gr5tbpx2umklaT/QVtbi/50hNdM+4ng+2zMo8KXJ0="
-  },
-  {
-    "Path": "github.com/dustin/go-humanize",
-    "Version": "v1.1.0",
-    "Sum": "h1:dbKTrvD0klcbBV/h4AWJdMuZogJACoMlvWIWZ5b2xWg=",
-    "GoModSum": "h1:hc1CvRkJMsgxqjmjMQF3QNRAZBwY8AXBAzKYoSX9sFI="
   },
   {
     "Path": "github.com/google/uuid",
@@ -72,10 +48,30 @@
     "GoModSum": "h1:XXSOKAI6jX/miQdMpMYrcXOBWEdjds2mbUolO3RPerU="
   },
   {
-    "Path": "github.com/townsendmerino/aikit/gpu",
-    "Version": "v0.35.0",
-    "Sum": "h1:2yjAKzV5XtTJywL6wS2p3x1C+hP60+mVRZNB37b+saA=",
-    "GoModSum": "h1:5BoeTW/VGltnAT3zB/lhZPFDxjZBh+tMF+FFhHE8Fn0="
+    "Path": "github.com/townsendmerino/goinfer",
+    "Version": "v0.24.1",
+    "Replace": {
+      "Path": "github.com/sh4869221b/goinfer",
+      "Version": "v0.0.0-20261106011512-994cbf5ee38d"
+    },
+    "Sum": "h1:HTJe6LmPe/a/vkc7FTGtocQZP3grPmHdG/wbQqkDDEU=",
+    "GoModSum": "h1:CuDcun/tFvvacbdtf7ZjKQBP9SOQvpDEb+oWE8cyRo8="
+  },
+  {
+    "Path": "github.com/townsendmerino/goinfer/backend/cuda",
+    "Version": "v0.0.0-20261106011512-994cbf5ee38d",
+    "Replace": {
+      "Path": "github.com/sh4869221b/goinfer/backend/cuda",
+      "Version": "v0.0.0-20261106011512-994cbf5ee38d"
+    },
+    "Sum": "h1:yVBuBC0iqZ/AO2s0LpagTpbUnxDDYf+Gtja9Xo06EuY=",
+    "GoModSum": "h1:zWlobZQ2mFmttCIwkpSZwWKjURhrNPna5vvYKgamaWU="
+  },
+  {
+    "Path": "golang.org/x/sys",
+    "Version": "v0.49.0",
+    "Sum": "h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=",
+    "GoModSum": "h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og="
   },
   {
     "Path": "golang.org/x/text",
@@ -100,5 +96,11 @@
     "Version": "v1.12.1",
     "Sum": "h1:nFMiWrpStgZczNl6XI9GnIk/rWhYIyHGUaR04pGbp9g=",
     "GoModSum": "h1:/JP4VbVC+K5sU2wZi9bHoq2MAkCnrt2r98UGeSK7Mjw="
+  },
+  {
+    "Path": "modernc.org/sqlite",
+    "Version": "v1.61.1",
+    "Sum": "h1:TBEE49wz7VlxS+qXRXMQiPUZYOXHJ4ku83daYv1fe04=",
+    "GoModSum": "h1:f4gr5tbpx2umklaT/QVtbi/50hNdM+4ng+2zMo8KXJ0="
   }
 ]
