@@ -40,20 +40,29 @@ func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy infe
 	if policy.Schema() != inference.PolicySchemaV1 {
 		return inference.GenerationRequest{}, inference.ErrInvalidPolicy
 	}
-	messages := prompt.Build(input)
-	if e.info.Template.Source == indexChatTemplate {
-		messages = prompt.BuildIndex(input)
-		messages.System = strings.TrimSpace(messages.System)
-		messages.User = strings.TrimSpace(messages.User)
-	}
-	segments := e.template.RenderSegments(messages.System, []chat.Turn{{Role: "user", Content: messages.User}})
-	if e.info.Template.Source == indexChatTemplate {
-		// The official disabled-thinking generation prefix closes an empty block.
-		segments = append(segments,
-			tokenizer.Segment{Text: thinkingOpen, Special: true},
-			tokenizer.Segment{Text: thinkingSeparator},
-			tokenizer.Segment{Text: thinkingClose, Special: true},
-			tokenizer.Segment{Text: thinkingSeparator})
+	var segments []tokenizer.Segment
+	if e.info.Template.Family == plamo3Family {
+		var err error
+		segments, err = plamo3Segments(input)
+		if err != nil {
+			return inference.GenerationRequest{}, err
+		}
+	} else {
+		messages := prompt.Build(input)
+		if e.info.Template.Source == indexChatTemplate {
+			messages = prompt.BuildIndex(input)
+			messages.System = strings.TrimSpace(messages.System)
+			messages.User = strings.TrimSpace(messages.User)
+		}
+		segments = e.template.RenderSegments(messages.System, []chat.Turn{{Role: "user", Content: messages.User}})
+		if e.info.Template.Source == indexChatTemplate {
+			// The official disabled-thinking generation prefix closes an empty block.
+			segments = append(segments,
+				tokenizer.Segment{Text: thinkingOpen, Special: true},
+				tokenizer.Segment{Text: thinkingSeparator},
+				tokenizer.Segment{Text: thinkingClose, Special: true},
+				tokenizer.Segment{Text: thinkingSeparator})
+		}
 	}
 	ids, err := e.tokenizer.EncodeSegments(segments, false)
 	if err != nil {

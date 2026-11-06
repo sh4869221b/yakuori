@@ -15,6 +15,7 @@ import (
 )
 
 type stubModel struct {
+	modelType         string
 	contextTokens     int
 	backend           string
 	quant             string
@@ -32,7 +33,9 @@ type stubModel struct {
 	onClose           func() error
 }
 
-func (m *stubModel) Config() *decoder.Config         { return &decoder.Config{MaxPositions: m.contextTokens} }
+func (m *stubModel) Config() *decoder.Config {
+	return &decoder.Config{ModelType: m.modelType, MaxPositions: m.contextTokens}
+}
 func (m *stubModel) EffectiveBackend() string        { return m.backend }
 func (m *stubModel) Quant() string                   { return m.quant }
 func (m *stubModel) ResidentActive() bool            { return m.residentActive }

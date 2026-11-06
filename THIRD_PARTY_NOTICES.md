@@ -10,8 +10,9 @@ for future research binaries, vendor trees or model-bearing images.
 ## Scope and retained notices
 
 The current Go module versions and their module sums are recorded in
-`licenses/go-module-sums.json`; `go mod verify` passed after the 2026-11-03
-update. Original root notices for the current pins are retained under
+`licenses/go-module-sums.json`; `go mod verify` passed after the 2026-11-06
+PLaMo integration update. Replacement module paths and immutable revisions are
+included. Original root notices for the current pins are retained under
 `licenses/upstream/` and `licenses/research-modernc/verbatim-files/`.
 The original 2026-10-16 inventory, independently verified GitHub-hosted root
 notices, and file-level source notice collections describe the versions examined
@@ -25,10 +26,9 @@ listed below.
 |---|---|---|---|
 | Go runtime / standard library | 1.27.3 | BSD-3-Clause, retained | Built executables |
 | golang.org/x/sys | v0.49.0 | BSD-3-Clause, retained | Linux publisher in CLI |
-| github.com/townsendmerino/goinfer | v0.23.0 | MIT, [retained](licenses/upstream/goinfer-v0.23.0/LICENSE) | CPU/CUDA inference engines and research tools |
-| [github.com/townsendmerino/goinfer/cuda](https://github.com/townsendmerino/goinfer/blob/cuda/v0.23.0/LICENSE) | v0.23.0 | MIT, [retained](licenses/upstream/goinfer-cuda-v0.23.0/LICENSE) | CUDA inference backend (`cuda && linux && amd64`) |
+| github.com/townsendmerino/goinfer → sh4869221b/goinfer | 994cbf5ee38dd8dcc612aad6e6803ac79f772f3b | MIT, [retained](licenses/upstream/goinfer-plamo3-994cbf5/LICENSE) | CPU/CUDA inference engines and research tools; source-only PLaMo reference fixtures have separate terms |
+| github.com/townsendmerino/goinfer/backend/cuda → sh4869221b/goinfer/backend/cuda | 994cbf5ee38dd8dcc612aad6e6803ac79f772f3b | MIT, [retained](licenses/upstream/goinfer-cuda-plamo3-994cbf5/LICENSE) | CUDA inference backend (`cuda && linux && amd64`) |
 | github.com/townsendmerino/aikit | v1.76.0 | MIT, [retained](licenses/upstream/aikit-v1.76.0/LICENSE) | Inference transitive dependency |
-| [github.com/townsendmerino/aikit/gpu](https://github.com/townsendmerino/aikit/blob/gpu/v0.35.0/LICENSE) | v0.35.0 | MIT, [retained](licenses/upstream/aikit-gpu-v0.35.0/LICENSE) | CUDA tensor primitives |
 | [github.com/eitamring/gocudrv](https://github.com/eitamring/gocudrv/blob/v0.3.2/LICENSE) | v0.3.2 | MIT, [retained](licenses/upstream/gocudrv-v0.3.2/LICENSE) | CUDA driver API binding |
 | [github.com/ebitengine/purego](https://github.com/ebitengine/purego/blob/v0.11.2/LICENSE) | v0.11.2 | Apache-2.0, [retained](licenses/upstream/purego-v0.11.2/LICENSE) | CUDA driver loading |
 | golang.org/x/text | v0.43.0 | BSD-3-Clause, retained | Inference transitive dependency |
@@ -127,6 +127,29 @@ The examined template has no separate attribution header or accompanying
 NOTICE file; the source repository root also has no NOTICE. A full copy of its
 Apache-2.0 LICENSE is retained at
 [`licenses/research-inference/notices/index-translate-2B-APACHE-2.0.txt`](licenses/research-inference/notices/index-translate-2B-APACHE-2.0.txt).
+
+## PLaMo materials
+
+Built with PLaMo.
+
+`internal/inference/goinfer/testdata/plamo3-chat-template.jinja` is copied verbatim
+from Preferred Networks, Inc.'s `pfnet/plamo-3-translate-0.8b` at revision
+`cc8e88169807d5a272e8ff06db12eb0129b67f81`. Its SHA-256 is
+`cd49e7e0dfa8ec847c163db88dfca89b280dddbb73ddc60ba38c62a420eaced2`.
+It and the explicitly identified model-generated expected translations in
+`internal/cli/plamo3_cpu_smoke_test.go` and `docs/plamo3.md` are PLaMo model
+materials under the [PLaMo Community License Agreement](licenses/plamo-community/LICENSE).
+The full English agreement is retained verbatim, with its pinned origin and hash
+in `licenses/upstream-index.json`. These materials are not relicensed as MIT.
+The test template fixture is not embedded in the CLI binary. No released weights
+or PFN Python model implementation are tracked here.
+
+The fork's root LICENSE, NOTICE and THIRD_PARTY_LICENSES.md are retained in
+`licenses/upstream/goinfer-plamo3-994cbf5/`. Its source-only PLaMo fixtures and
+reference outputs carry separate terms described in that NOTICE. The current
+nested CUDA module incorporates code formerly in aikit/gpu, although that module
+is no longer selected separately. The historical copied-code/provenance findings
+above remain open; this pin update is not a complete distribution audit.
 
 ## Models and images
 

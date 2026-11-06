@@ -6,11 +6,11 @@ import (
 	"fmt"
 
 	driver "github.com/eitamring/gocudrv/cuda"
-	_ "github.com/townsendmerino/goinfer/cuda"
+	_ "github.com/townsendmerino/goinfer/backend/cuda"
 	"github.com/townsendmerino/goinfer/decoder"
 )
 
-const cudaBackendPin = "github.com/townsendmerino/goinfer/cuda@v0.23.0"
+const cudaBackendPin = "github.com/sh4869221b/goinfer/backend/cuda@994cbf5ee38dd8dcc612aad6e6803ac79f772f3b"
 
 func loadDecoder(path string, options decoder.Options) (*decoder.Model, error) {
 	if options.Backend == "cuda" {

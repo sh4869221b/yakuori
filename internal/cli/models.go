@@ -20,12 +20,13 @@ import (
 	"github.com/sh4869221b/yakuori/internal/models"
 )
 
-const modelsUsage = `Usage: yakuori models import --id ID FILE
+const modelsUsage = `Usage: yakuori models import --id ID FILE_OR_DIRECTORY
        yakuori models pull --id ID --sha256 HEX --size BYTES --digest-source TEXT URL
        yakuori models use ID
        yakuori models verify ID
 
-Import keeps a private copy and does not select it. Flags precede FILE.
+Import accepts a GGUF file or a PLaMo 3 safetensors directory (including LICENSE/en).
+It keeps a private copy of the complete model and does not select it. Flags precede the path.
 Pull fetches URL once over HTTPS and registers the received bytes only when
 they match the expected size and SHA-256. It selects nothing, never retries
 and leaves leftovers of an interrupted run alone. Flags precede URL.

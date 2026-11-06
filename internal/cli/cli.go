@@ -31,7 +31,7 @@ const usage = `Usage: yakuori <command>
 Commands:
   help       Show this help
   doctor     Diagnose storage; --check-model loads the selected model
-  models     Import, pull, select, or verify a local GGUF model
+  models     Import, pull, select, or verify a local model
   translate  Translate a UTF-8 text file to stdout
   localize   Translate a UTF-8 text or binary W3 strings file to a published file
 

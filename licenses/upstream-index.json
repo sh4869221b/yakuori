@@ -118,5 +118,35 @@
     "classification": "MIT",
     "source_url": "https://github.com/townsendmerino/aikit/blob/v1.70.1/LICENSE",
     "scope": "root notice verified; complete archive and file-header audit pending"
+  },
+  {
+    "repository": "sh4869221b/goinfer",
+    "version_or_revision": "994cbf5ee38dd8dcc612aad6e6803ac79f772f3b",
+    "license_file": "LICENSE",
+    "sha256": "e6748a83fb6b323f85260b8979b0728c647a7ad6ae6772e7fcbc69301d3d1a0c",
+    "classification": "MIT",
+    "source_url": "https://github.com/sh4869221b/goinfer/blob/994cbf5ee38dd8dcc612aad6e6803ac79f772f3b/LICENSE",
+    "retained_path": "licenses/upstream/goinfer-plamo3-994cbf5/LICENSE",
+    "scope": "Root runtime notice retained; NOTICE separately identifies community-licensed PLaMo fixtures; full file-level audit pending"
+  },
+  {
+    "repository": "sh4869221b/goinfer",
+    "version_or_revision": "994cbf5ee38dd8dcc612aad6e6803ac79f772f3b",
+    "license_file": "LICENSE",
+    "sha256": "e6748a83fb6b323f85260b8979b0728c647a7ad6ae6772e7fcbc69301d3d1a0c",
+    "classification": "MIT",
+    "source_url": "https://github.com/sh4869221b/goinfer/blob/994cbf5ee38dd8dcc612aad6e6803ac79f772f3b/LICENSE",
+    "retained_path": "licenses/upstream/goinfer-cuda-plamo3-994cbf5/LICENSE",
+    "scope": "Nested backend/cuda module archive root notice retained; inherited from repository root"
+  },
+  {
+    "repository": "pfnet/plamo-3-translate-0.8b",
+    "version_or_revision": "cc8e88169807d5a272e8ff06db12eb0129b67f81",
+    "license_file": "LICENSE/en",
+    "sha256": "d9979039b8f1a96fa81e1be61c4550d06f8542b25119e3f765c7c011a68597fb",
+    "classification": "PLaMo Community License Agreement",
+    "source_url": "https://huggingface.co/pfnet/plamo-3-translate-0.8b/blob/cc8e88169807d5a272e8ff06db12eb0129b67f81/LICENSE/en",
+    "retained_path": "licenses/plamo-community/LICENSE",
+    "scope": "Applies to copied PFN template and model-generated expected translations; no released model weights tracked"
   }
 ]

@@ -1,0 +1,6 @@
+=== RUN   TestSupervisorKeepsSampleWhenWorkerEndsDuringQuery
+    supervisor_linux_test.go:157: lost partial query: &{RunID:during-query ResourceStatus:error ChildOutcome:exited StopReason:none ExitCode:0x2759158ae000 Signal: ResultStatus:available ReapStatus:reaped GroupStop:not_needed GroupStatus:cleared WallSeconds:0x2759156d90b8 QueryCleanup:unknown RSSBytes:0x2759158ae008 ProcessVRAMBytes:0x2759158ae010 DeviceVRAMBytes:<nil> MonitoringStatus:complete IntervalSeconds:0.02 QueryTimeoutSeconds:1 Samples:[{AtSeconds:0.000277573 QuerySeconds:0.298108928 ProcessStatus:observed ProcessBytes:0x2759157aa000 DeviceStatus:interrupted DeviceBytes:<nil> OtherProcesses:[]}] LoadSeconds:0x2759158af180 LoadStatus:complete GenerationSeconds:0x2759158af190 GenerationStatus:complete GenerationCalls:0x2759158af1a0 GenerateCompleted:0x2759158af1a8 GenerateFailed:0x2759158af198 Validation:0x2759158dc4c8 TMValidation:0x2759158dc4e0}
+--- FAIL: TestSupervisorKeepsSampleWhenWorkerEndsDuringQuery (0.30s)
+FAIL
+FAIL	github.com/sh4869221b/yakuori/tools/acceptance	0.302s
+FAIL

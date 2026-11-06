@@ -66,7 +66,7 @@ func EffectiveModelProfile(info inference.ModelInfo, limits config.Limits, segme
 		return identity.ProfileInput{}, err
 	}
 	if info.ModelSHA256 == ([32]byte{}) || info.Tokenizer.ModelSHA256 != info.ModelSHA256 || info.PolicySchema != inference.PolicySchemaV1 || info.ContextTokens <= 0 || info.Prefill.Path != info.Backend ||
-		info.Prompt.Schema != prompt.SchemaV1 || (info.Prompt != prompt.PlainIdentity() && info.Prompt != prompt.IndexIdentity()) || info.Thinking != inference.ThinkingDisabled {
+		info.Prompt.Schema != prompt.SchemaV1 || (info.Prompt != prompt.PlainIdentity() && info.Prompt != prompt.IndexIdentity() && info.Prompt != prompt.Plamo3Identity()) || info.Thinking != inference.ThinkingDisabled {
 		return identity.ProfileInput{}, ErrInferenceProfile
 	}
 	kv, cudaPin := info.KVPrecision, info.CUDABackendPin
