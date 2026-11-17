@@ -16,6 +16,7 @@ type PromptSpan struct {
 }
 
 type RequestIdentity struct {
+	RemoteModel            string
 	ModelSHA256            [32]byte
 	Tokenizer              TokenizerIdentity
 	Template               TemplateIdentity
@@ -54,7 +55,7 @@ func NewGenerationRequest(prepared PreparedRequest, policy GenerationPolicy) (Ge
 		spans:          slices.Clone(prepared.Spans),
 		tokenIDs:       slices.Clone(prepared.TokenIDs),
 		identity:       prepared.Identity,
-		policy:         policy.snapshot(prepared.StopIDs),
+		policy:         effectivePolicy(prepared, policy),
 		terms:          prepared.Terms,
 	}, nil
 }
@@ -68,5 +69,15 @@ func (r GenerationRequest) Terms() glossary.Glossary  { return r.terms }
 func (r GenerationRequest) Policy() EffectivePolicy {
 	p := r.policy
 	p.StopIDs = slices.Clone(p.StopIDs)
+	return p
+}
+
+// effectivePolicy preserves local defaults while marking the remote API sampling policy as provider-defined.
+func effectivePolicy(prepared PreparedRequest, policy GenerationPolicy) EffectivePolicy {
+	p := policy.snapshot(prepared.StopIDs)
+	if prepared.Identity.RemoteModel != "" {
+		p.SeedFixed = false
+		p.SamplingMode = "provider-default"
+	}
 	return p
 }

@@ -30,6 +30,7 @@ func (p GenerationPolicy) RequestTimeout() time.Duration { return p.requestTimeo
 // EffectivePolicy records the fixed plain-generation path, including disabled features.
 // It is a returned snapshot, not an input for choosing sampling behavior.
 type EffectivePolicy struct {
+	SamplingMode              string
 	Schema                    int
 	MaxOutputTokens           int
 	RequestTimeout            time.Duration
