@@ -67,13 +67,8 @@ func runWithTranslationOpener(ctx context.Context, args []string, stdout, stderr
 }
 
 func runWithTranslationExecutor(ctx context.Context, args []string, stdout, stderr io.Writer, resolve func() (config.Paths, error), runner fileRunner, open selectedEngineOpener, execute func(translationCommand, context.Context, io.Writer, config.Paths, selectedEngineOpener) (localize.Result, error)) int {
-	fail := func(code int, message string) int {
-		// A failed diagnostic write must still return failure.
-		_, _ = fmt.Fprintf(stderr, "yakuori: %s\n", message)
-		return code
-	}
 	if len(args) == 0 {
-		return fail(ExitUsage, "missing command; use --help")
+		return reportFailure(stderr, ExitUsage, "missing command; use --help")
 	}
 	if args[0] == "models" || args[0] == "doctor" {
 		return runStorage(ctx, args, stdout, stderr, resolve)
@@ -82,9 +77,9 @@ func runWithTranslationExecutor(ctx context.Context, args []string, stdout, stde
 		command, help, err := parseTranslation(args[0], args[1:])
 		if err != nil {
 			if errors.Is(err, errSameLocalizePath) {
-				return fail(ExitUsage, "source and output are the same path; use --in-place")
+				return reportFailure(stderr, ExitUsage, "source and output are the same path; use --in-place")
 			}
-			return fail(ExitUsage, "invalid "+args[0]+" arguments; use --help")
+			return reportFailure(stderr, ExitUsage, "invalid "+args[0]+" arguments; use --help")
 		}
 		if help == "" {
 			ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -110,14 +105,10 @@ func runWithTranslationExecutor(ctx context.Context, args []string, stdout, stde
 			result, err := execute(command, ctx, stdout, paths, open)
 			return reportPipeline(stderr, result, err)
 		}
-		n, err := io.WriteString(stdout, help)
-		if err != nil || n != len(help) {
-			return fail(ExitFailure, "write stdout failed")
-		}
-		return ExitOK
+		return writeOutput(stdout, stderr, help, nil)
 	}
 	if len(args) != 1 {
-		return fail(ExitUsage, "unexpected arguments; use --help")
+		return reportFailure(stderr, ExitUsage, "unexpected arguments; use --help")
 	}
 	var result string
 	switch args[0] {
@@ -126,15 +117,11 @@ func runWithTranslationExecutor(ctx context.Context, args []string, stdout, stde
 	default:
 		// Do not echo user-supplied text into ordinary diagnostics.
 		if strings.HasPrefix(args[0], "-") {
-			return fail(ExitUsage, "unknown option; use --help")
+			return reportFailure(stderr, ExitUsage, "unknown option; use --help")
 		}
-		return fail(ExitUsage, "unknown command; use --help")
+		return reportFailure(stderr, ExitUsage, "unknown command; use --help")
 	}
-	n, err := io.WriteString(stdout, result)
-	if err != nil || n != len(result) {
-		return fail(ExitFailure, "write stdout failed")
-	}
-	return ExitOK
+	return writeOutput(stdout, stderr, result, nil)
 }
 
 func reportPipeline(stderr io.Writer, result localize.Result, err error) int {
@@ -244,7 +231,7 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 		command.options = publication.Options{Source: source, Output: source, Mode: publication.InPlace}
 		return command, "", nil
 	}
-	if !outputSpecified || output == "" || len(flags.Args()) != 1 || flags.Arg(0) == "" {
+	if !outputSpecified || output == "" {
 		return command, "", errInvalidLocalizeArguments
 	}
 	source := flags.Arg(0)

@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/sh4869221b/yakuori/internal/config"
-	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/models"
 )
 
@@ -102,9 +101,7 @@ func inspectStorageItem(output *strings.Builder, item storageItem) error {
 	return nil
 }
 
-type selectedOpener func(context.Context, string) (string, inference.Engine, error)
-
-func checkModel(ctx context.Context, backend string, open selectedOpener) (string, error) {
+func checkModel(ctx context.Context, backend string, open selectedEngineOpener) (string, error) {
 	id, engine, err := open(ctx, backend)
 	if err != nil {
 		return "", fmt.Errorf("check model requested_backend=%s: %s", backend, modelDiagnostic(err))
