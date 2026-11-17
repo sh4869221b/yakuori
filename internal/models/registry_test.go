@@ -121,6 +121,40 @@ func TestManagedReadOnlyMissing(t *testing.T) {
 	}
 }
 
+func TestModelIDInputBoundaries(t *testing.T) {
+	for _, id := range []string{"", "../escape", "with space"} {
+		t.Run(id, func(t *testing.T) {
+			r, _ := fixture(t)
+			if _, err := r.Verify(context.Background(), id); !errors.Is(err, config.ErrInvalidModelID) {
+				t.Fatalf("Verify invalid ID: %v", err)
+			}
+			if err := r.Use(context.Background(), id); !errors.Is(err, config.ErrInvalidModelID) {
+				t.Fatalf("Use invalid ID: %v", err)
+			}
+			for _, path := range []string{r.paths.Data, r.paths.Config, r.paths.Cache} {
+				if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("invalid ID touched storage %s: %v", path, err)
+				}
+			}
+		})
+	}
+	t.Run("invalid persisted selection", func(t *testing.T) {
+		r, source := fixture(t)
+		importOne(t, r, source)
+		if err := r.Use(context.Background(), "one"); err != nil {
+			t.Fatal(err)
+		}
+		write(t, r.storage.ConfigFile, []byte(`{"schema":1,"selected_model":"../escape"}`))
+		r.open = func(context.Context, string, goinfer.Options) (inference.Engine, error) {
+			t.Fatal("opened engine with invalid persisted ID")
+			return nil, nil
+		}
+		if _, engine, err := r.OpenSelected(context.Background(), "cpu"); !errors.Is(err, config.ErrInvalidModelID) || engine != nil {
+			t.Fatalf("OpenSelected accepted invalid persisted ID: %v", err)
+		}
+	})
+}
+
 func TestRegistryEngineBinding(t *testing.T) {
 	for _, backend := range []string{"cpu", "cuda"} {
 		t.Run(backend, func(t *testing.T) {

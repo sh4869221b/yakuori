@@ -108,11 +108,7 @@ func (r *Registry) pull(ctx context.Context, client *http.Client, req PullReques
 	// publishStage owns the stage from here: it commits the model directory and
 	// the registry document, or removes the stage again.
 	owned = ""
-	published, err := r.publishStage(ctx, req.ID, stage, expected)
-	if published == (Entry{}) {
-		return Entry{}, err
-	}
-	return published, err
+	return r.publishStage(ctx, req.ID, stage, expected)
 }
 
 // validatePullRequest rejects an unusable request before any storage is created
