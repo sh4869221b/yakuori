@@ -174,7 +174,7 @@ func (r *Registry) Use(ctx context.Context, id string) (err error) {
 		return err
 	}
 	defer func() { err = errors.Join(err, lock.Close()) }()
-	if _, err := r.Verify(ctx, id); err != nil {
+	if _, err := r.verifyValidated(ctx, id); err != nil {
 		return err
 	}
 	if err := privateDir(r.paths.Config, true); err != nil {

@@ -26,7 +26,7 @@ func (r *Registry) OpenSelected(ctx context.Context, backend string) (string, in
 	if id == "" {
 		return "", nil, errors.New("no model selected")
 	}
-	entry, err := r.Verify(ctx, id)
+	entry, err := r.verifyValidated(ctx, id)
 	if err != nil {
 		return "", nil, err
 	}

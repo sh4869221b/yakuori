@@ -104,6 +104,12 @@ func (r *Registry) Verify(ctx context.Context, id string) (Entry, error) {
 	if err := config.ValidateModelID(id); err != nil {
 		return Entry{}, err
 	}
+	return r.verifyValidated(ctx, id)
+}
+
+// verifyValidated requires an ID already checked at the input or settings boundary.
+// Registry contents and model bytes still require validation on each read.
+func (r *Registry) verifyValidated(ctx context.Context, id string) (Entry, error) {
 	if err := ctx.Err(); err != nil {
 		return Entry{}, err
 	}
