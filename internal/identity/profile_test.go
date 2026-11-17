@@ -252,3 +252,23 @@ func TestProfileIdentityRejectsInvalidInput(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoteFieldsRejectedOnLocalProfiles(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(*identity.ProfileInput)
+	}{
+		{"remote model", func(p *identity.ProfileInput) { p.RemoteModel = "remote" }},
+		{"remote sampling", func(p *identity.ProfileInput) { p.Generation.SamplingMode = "provider-default" }},
+		{"invalid utf8 model", func(p *identity.ProfileInput) { p.RemoteModel = string([]byte{0xff}) }},
+		{"invalid utf8 sampling", func(p *identity.ProfileInput) { p.Generation.SamplingMode = string([]byte{0xff}) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := profileInput()
+			tc.change(&p)
+			if _, err := identity.NewProfileIdentity(p); err == nil {
+				t.Fatal("invalid remote fields accepted")
+			}
+		})
+	}
+}

@@ -14,6 +14,8 @@ import (
 	"syscall"
 
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/inference"
+	openaibackend "github.com/sh4869221b/yakuori/internal/inference/openai"
 	"github.com/sh4869221b/yakuori/internal/localize"
 	"github.com/sh4869221b/yakuori/internal/models"
 	"github.com/sh4869221b/yakuori/internal/publication"
@@ -96,7 +98,14 @@ func runWithTranslationExecutor(ctx context.Context, args []string, stdout, stde
 				return reportPipeline(stderr, localize.Result{}, &localize.Error{Phase: "config", Err: err})
 			}
 			if open == nil {
-				open = models.New(paths).OpenSelected
+				if command.backend == "openai" {
+					open = func(ctx context.Context, _ string) (string, inference.Engine, error) {
+						e, err := openaibackend.NewEngine(command.openaiModel, os.Getenv("OPENAI_API_KEY"))
+						return command.openaiModel, e, err
+					}
+				} else {
+					open = models.New(paths).OpenSelected
+				}
 			}
 			result, err := execute(command, ctx, stdout, paths, open)
 			return reportPipeline(stderr, result, err)
@@ -155,6 +164,7 @@ func reportPipeline(stderr io.Writer, result localize.Result, err error) int {
 
 type translationCommand struct {
 	action, format, sourceLanguage, targetLanguage, backend string
+	openaiModel                                             string
 	scope                                                   tm.Scope
 	options                                                 publication.Options
 }
@@ -171,7 +181,8 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 	flags.StringVar(&command.targetLanguage, "target-language", "", "required target language")
 	flags.StringVar(&command.scope.GameNamespace, "game", "", "required game namespace")
 	flags.StringVar(&command.scope.ArtifactNamespace, "artifact", "", "required artifact namespace")
-	flags.StringVar(&command.backend, "backend", "cpu", "cpu or cuda")
+	flags.StringVar(&command.backend, "backend", "cpu", "cpu, cuda or openai")
+	flags.StringVar(&command.openaiModel, "openai-model", "", "pinned OpenAI model snapshot (required for openai)")
 	if action == "localize" {
 		flags.StringVar(&command.format, "format", "", "required format: text or w3strings (binary Witcher 3 table)")
 		flags.StringVar(&output, "output", "", "write the result to OUT")
@@ -199,7 +210,7 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 	if flags.NArg() != 1 || flags.Arg(0) == "" || flags.Arg(0) == "-" ||
 		command.sourceLanguage == "" || command.targetLanguage == "" ||
 		command.scope.GameNamespace == "" || command.scope.ArtifactNamespace == "" ||
-		command.backend != "cpu" && command.backend != "cuda" {
+		command.backend != "cpu" && command.backend != "cuda" && command.backend != "openai" || (command.backend == "openai") != (command.openaiModel != "") {
 		return command, "", errInvalidLocalizeArguments
 	}
 	if action == "localize" && command.format != "text" && command.format != "w3strings" {
