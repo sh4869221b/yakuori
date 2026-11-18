@@ -279,6 +279,59 @@ func TestLegacyRecoveryReportsOnlyVerifiedBackups(t *testing.T) {
 	}
 }
 
+func TestLegacyRecoveryRejectsLinksAtReplacementDestination(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		link func(string, string) error
+	}{{"symlink", os.Symlink}, {"hardlink", os.Link}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := legacyInPlaceRecord(t, "parent", "source-\xff", backedUpPhase)
+			moveRecoveryFile(t, f.source, f.backup)
+			parent := filepath.Dir(f.source)
+			replacement := filepath.Join(parent, "source-�")
+			target := filepath.Join(parent, "retained-target")
+			putFile(t, target, "unrelated file")
+			if err := tc.link(target, replacement); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.Lstat(replacement)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, request := range []struct{ name, path string }{{"raw", f.source}, {"replacement", replacement}} {
+				t.Run(request.name, func(t *testing.T) {
+					err := scanLegacyRecovery(t, request.path, noRecoveryRename(t))
+					var recovery *RecoveryError
+					if !errors.Is(err, ErrRecoveryConflict) || !errors.As(err, &recovery) || recovery.Reason != legacyPathRecoveryReason ||
+						recovery.Result.State != SourceBackedUp || recovery.Result.RecordPath != f.record ||
+						recovery.Result.BackupPath != f.backup || recovery.Result.OutputPath != request.path {
+						t.Errorf("unexpected recovery diagnostic: %v", err)
+					}
+					if request.path == replacement && (!errors.Is(err, ErrInvalidPath) || (tc.name == "symlink" && !errors.Is(err, unix.ELOOP))) {
+						t.Errorf("missing destination link rejection cause: %v", err)
+					}
+					after, err := os.Lstat(replacement)
+					if err != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() {
+						t.Fatalf("replacement link changed: %v", err)
+					}
+					if tc.name == "symlink" {
+						if got, err := os.Readlink(replacement); err != nil || got != target {
+							t.Fatalf("replacement symlink points to %q: %v", got, err)
+						}
+					} else if got, err := os.Stat(target); err != nil || !os.SameFile(after, got) {
+						t.Fatalf("replacement hardlink target changed: %v", err)
+					}
+					wantAbsent(t, f.source)
+					wantBytes(t, target, "unrelated file")
+					wantBytes(t, f.backup, "original")
+					wantBytes(t, f.record, f.wire)
+					wantBytes(t, f.stage, "translated")
+				})
+			}
+		})
+	}
+}
+
 func TestLegacyRecoveryPreservesUnambiguousUTF8Paths(t *testing.T) {
 	for _, tc := range []struct{ parent, name string }{{"parent", "plain"}, {"parent-�", "valid-�"}, {"parent", `literal-\ufffd`}} {
 		t.Run(tc.name, func(t *testing.T) {

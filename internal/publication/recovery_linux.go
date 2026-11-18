@@ -82,6 +82,9 @@ func (r *Run) reconcileRecord(record operationRecord, dir *directory) (result Re
 	}
 	for _, l := range leaves {
 		if err = observe(l); err != nil {
+			if l == &final && legacyOutputMayBeLossy && errors.Is(err, ErrInvalidPath) {
+				err = errors.Join(errAmbiguousLegacyPath, err)
+			}
 			return result, fmt.Errorf("observe recovery file: %w: %w", ErrRecoveryConflict, err)
 		}
 	}
