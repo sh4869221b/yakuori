@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -117,7 +118,8 @@ func (c *Client) Generate(ctx context.Context, request Request) (Response, error
 			Output int `json:"output_tokens"`
 		} `json:"usage"`
 		Output []struct {
-			Type    string `json:"type"`
+			Type    string  `json:"type"`
+			Phase   *string `json:"phase"`
 			Content []struct {
 				Type string `json:"type"`
 				Text string `json:"text"`
@@ -131,20 +133,37 @@ func (c *Client) Generate(ctx context.Context, request Request) (Response, error
 	if response.Status != "completed" || response.Model != request.Model || response.Usage == nil || response.Usage.Input <= 0 || response.Usage.Output <= 0 {
 		return Response{}, ErrAPI
 	}
-	var text string
+	// A phased response needs an explicit final answer. Older responses omit
+	// phase (or send null), so only fall back when all messages are unphased.
+	phased := false
+	for _, item := range response.Output {
+		if item.Type != "message" || item.Phase == nil {
+			continue
+		}
+		switch *item.Phase {
+		case "commentary", "final_answer":
+			phased = true
+		default:
+			return Response{}, ErrAPI
+		}
+	}
+	var text strings.Builder
 	for _, item := range response.Output {
 		if item.Type != "message" {
 			continue
 		}
+		answer := !phased || (item.Phase != nil && *item.Phase == "final_answer")
 		for _, part := range item.Content {
 			if part.Type != "output_text" {
 				return Response{}, ErrAPI
 			}
-			text += part.Text
+			if answer {
+				text.WriteString(part.Text)
+			}
 		}
 	}
-	if text == "" {
+	if text.Len() == 0 {
 		return Response{}, ErrAPI
 	}
-	return Response{Text: text, InputTokens: response.Usage.Input, OutputTokens: response.Usage.Output}, nil
+	return Response{Text: text.String(), InputTokens: response.Usage.Input, OutputTokens: response.Usage.Output}, nil
 }

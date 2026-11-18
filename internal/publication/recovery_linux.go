@@ -69,14 +69,14 @@ func (r *Run) reconcileRecord(record operationRecord, dir *directory) (result Re
 		leaves = append(leaves, &backup)
 	}
 	for _, l := range leaves {
-		if _, err = observe(l); err != nil {
+		if err = observe(l); err != nil {
 			return result, fmt.Errorf("observe recovery file: %w: %w", ErrRecoveryConflict, err)
 		}
 	}
 	if matchesRecord(backup, record.Source) {
 		result.State = SourceBackedUp
 	}
-	if _, err = observe(&stage); err != nil {
+	if err = observe(&stage); err != nil {
 		return result, fmt.Errorf("observe recovery stage: %w: %w", ErrRecoveryConflict, err)
 	}
 	leaves = append(leaves, &stage)

@@ -81,6 +81,9 @@ func (m *manifest) checkStructure(found []occurrence) error {
 }
 
 func withoutOccurrences(text string, found []occurrence) string {
+	if len(found) == 0 {
+		return text
+	}
 	var payload strings.Builder
 	previous := 0
 	for _, occ := range found {

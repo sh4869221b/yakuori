@@ -41,7 +41,7 @@ func TestPrepareRecoveryRejectsAmbiguity(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if _, err = observe(&stage); err != nil {
+					if err = observe(&stage); err != nil {
 						t.Fatal(err)
 					}
 					record.RunID, record.Stage = id, recordedFile(stage)

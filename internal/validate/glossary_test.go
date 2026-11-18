@@ -2,6 +2,7 @@ package validate
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/sh4869221b/yakuori/internal/glossary"
@@ -125,6 +126,34 @@ func TestValidateGlossaryProtectUsesMatchingBoundaries(t *testing.T) {
 				}
 			} else if err != nil || accepted.Text() != tt.candidate {
 				t.Fatalf("accepted=%v err=%v", accepted, err)
+			}
+		})
+	}
+}
+
+func TestReviewGlossaryProtectedPayload(t *testing.T) {
+	for _, tc := range []struct {
+		name, source, candidate string
+		entry                   glossary.Entry
+		want                    []ReviewCode
+	}{
+		{"protected only", "名前", "名前", glossary.Entry{Source: "名前", Mode: glossary.Protect, Match: glossary.Word}, nil},
+		{"moved protected Japanese", "名前 Hello", "Welcome 名前", glossary.Entry{Source: "名前", Mode: glossary.Protect, Match: glossary.Word}, []ReviewCode{TargetLanguageUncertain}},
+		{"word-only protection", "名前 Hello", "名前名前 名前", glossary.Entry{Source: "名前", Mode: glossary.Protect, Match: glossary.Word}, nil},
+		{"mandatory target is payload", "Name Hello", "Welcome 名前", glossary.Entry{Source: "Name", Target: "名前", Mode: glossary.Mandatory, Match: glossary.Word}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			session, ids, _ := fixture(t, tc.source)
+			accepted, err := Validate(session, ids[0], glossaryProfile(t, tc.entry), tc.candidate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var codes []ReviewCode
+			for _, finding := range accepted.ReviewFindings() {
+				codes = append(codes, finding.Code)
+			}
+			if !slices.Equal(codes, tc.want) {
+				t.Fatalf("findings=%v want=%v", codes, tc.want)
 			}
 		})
 	}

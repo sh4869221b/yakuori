@@ -37,7 +37,8 @@ func Validate(session unit.Session, id unit.UnitID, profile Profile, candidate s
 	if err != nil {
 		return AcceptedTranslation{}, fmt.Errorf("%w: %w", ErrInvalidSource, err)
 	}
-	if err := prepared.CheckRestored(session, id, candidate); err != nil {
+	sourcePayload, candidatePayload, err := prepared.CheckRestoredPayload(session, id, candidate)
+	if err != nil {
 		return AcceptedTranslation{}, fmt.Errorf("%w: %w", ErrInvalidCandidate, err)
 	}
 	if err := checkContent(source, candidate); err != nil {
@@ -57,6 +58,6 @@ func Validate(session unit.Session, id unit.UnitID, profile Profile, candidate s
 			profile: profile,
 		},
 		validated: true,
-		review:    reviewContent(u, source, candidate),
+		review:    reviewContent(u.TargetLanguage(), source, candidate, sourcePayload, candidatePayload),
 	}, nil
 }

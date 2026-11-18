@@ -45,7 +45,7 @@ func Prepare(ctx context.Context, options Options) (*Run, error) {
 	return PrepareWithLimits(ctx, options, config.DefaultLimits())
 }
 
-// PrepareWithLimits bounds the source snapshot; existing output observations are unchanged.
+// PrepareWithLimits bounds the source snapshot and streams existing output digests.
 func PrepareWithLimits(ctx context.Context, options Options, limits config.Limits) (*Run, error) {
 	if err := limits.Check(); err != nil {
 		return nil, err
@@ -110,7 +110,7 @@ func prepareWithLimits(ctx context.Context, options Options, rename renameFunc, 
 	case InPlace:
 		r.output.id, r.output.digest, r.output.present = r.source.id, r.source.digest, true
 	case Create, Replace:
-		if _, err = observe(&r.output); err != nil {
+		if err = observe(&r.output); err != nil {
 			return nil, fmt.Errorf("output: %w", err)
 		}
 		if r.output.present && r.source.id.Dev == r.output.id.Dev && r.source.id.Ino == r.output.id.Ino {

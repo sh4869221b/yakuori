@@ -64,6 +64,39 @@ func TestRefusalFailsClosed(t *testing.T) {
 	}
 }
 
+func TestResponsePhases(t *testing.T) {
+	const commentary = `{"type":"message","phase":"commentary","content":[{"type":"output_text","text":"Preparing translation."}]}`
+	const final = `{"type":"message","phase":"final_answer","content":[{"type":"output_text","text":"こん"},{"type":"output_text","text":"にち"}]}`
+	const finalTail = `{"type":"message","phase":"final_answer","content":[{"type":"output_text","text":"は"}]}`
+	const legacy = `{"type":"message","content":[{"type":"output_text","text":"旧"}]}`
+	const legacyTail = `{"type":"message","phase":null,"content":[{"type":"output_text","text":"式"}]}`
+	for _, tc := range []struct{ name, output, want string }{
+		{"final", commentary + "," + final + "," + finalTail, "こんにちは"},
+		{"legacy", legacy + "," + legacyTail, "旧式"},
+		{"final with unphased", legacy + "," + commentary + "," + finalTail, "は"},
+		{"commentary only", commentary, ""},
+		{"commentary with unphased but no final", commentary + "," + legacy, ""},
+		{"unknown phase", strings.Replace(final, "final_answer", "future", 1), ""},
+		{"empty phase", strings.Replace(final, "final_answer", "", 1), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, _ := New("test-key")
+			client.http.Transport = transport(func(r *http.Request) (*http.Response, error) {
+				body := `{"status":"completed","model":"snapshot","usage":{"input_tokens":4,"output_tokens":3},"output":[` + tc.output + `]}`
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+			})
+			got, err := client.Generate(context.Background(), Request{Model: "snapshot", Timeout: time.Second})
+			if tc.want == "" {
+				if err != ErrAPI || got != (Response{}) {
+					t.Fatalf("got %+v, %v; want rejected response", got, err)
+				}
+			} else if err != nil || got.Text != tc.want {
+				t.Fatalf("got %+v, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
 func TestFailureDoesNotExposeBody(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

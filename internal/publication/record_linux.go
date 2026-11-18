@@ -3,12 +3,14 @@
 package publication
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"unicode/utf8"
 
 	"golang.org/x/sys/unix"
 )
@@ -18,6 +20,9 @@ var ErrRecordTooLarge = errors.New("publication record exceeds 64 KiB")
 type recordPhase string
 
 const (
+	recordUTF8Schema  = 1
+	recordBytesSchema = 2
+
 	preparedPhase  recordPhase = "prepared"
 	backedUpPhase  recordPhase = "source-backed-up"
 	publishedPhase recordPhase = "published"
@@ -60,9 +65,45 @@ func recordedFile(l leaf) recordFile {
 	return recordFile{l.path, l.name, l.id, l.digest, l.id.Size}
 }
 
+func (r *operationRecord) pathFields() []*string {
+	fields := []*string{&r.Source.Path, &r.Source.Basename, &r.Output.Path, &r.Output.Basename, &r.Stage.Path, &r.Stage.Basename}
+	if r.Backup != nil {
+		fields = append(fields, &r.Backup.Path, &r.Backup.Basename)
+	}
+	if f := r.ExistingOutput.File; f != nil {
+		fields = append(fields, &f.Path, &f.Basename)
+	}
+	return fields
+}
+
+func encodeRecord(record operationRecord) ([]byte, error) {
+	// Rewriting a recovery snapshot must not mutate its decoded paths.
+	if record.Backup != nil {
+		backup := *record.Backup
+		record.Backup = &backup
+	}
+	if record.ExistingOutput.File != nil {
+		file := *record.ExistingOutput.File
+		record.ExistingOutput.File = &file
+	}
+	fields := record.pathFields()
+	for _, field := range fields {
+		if !utf8.ValidString(*field) {
+			record.SchemaVersion = recordBytesSchema
+			break
+		}
+	}
+	if record.SchemaVersion == recordBytesSchema {
+		for _, field := range fields {
+			*field = base64.RawStdEncoding.EncodeToString([]byte(*field))
+		}
+	}
+	return json.Marshal(record)
+}
+
 func (r *Run) writeRecord(phase recordPhase, operation string) error {
 	record := operationRecord{
-		SchemaVersion: 1, RunID: r.runID, Mode: r.mode,
+		SchemaVersion: recordUTF8Schema, RunID: r.runID, Mode: r.mode,
 		Source: recordedFile(r.source), Output: recordPath{r.output.path, r.output.name}, Stage: recordedFile(r.stage),
 		SourceParent: r.source.parent.id, OutputParent: r.output.parent.id,
 		Phase: phase, LastCompletedOperation: operation,
@@ -88,7 +129,7 @@ type recordWriter struct {
 }
 
 func (w recordWriter) write(record operationRecord, name string) (err error) {
-	b, err := json.Marshal(record)
+	b, err := encodeRecord(record)
 	if err != nil {
 		return fmt.Errorf("encode publication record: %w", err)
 	}

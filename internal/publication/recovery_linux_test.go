@@ -31,6 +31,54 @@ func moveRecoveryFile(t *testing.T, from, to string) {
 	}
 }
 
+func TestRecoveryRestoresNonUTF8Filename(t *testing.T) {
+	for _, phase := range []recordPhase{preparedPhase, backedUpPhase} {
+		t.Run(string(phase), func(t *testing.T) {
+			root := publicationFixture(t)
+			parent := filepath.Join(root, "dir-\xfe")
+			if err := os.Mkdir(parent, 0700); err != nil {
+				t.Fatal(err)
+			}
+			source := filepath.Join(parent, "source-\xff")
+			putFile(t, source, "original")
+			options := Options{source, source, InPlace}
+			r, err := Prepare(context.Background(), options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { closeRun(t, r) })
+			stageBytes(t, r, "translated")
+			if err := r.writeRecord(preparedPhase, "none"); err != nil {
+				t.Fatal(err)
+			}
+			moveRecoveryFile(t, source, r.backupPath())
+			if phase == backedUpPhase {
+				if err := r.writeRecord(backedUpPhase, "backup-rename"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			closeRun(t, r)
+			next, err := Prepare(context.Background(), options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { closeRun(t, next) })
+			wantBytes(t, source, "original")
+			wantBytes(t, r.stage.path, "translated")
+			wantAbsent(t, r.backupPath())
+			stage, err := openParent(r.stage.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = stage.parent.file.Close() })
+			got, err := readRecord(stage.parent)
+			if err != nil || got.Phase != restoredPhase || got.Output.Path != source {
+				t.Fatalf("recovery record: %+v, %v", got, err)
+			}
+		})
+	}
+}
+
 func TestRecoveryDecisionTable(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

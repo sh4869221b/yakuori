@@ -4,6 +4,7 @@ package publication
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/sys/unix"
 )
@@ -97,6 +99,9 @@ func recordFields(b []byte, keys string) (map[string]json.RawMessage, error) {
 }
 
 func parseRecord(b []byte, dir *directory) (operationRecord, error) {
+	if !utf8.Valid(b) {
+		return operationRecord{}, fmt.Errorf("record is not UTF-8 JSON: %w", ErrInvalidRecord)
+	}
 	fields, err := recordFields(b, "schema_version run_id mode source output stage backup source_parent output_parent existing_output phase last_completed_operation")
 	if err != nil {
 		return operationRecord{}, err
@@ -133,6 +138,19 @@ func parseRecord(b []byte, dir *directory) (operationRecord, error) {
 		// Decoder errors can quote arbitrary JSON values; keep file bodies private.
 		return operationRecord{}, fmt.Errorf("invalid record field type: %w", ErrInvalidRecord)
 	}
+	switch record.SchemaVersion {
+	case recordUTF8Schema:
+	case recordBytesSchema:
+		for _, field := range record.pathFields() {
+			decoded, err := base64.RawStdEncoding.Strict().DecodeString(*field)
+			if err != nil || base64.RawStdEncoding.EncodeToString(decoded) != *field {
+				return operationRecord{}, fmt.Errorf("invalid record path encoding: %w", ErrInvalidRecord)
+			}
+			*field = string(decoded)
+		}
+	default:
+		return operationRecord{}, fmt.Errorf("record schema: %w", ErrInvalidRecord)
+	}
 	if err = validateRecord(record, dir); err != nil {
 		return operationRecord{}, err
 	}
@@ -141,8 +159,8 @@ func parseRecord(b []byte, dir *directory) (operationRecord, error) {
 
 func validateRecord(r operationRecord, dir *directory) error {
 	invalid := func(reason string) error { return fmt.Errorf("%s: %w", reason, ErrInvalidRecord) }
-	if r.SchemaVersion != 1 || !recordHex(r.RunID, 32) {
-		return invalid("record schema/run ID")
+	if !recordHex(r.RunID, 32) {
+		return invalid("record run ID")
 	}
 	if !validRecordPath(r.Output) || !validRecordFile(r.Source) || !validRecordFile(r.Stage) {
 		return invalid("record paths/files")

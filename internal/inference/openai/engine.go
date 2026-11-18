@@ -29,7 +29,8 @@ func NewEngine(model, key string) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Engine{client: client, info: inference.ModelInfo{RemoteModel: model, Backend: "openai", RequestedBackend: "openai", BackendPin: "responses-v1", ComputeQuant: "provider-managed", KVPrecision: "not-applicable", Tokenizer: inference.TokenizerIdentity{BackendPin: "openai-server"}, Prefill: inference.PrefillPolicy{Path: "none"}, Thinking: "provider-default", ContextTokens: config.DefaultLimits().ContextTokens, PolicySchema: inference.PolicySchemaV1, Prompt: prompt.PlainIdentity(), Template: inference.TemplateIdentity{Family: "openai-responses", Source: "openai", RendererVersion: "v1"}}}, nil
+	// Bump the profile pin so previously saved commentary cannot be reused from TM.
+	return &Engine{client: client, info: inference.ModelInfo{RemoteModel: model, Backend: "openai", RequestedBackend: "openai", BackendPin: "responses-v2", ComputeQuant: "provider-managed", KVPrecision: "not-applicable", Tokenizer: inference.TokenizerIdentity{BackendPin: "openai-server"}, Prefill: inference.PrefillPolicy{Path: "none"}, Thinking: "provider-default", ContextTokens: config.DefaultLimits().ContextTokens, PolicySchema: inference.PolicySchemaV1, Prompt: prompt.PlainIdentity(), Template: inference.TemplateIdentity{Family: "openai-responses", Source: "openai", RendererVersion: "v1"}}}, nil
 }
 func (e *Engine) Info(ctx context.Context) (inference.ModelInfo, error) {
 	if err := ctx.Err(); err != nil {
