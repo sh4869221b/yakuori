@@ -22,7 +22,7 @@
 - 最初にwhole unitのadmissionを試す。
 - 分割候補は長いものから試し、token countの単調性を仮定しない。
 - request identityとpolicyは同じplan内で一致させる。
-- CountTokensの結果は正値かつ `len(TokenIDs())` と一致する。
+- CountTokensの結果は正値。token IDを持たないremote modelのrequestはserver countを使用し、それ以外では `len(TokenIDs())` と一致させる。
 - prompt tokensとmax output tokensの両方がcontext内に収まる必要がある。
 - 生成不要Pieceには空request・token数0を保持する。
 - 先頭separatorと各segment後方separatorは元のまま保持する。

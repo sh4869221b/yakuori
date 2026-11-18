@@ -178,33 +178,49 @@ func (p Prepared) Restore(session unit.Session, id unit.UnitID, candidate string
 
 // CheckRestored applies the same source structure contract to a restored candidate.
 func (p Prepared) CheckRestored(session unit.Session, id unit.UnitID, text string) error {
+	_, err := p.checkRestored(session, id, text)
+	return err
+}
+
+// CheckRestoredPayload validates a restored candidate and returns the source and
+// candidate text with their protected occurrences removed.
+func (p Prepared) CheckRestoredPayload(session unit.Session, id unit.UnitID, text string) (source, candidate string, err error) {
+	candidate, err = p.checkRestored(session, id, text)
+	if err != nil {
+		return "", "", err
+	}
+	return withoutOccurrences(p.data.source, p.data.occurrences), candidate, nil
+}
+
+func (p Prepared) checkRestored(session unit.Session, id unit.UnitID, text string) (string, error) {
 	if err := p.checkBinding(session, id); err != nil {
-		return err
+		return "", err
 	}
 	if err := checkText(text); err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidCandidate, err)
+		return "", fmt.Errorf("%w: %v", ErrInvalidCandidate, err)
 	}
 	m := p.data
 	if strings.Contains(text, m.prefix) || !maps.Equal(reservedTokens(text), m.sourceReserved) {
-		return fmt.Errorf("%w: unrestored or unknown reserved token", ErrInvalidCandidate)
+		return "", fmt.Errorf("%w: unrestored or unknown reserved token", ErrInvalidCandidate)
 	}
 	observed, err := m.scanLiterals(text)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidCandidate, err)
+		return "", fmt.Errorf("%w: %v", ErrInvalidCandidate, err)
 	}
 	if err := m.checkStructure(observed); err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidCandidate, err)
+		return "", fmt.Errorf("%w: %v", ErrInvalidCandidate, err)
 	}
 	if (m.source == "") != (text == "") {
-		return fmt.Errorf("%w: source and candidate emptiness differ", ErrInvalidCandidate)
+		return "", fmt.Errorf("%w: source and candidate emptiness differ", ErrInvalidCandidate)
 	}
 	if !m.generationRequired && text != m.source {
-		return fmt.Errorf("%w: generation-free unit differs from source", ErrInvalidCandidate)
+		return "", fmt.Errorf("%w: generation-free unit differs from source", ErrInvalidCandidate)
 	}
-	if m.payloadRequired && strings.TrimSpace(withoutOccurrences(text, observed)) == "" {
-		return fmt.Errorf("%w: nonprotected payload missing", ErrInvalidCandidate)
+	payload := withoutOccurrences(text, observed)
+	if m.payloadRequired && strings.TrimSpace(payload) == "" {
+		return "", fmt.Errorf("%w: nonprotected payload missing", ErrInvalidCandidate)
 	}
-	return nil
+	return payload, nil
 }
 
 func checkText(text string) error {

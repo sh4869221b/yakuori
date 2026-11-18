@@ -115,9 +115,12 @@ func openParent(path string) (_ leaf, err error) {
 	return leaf{parent: &directory{f, id, filepath.Dir(abs)}, name: name, path: abs, lookupPath: lookupPath}, nil
 }
 
-func observe(l *leaf) ([]byte, error) { return observeLimit(l, 0) }
+func observe(l *leaf) error {
+	_, err := observeLimit(l, 0)
+	return err
+}
 
-// A zero limit is used only for existing output/recovery observations.
+// A zero limit records identity and digest without retaining the file bytes.
 func observeLimit(l *leaf, limit int) (_ []byte, err error) {
 	// O_NONBLOCK avoids hanging on a FIFO before its file type is checked.
 	fd, err := unix.Openat(int(l.parent.file.Fd()), l.name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
@@ -137,10 +140,31 @@ func observeLimit(l *leaf, limit int) (_ []byte, err error) {
 		return nil, ErrInvalidPath
 	}
 	var b []byte
+	var size int64
+	var digest string
 	if limit > 0 {
 		b, err = readSource(f, id.Size, limit)
+		if err == nil {
+			size = int64(len(b))
+			h := sha256.Sum256(b)
+			digest = hex.EncodeToString(h[:])
+		}
 	} else {
-		b, err = io.ReadAll(f)
+		h := sha256.New()
+		size, err = io.Copy(h, io.LimitReader(f, id.Size))
+		if err == nil && size == id.Size {
+			// Some regular-looking files expose more data than stat reports.
+			var extra [1]byte
+			if _, err = io.ReadFull(f, extra[:]); err == nil {
+				return nil, fmt.Errorf("leaf has data past its stat size: %w", ErrInvalidPath)
+			}
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+		}
+		if err == nil {
+			digest = hex.EncodeToString(h.Sum(nil))
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read leaf: %w", err)
@@ -149,11 +173,10 @@ func observeLimit(l *leaf, limit int) (_ []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if after != id || int64(len(b)) != id.Size {
+	if after != id || size != id.Size {
 		return nil, fmt.Errorf("leaf changed during snapshot: %w", ErrInvalidPath)
 	}
-	h := sha256.Sum256(b)
-	l.id, l.digest, l.present = id, hex.EncodeToString(h[:]), true
+	l.id, l.digest, l.present = id, digest, true
 	return b, nil
 }
 

@@ -3,8 +3,6 @@ package validate
 import (
 	"strings"
 	"unicode"
-
-	"github.com/sh4869221b/yakuori/internal/unit"
 )
 
 type ReviewCode string
@@ -46,9 +44,8 @@ func (a AcceptedTranslation) ReviewFindings() []ReviewFinding {
 	return findings
 }
 
-func reviewContent(u unit.TranslationUnit, source, candidate string) reviewFlags {
-	spans := u.ProtectionSpans()
-	if strings.TrimSpace(reviewPayload(source, source, spans)) == "" {
+func reviewContent(targetLanguage, source, candidate, sourcePayload, candidatePayload string) reviewFlags {
+	if strings.TrimSpace(sourcePayload) == "" {
 		return 0
 	}
 	var flags reviewFlags
@@ -58,21 +55,10 @@ func reviewContent(u unit.TranslationUnit, source, candidate string) reviewFlags
 			flags |= possibleProperNameFlag
 		}
 	}
-	if u.TargetLanguage() == "ja" {
-		payload := reviewPayload(candidate, source, spans)
-		if !strings.ContainsFunc(payload, func(r rune) bool { return unicode.In(r, unicode.Hiragana, unicode.Katakana, unicode.Han) }) {
-			flags |= targetLanguageUncertainFlag
-		}
+	if targetLanguage == "ja" && !strings.ContainsFunc(candidatePayload, func(r rune) bool { return unicode.In(r, unicode.Hiragana, unicode.Katakana, unicode.Han) }) {
+		flags |= targetLanguageUncertainFlag
 	}
 	return flags
-}
-
-func reviewPayload(text, source string, spans []unit.ProtectionSpan) string {
-	replacements := make([]string, 0, len(spans)*2)
-	for _, span := range spans {
-		replacements = append(replacements, source[span.Start:span.End], "")
-	}
-	return strings.NewReplacer(replacements...).Replace(text)
 }
 
 func possibleProperName(source string) bool {

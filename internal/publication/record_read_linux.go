@@ -4,6 +4,7 @@ package publication
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/sys/unix"
 )
@@ -97,6 +99,9 @@ func recordFields(b []byte, keys string) (map[string]json.RawMessage, error) {
 }
 
 func parseRecord(b []byte, dir *directory) (operationRecord, error) {
+	if !utf8.Valid(b) {
+		return operationRecord{}, fmt.Errorf("record is not UTF-8 JSON: %w", ErrInvalidRecord)
+	}
 	fields, err := recordFields(b, "schema_version run_id mode source output stage backup source_parent output_parent existing_output phase last_completed_operation")
 	if err != nil {
 		return operationRecord{}, err
@@ -133,6 +138,19 @@ func parseRecord(b []byte, dir *directory) (operationRecord, error) {
 		// Decoder errors can quote arbitrary JSON values; keep file bodies private.
 		return operationRecord{}, fmt.Errorf("invalid record field type: %w", ErrInvalidRecord)
 	}
+	switch record.SchemaVersion {
+	case recordUTF8Schema:
+	case recordBytesSchema:
+		for _, field := range record.pathFields() {
+			decoded, err := base64.RawStdEncoding.Strict().DecodeString(*field)
+			if err != nil || base64.RawStdEncoding.EncodeToString(decoded) != *field {
+				return operationRecord{}, fmt.Errorf("invalid record path encoding: %w", ErrInvalidRecord)
+			}
+			*field = string(decoded)
+		}
+	default:
+		return operationRecord{}, fmt.Errorf("record schema: %w", ErrInvalidRecord)
+	}
 	if err = validateRecord(record, dir); err != nil {
 		return operationRecord{}, err
 	}
@@ -141,8 +159,8 @@ func parseRecord(b []byte, dir *directory) (operationRecord, error) {
 
 func validateRecord(r operationRecord, dir *directory) error {
 	invalid := func(reason string) error { return fmt.Errorf("%s: %w", reason, ErrInvalidRecord) }
-	if r.SchemaVersion != 1 || !recordHex(r.RunID, 32) {
-		return invalid("record schema/run ID")
+	if !recordHex(r.RunID, 32) {
+		return invalid("record run ID")
 	}
 	if !validRecordPath(r.Output) || !validRecordFile(r.Source) || !validRecordFile(r.Stage) {
 		return invalid("record paths/files")
@@ -153,7 +171,13 @@ func validateRecord(r operationRecord, dir *directory) error {
 		}
 	}
 	wantDir := filepath.Join(filepath.Dir(r.Output.Path), ".yakuori-run-"+r.RunID)
-	if dir.path != wantDir || r.Stage.Path != filepath.Join(wantDir, "stage") || r.Stage.Basename != "stage" ||
+	dirPath := dir.path
+	if r.SchemaVersion == recordUTF8Schema {
+		// A lossy directory spelling is enough to recognize retained evidence.
+		// Recovery still checks the identities and original pathname before acting.
+		dirPath = legacyPathSpelling(dirPath)
+	}
+	if dirPath != wantDir || r.Stage.Path != filepath.Join(wantDir, "stage") || r.Stage.Basename != "stage" ||
 		r.Stage.Identity.Dev != r.OutputParent.Dev || r.Stage.Identity.MountID != r.OutputParent.MountID ||
 		dir.id.Dev != r.OutputParent.Dev || dir.id.MountID != r.OutputParent.MountID {
 		return invalid("record run/stage location")
@@ -170,14 +194,23 @@ func validateRecord(r operationRecord, dir *directory) error {
 	samePath := sameDirectory(r.SourceParent, r.OutputParent) && r.Source.Basename == r.Output.Basename
 	switch r.Mode {
 	case InPlace:
+		backupName := backupBasename(r.RunID)
 		if !samePath || r.Source.Path != r.Output.Path || r.Backup == nil || !validRecordPath(*r.Backup) ||
-			r.Backup.Path != filepath.Join(filepath.Dir(r.Source.Path), ".yakuori-backup-"+r.RunID) ||
-			r.Backup.Basename != ".yakuori-backup-"+r.RunID || r.ExistingOutput.File == nil || *r.ExistingOutput.File != r.Source {
+			r.Backup.Path != filepath.Join(filepath.Dir(r.Source.Path), backupName) ||
+			r.Backup.Basename != backupName || r.ExistingOutput.File == nil || *r.ExistingOutput.File != r.Source {
 			return invalid("record in-place relation")
 		}
 	case Create, Replace:
-		if samePath || r.Source.Path == r.Output.Path || r.Backup != nil || (r.Mode == Create && !r.ExistingOutput.Absent) {
+		if r.Backup != nil || (r.Mode == Create && !r.ExistingOutput.Absent) {
 			return invalid("record ordinary mode relation")
+		}
+		if samePath || r.Source.Path == r.Output.Path {
+			if !r.hasLegacyPathCollision() {
+				return invalid("record ordinary mode relation")
+			}
+			if f := r.ExistingOutput.File; f != nil && f.Identity.Dev == r.Source.Identity.Dev && f.Identity.Ino == r.Source.Identity.Ino {
+				return invalid("record existing output aliases source")
+			}
 		}
 	default:
 		return invalid("record mode")
@@ -205,6 +238,26 @@ func validateRecord(r operationRecord, dir *directory) error {
 		return invalid("record phase/operation")
 	}
 	return nil
+}
+
+// A legacy record may describe two distinct paths with the same lossy spelling.
+// Accept this for discovery only. An applicable pending record needs manual recovery.
+func (r operationRecord) hasLegacyPathCollision() bool {
+	if r.SchemaVersion != recordUTF8Schema || (r.Mode != Create && r.Mode != Replace) {
+		return false
+	}
+	if sameDirectory(r.SourceParent, r.OutputParent) {
+		return r.Source.Basename == r.Output.Basename && strings.ContainsRune(r.Output.Basename, utf8.RuneError)
+	}
+	return r.Source.Path == r.Output.Path && strings.ContainsRune(filepath.Dir(r.Output.Path), utf8.RuneError)
+}
+
+// Legacy JSON replaced each invalid UTF-8 byte with U+FFFD.
+func legacyPathSpelling(path string) string {
+	if utf8.ValidString(path) {
+		return path
+	}
+	return string([]rune(path))
 }
 
 func validRecordPath(p recordPath) bool {
