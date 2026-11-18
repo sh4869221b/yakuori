@@ -57,8 +57,12 @@ func (r *Run) reconcileRecord(record operationRecord, dir *directory) (result Re
 	if record.hasLegacyPathCollision() {
 		return result, errAmbiguousLegacyPath
 	}
+	legacyOutputMayBeLossy := record.SchemaVersion == recordUTF8Schema && strings.ContainsRune(record.Output.Basename, utf8.RuneError)
 	backup, err := r.observeRecoveryBackup(record, &result)
 	if err != nil {
+		if legacyOutputMayBeLossy && errors.Is(err, ErrInvalidPath) {
+			err = errors.Join(errAmbiguousLegacyPath, err)
+		}
 		return result, err
 	}
 	source, err := r.recoveryLeaf(recordPath{record.Source.Path, record.Source.Basename}, record.SourceParent)
@@ -86,7 +90,7 @@ func (r *Run) reconcileRecord(record operationRecord, dir *directory) (result Re
 	}
 	// Schema 1 cannot distinguish a literal replacement rune from an invalid
 	// byte. Require a known file at that spelling before reconciling the record.
-	if record.SchemaVersion == recordUTF8Schema && strings.ContainsRune(record.Output.Basename, utf8.RuneError) {
+	if legacyOutputMayBeLossy {
 		existing := record.ExistingOutput.File
 		if !matchesRecord(final, record.Stage) && (existing == nil || !matchesRecord(final, *existing)) {
 			return result, errAmbiguousLegacyPath

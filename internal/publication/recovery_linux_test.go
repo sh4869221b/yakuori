@@ -208,7 +208,7 @@ func TestLegacyRecoveryRejectsAmbiguousPathSpellings(t *testing.T) {
 }
 
 func TestLegacyRecoveryReportsOnlyVerifiedBackups(t *testing.T) {
-	for _, kind := range []string{"wrong run ID", "wrong inode", "wrong digest", "symlink"} {
+	for _, kind := range []string{"wrong run ID", "wrong inode", "wrong digest", "symlink", "hardlink"} {
 		t.Run(kind, func(t *testing.T) {
 			f := legacyInPlaceRecord(t, "parent", "source-\xff", backedUpPhase)
 			retained := filepath.Join(filepath.Dir(f.backup), ".yakuori-backup-fedcba0987654321fedcba0987654321")
@@ -225,6 +225,19 @@ func TestLegacyRecoveryReportsOnlyVerifiedBackups(t *testing.T) {
 				if err := os.Symlink(retained, f.backup); err != nil {
 					t.Fatal(err)
 				}
+			case "hardlink":
+				if err := os.Link(retained, f.backup); err != nil {
+					t.Fatal(err)
+				}
+			}
+			linked := kind == "symlink" || kind == "hardlink"
+			var linkBefore os.FileInfo
+			if linked {
+				var err error
+				linkBefore, err = os.Lstat(f.backup)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			for _, requested := range []string{f.source, filepath.Join(filepath.Dir(f.source), "source-�")} {
 				err := scanLegacyRecovery(t, requested, noRecoveryRename(t))
@@ -233,8 +246,17 @@ func TestLegacyRecoveryReportsOnlyVerifiedBackups(t *testing.T) {
 					recovery.Result.RecordPath != f.record || recovery.Result.BackupPath != f.backup || recovery.Result.OutputPath != requested {
 					t.Errorf("request %q: unexpected recovery diagnostic: %v", requested, err)
 				}
-				if kind == "symlink" && !errors.Is(err, ErrInvalidPath) {
-					t.Errorf("request %q: unchecked backup symlink: %v", requested, err)
+				if linked {
+					if !errors.Is(err, ErrInvalidPath) || recovery == nil || recovery.Reason != legacyPathRecoveryReason {
+						t.Errorf("request %q: expected unsafe backup and manual reconciliation reason: %v", requested, err)
+					}
+					after, statErr := os.Lstat(f.backup)
+					if statErr != nil || !os.SameFile(linkBefore, after) || linkBefore.Mode() != after.Mode() {
+						t.Fatalf("request %q changed the backup link: %v", requested, statErr)
+					}
+				}
+				if kind == "symlink" && !errors.Is(err, unix.ELOOP) {
+					t.Errorf("request %q: missing no-follow error: %v", requested, err)
 				}
 				wantAbsent(t, requested)
 			}
@@ -242,6 +264,16 @@ func TestLegacyRecoveryReportsOnlyVerifiedBackups(t *testing.T) {
 			wantBytes(t, f.stage, "translated")
 			if kind != "wrong digest" {
 				wantBytes(t, retained, "original")
+			}
+			switch kind {
+			case "symlink":
+				if target, err := os.Readlink(f.backup); err != nil || target != retained {
+					t.Fatalf("backup symlink target = %q, error = %v", target, err)
+				}
+			case "hardlink":
+				if target, err := os.Stat(retained); err != nil || !os.SameFile(linkBefore, target) {
+					t.Fatalf("backup hardlink target changed: %v", err)
+				}
 			}
 		})
 	}
