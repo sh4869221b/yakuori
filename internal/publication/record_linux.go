@@ -170,6 +170,8 @@ func (w recordWriter) write(record operationRecord, name string) (err error) {
 	return nil
 }
 
-func (r *Run) backupName() string { return ".yakuori-backup-" + r.runID }
+func backupBasename(runID string) string { return ".yakuori-backup-" + runID }
+
+func (r *Run) backupName() string { return backupBasename(r.runID) }
 
 func (r *Run) backupPath() string { return filepath.Join(r.source.parent.path, r.backupName()) }

@@ -75,14 +75,16 @@ func (r *Run) recoverPendingRecords(ctx context.Context) (err error) {
 		if !sameDirectory(record.OutputParent, r.output.parent.id) {
 			return errors.Join(&RecoveryError{Result: result, Reason: "recorded output parent differs", Cause: ErrRecoveryConflict}, closeCandidate())
 		}
-		if record.SchemaVersion == recordUTF8Schema && (record.Output.Path != r.output.path ||
-			(record.Source.Path != r.source.path && record.Source.Path == legacyPathSpelling(r.source.path))) {
+		legacyPathMismatch := record.SchemaVersion == recordUTF8Schema && (record.Output.Path != r.output.path ||
+			(record.Source.Path != r.source.path && record.Source.Path == legacyPathSpelling(r.source.path)))
+		if record.hasLegacyPathCollision() || legacyPathMismatch {
 			result.OutputPath = r.output.path
 			if record.Backup != nil {
-				// The validated backup basename is fixed by run ID. Use its actual locked parent.
-				result.BackupPath = filepath.Join(r.output.parent.path, record.Backup.Basename)
+				result.BackupPath = filepath.Join(r.output.parent.path, backupBasename(record.RunID))
 			}
-			return errors.Join(&RecoveryError{Result: result, Reason: legacyPathRecoveryReason, Cause: errAmbiguousLegacyPath}, closeCandidate())
+			_, backupErr := r.observeRecoveryBackup(record, &result)
+			cause := errors.Join(errAmbiguousLegacyPath, backupErr)
+			return errors.Join(&RecoveryError{Result: result, Reason: legacyPathRecoveryReason, Cause: cause}, closeCandidate())
 		}
 		if record.Source.Path != r.source.path || record.Source.Basename != r.source.name || !sameDirectory(record.SourceParent, r.source.parent.id) {
 			return errors.Join(&RecoveryError{Result: result, Reason: "recorded source or parent differs", Cause: ErrRecoveryConflict}, closeCandidate())

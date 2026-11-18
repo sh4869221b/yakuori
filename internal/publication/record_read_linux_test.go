@@ -81,6 +81,43 @@ func TestRecordPreservesLiteralReplacementRune(t *testing.T) {
 	testRecordPreservesPathBytes(t, "dir-�", "name-�")
 }
 
+func TestCollidingLegacyRecordKeepsStructuralChecks(t *testing.T) {
+	f := legacyRecord(t, "parent", "slot-\xff", "slot-\xfe", Replace, preparedPhase)
+	stage, err := openParent(f.stage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stage.parent.file.Close() })
+	for _, tc := range []struct {
+		name   string
+		change func(*operationRecord)
+	}{
+		{"plain same path", func(r *operationRecord) {
+			r.Output.Basename = "plain"
+			r.Output.Path = filepath.Join(filepath.Dir(r.Output.Path), r.Output.Basename)
+			r.Source.Path, r.Source.Basename = r.Output.Path, r.Output.Basename
+			r.ExistingOutput.File.Path, r.ExistingOutput.File.Basename = r.Output.Path, r.Output.Basename
+		}},
+		{"lossless schema", func(r *operationRecord) { r.SchemaVersion = recordBytesSchema }},
+		{"create with existing output", func(r *operationRecord) { r.Mode = Create }},
+		{"ordinary mode with backup", func(r *operationRecord) { r.Backup = &r.Output }},
+		{"existing output aliases source", func(r *operationRecord) { r.ExistingOutput.File = &r.Source }},
+		{"wrong operation", func(r *operationRecord) { r.LastCompletedOperation = "backup-rename" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			record := readOperationRecord(t, f.record)
+			tc.change(&record)
+			b, err := encodeRecord(record)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = parseRecord(b, stage.parent); !errors.Is(err, ErrInvalidRecord) {
+				t.Fatalf("invalid record accepted: %v", err)
+			}
+		})
+	}
+}
+
 func testRecordPreservesPathBytes(t *testing.T, parentName, sourceName string) {
 	t.Helper()
 	root := t.TempDir()

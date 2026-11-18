@@ -194,14 +194,23 @@ func validateRecord(r operationRecord, dir *directory) error {
 	samePath := sameDirectory(r.SourceParent, r.OutputParent) && r.Source.Basename == r.Output.Basename
 	switch r.Mode {
 	case InPlace:
+		backupName := backupBasename(r.RunID)
 		if !samePath || r.Source.Path != r.Output.Path || r.Backup == nil || !validRecordPath(*r.Backup) ||
-			r.Backup.Path != filepath.Join(filepath.Dir(r.Source.Path), ".yakuori-backup-"+r.RunID) ||
-			r.Backup.Basename != ".yakuori-backup-"+r.RunID || r.ExistingOutput.File == nil || *r.ExistingOutput.File != r.Source {
+			r.Backup.Path != filepath.Join(filepath.Dir(r.Source.Path), backupName) ||
+			r.Backup.Basename != backupName || r.ExistingOutput.File == nil || *r.ExistingOutput.File != r.Source {
 			return invalid("record in-place relation")
 		}
 	case Create, Replace:
-		if samePath || r.Source.Path == r.Output.Path || r.Backup != nil || (r.Mode == Create && !r.ExistingOutput.Absent) {
+		if r.Backup != nil || (r.Mode == Create && !r.ExistingOutput.Absent) {
 			return invalid("record ordinary mode relation")
+		}
+		if samePath || r.Source.Path == r.Output.Path {
+			if !r.hasLegacyPathCollision() {
+				return invalid("record ordinary mode relation")
+			}
+			if f := r.ExistingOutput.File; f != nil && f.Identity.Dev == r.Source.Identity.Dev && f.Identity.Ino == r.Source.Identity.Ino {
+				return invalid("record existing output aliases source")
+			}
 		}
 	default:
 		return invalid("record mode")
@@ -229,6 +238,18 @@ func validateRecord(r operationRecord, dir *directory) error {
 		return invalid("record phase/operation")
 	}
 	return nil
+}
+
+// A legacy record may describe two distinct paths with the same lossy spelling.
+// Accept this for discovery only. An applicable pending record needs manual recovery.
+func (r operationRecord) hasLegacyPathCollision() bool {
+	if r.SchemaVersion != recordUTF8Schema || (r.Mode != Create && r.Mode != Replace) {
+		return false
+	}
+	if sameDirectory(r.SourceParent, r.OutputParent) {
+		return r.Source.Basename == r.Output.Basename && strings.ContainsRune(r.Output.Basename, utf8.RuneError)
+	}
+	return r.Source.Path == r.Output.Path && strings.ContainsRune(filepath.Dir(r.Output.Path), utf8.RuneError)
 }
 
 // Legacy JSON replaced each invalid UTF-8 byte with U+FFFD.

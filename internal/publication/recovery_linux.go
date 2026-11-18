@@ -54,6 +54,13 @@ func (r *Run) reconcileRecord(record operationRecord, dir *directory) (result Re
 	case abandonedPhase:
 		return result, nil
 	}
+	if record.hasLegacyPathCollision() {
+		return result, errAmbiguousLegacyPath
+	}
+	backup, err := r.observeRecoveryBackup(record, &result)
+	if err != nil {
+		return result, err
+	}
 	source, err := r.recoveryLeaf(recordPath{record.Source.Path, record.Source.Basename}, record.SourceParent)
 	if err != nil {
 		return result, err
@@ -69,18 +76,13 @@ func (r *Run) reconcileRecord(record operationRecord, dir *directory) (result Re
 	if record.Mode != InPlace {
 		leaves = append(leaves, &source)
 	}
-	backup := leaf{parent: source.parent}
-	if record.Backup != nil {
-		backup.name, backup.path, backup.lookupPath = record.Backup.Basename, record.Backup.Path, record.Backup.Path
-		leaves = append(leaves, &backup)
-	}
 	for _, l := range leaves {
 		if err = observe(l); err != nil {
 			return result, fmt.Errorf("observe recovery file: %w: %w", ErrRecoveryConflict, err)
 		}
 	}
-	if matchesRecord(backup, record.Source) {
-		result.State = SourceBackedUp
+	if record.Backup != nil {
+		leaves = append(leaves, &backup)
 	}
 	// Schema 1 cannot distinguish a literal replacement rune from an invalid
 	// byte. Require a known file at that spelling before reconciling the record.
@@ -150,24 +152,54 @@ func (r *Run) reconcileRecord(record operationRecord, dir *directory) (result Re
 	return result, r.completeRecoveryRecord(record, dir, result.State)
 }
 
+func (r *Run) lockedRecoveryParent(parent identity) (*directory, error) {
+	for _, d := range r.locks {
+		if sameDirectory(d.id, parent) {
+			id, err := identify(d.file)
+			if err != nil {
+				return nil, fmt.Errorf("identify locked recovery parent: %w: %w", ErrRecoveryConflict, err)
+			}
+			if sameDirectory(id, parent) {
+				return d, nil
+			}
+			break
+		}
+	}
+	return nil, fmt.Errorf("recovery parent identity/lock differs: %w", ErrRecoveryConflict)
+}
+
+func (r *Run) observeRecoveryBackup(record operationRecord, result *Result) (leaf, error) {
+	if record.Backup == nil {
+		return leaf{}, nil
+	}
+	parent, err := r.lockedRecoveryParent(record.SourceParent)
+	if err != nil {
+		return leaf{}, err
+	}
+	// Use the held directory and the validated run ID, even when the JSON path is lossy.
+	name := backupBasename(record.RunID)
+	path := filepath.Join(parent.path, name)
+	result.BackupPath = path
+	backup := leaf{parent: parent, name: name, path: path, lookupPath: path}
+	if err := observe(&backup); err != nil {
+		return leaf{}, fmt.Errorf("observe recovery backup: %w: %w", ErrRecoveryConflict, err)
+	}
+	if matchesRecord(backup, record.Source) {
+		result.State = SourceBackedUp
+	}
+	return backup, nil
+}
+
 func (r *Run) recoveryLeaf(path recordPath, parent identity) (leaf, error) {
 	l, err := openParent(path.Path)
 	if err != nil {
 		return leaf{}, fmt.Errorf("recovery parent path: %w: %w", ErrRecoveryConflict, err)
 	}
-	locked := false
-	for _, d := range r.locks {
-		if sameDirectory(d.id, parent) {
-			id, e := identify(d.file)
-			if e != nil {
-				return leaf{}, errors.Join(e, l.parent.file.Close())
-			}
-			locked = sameDirectory(id, parent)
-			break
-		}
+	if _, err = r.lockedRecoveryParent(parent); err == nil && !sameDirectory(l.parent.id, parent) {
+		err = fmt.Errorf("recovery parent path identity differs: %w", ErrRecoveryConflict)
 	}
-	if !locked || !sameDirectory(l.parent.id, parent) {
-		return leaf{}, errors.Join(fmt.Errorf("recovery parent identity/lock differs: %w", ErrRecoveryConflict), l.parent.file.Close())
+	if err != nil {
+		return leaf{}, errors.Join(err, l.parent.file.Close())
 	}
 	return l, nil
 }
