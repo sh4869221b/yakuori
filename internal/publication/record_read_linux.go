@@ -171,7 +171,13 @@ func validateRecord(r operationRecord, dir *directory) error {
 		}
 	}
 	wantDir := filepath.Join(filepath.Dir(r.Output.Path), ".yakuori-run-"+r.RunID)
-	if dir.path != wantDir || r.Stage.Path != filepath.Join(wantDir, "stage") || r.Stage.Basename != "stage" ||
+	dirPath := dir.path
+	if r.SchemaVersion == recordUTF8Schema {
+		// A lossy directory spelling is enough to recognize retained evidence.
+		// Recovery still checks the identities and original pathname before acting.
+		dirPath = legacyPathSpelling(dirPath)
+	}
+	if dirPath != wantDir || r.Stage.Path != filepath.Join(wantDir, "stage") || r.Stage.Basename != "stage" ||
 		r.Stage.Identity.Dev != r.OutputParent.Dev || r.Stage.Identity.MountID != r.OutputParent.MountID ||
 		dir.id.Dev != r.OutputParent.Dev || dir.id.MountID != r.OutputParent.MountID {
 		return invalid("record run/stage location")
@@ -223,6 +229,14 @@ func validateRecord(r operationRecord, dir *directory) error {
 		return invalid("record phase/operation")
 	}
 	return nil
+}
+
+// Legacy JSON replaced each invalid UTF-8 byte with U+FFFD.
+func legacyPathSpelling(path string) string {
+	if utf8.ValidString(path) {
+		return path
+	}
+	return string([]rune(path))
 }
 
 func validRecordPath(p recordPath) bool {

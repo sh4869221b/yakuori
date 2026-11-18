@@ -4,13 +4,160 @@ package publication
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
 )
+
+type legacyRecoveryFixture struct {
+	source, record, backup, stage string
+	wire                          string
+}
+
+func legacyInPlaceRecord(t *testing.T, parentName, name string, phase recordPhase) legacyRecoveryFixture {
+	t.Helper()
+	const runID = "1234567890abcdef1234567890abcdef"
+	parent := filepath.Join(t.TempDir(), parentName)
+	run := filepath.Join(parent, ".yakuori-run-"+runID)
+	if err := os.MkdirAll(run, 0700); err != nil {
+		t.Fatal(err)
+	}
+	f := legacyRecoveryFixture{source: filepath.Join(parent, name), record: filepath.Join(run, "record.json"),
+		backup: filepath.Join(parent, ".yakuori-backup-"+runID), stage: filepath.Join(run, "stage")}
+	observeFile := func(path, content string) leaf {
+		putFile(t, path, content)
+		l, err := openParent(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = l.parent.file.Close() })
+		if err := observe(&l); err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	source := observeFile(f.source, "original")
+	stage := observeFile(f.stage, "translated")
+	record := operationRecord{SchemaVersion: 1, RunID: runID, Mode: InPlace,
+		Source: recordedFile(source), Output: recordPath{source.path, source.name}, Stage: recordedFile(stage),
+		Backup: &recordPath{f.backup, filepath.Base(f.backup)}, SourceParent: source.parent.id, OutputParent: source.parent.id,
+		Phase: phase, LastCompletedOperation: "none"}
+	record.ExistingOutput.File = &record.Source
+	switch phase {
+	case backedUpPhase:
+		record.LastCompletedOperation = "backup-rename"
+	case restoredPhase:
+		record.LastCompletedOperation = "restore-rename"
+	}
+	// Schema 1 originally passed Linux paths straight to encoding/json.
+	b, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.wire = string(b)
+	putFile(t, f.record, f.wire)
+	return f
+}
+
+func scanLegacyRecovery(t *testing.T, path string, rename renameFunc) error {
+	t.Helper()
+	source, err := openParent(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &Run{source: source, mode: InPlace, rename: rename, recordWrite: (*os.File).Write, recordSync: (*os.File).Sync, recordClose: (*os.File).Close}
+	defer func() { closeRun(t, r) }()
+	r.output, err = openParent(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.lockDirectories(); err != nil {
+		t.Fatal(err)
+	}
+	return r.recoverPendingRecords(context.Background())
+}
+
+func TestLegacyRecoveryRejectsAmbiguousPathSpellings(t *testing.T) {
+	for _, tc := range []struct {
+		name, parent, raw, replaced string
+		phase                       recordPhase
+		occupied                    bool
+	}{
+		{"prepared", "parent", "source-\xff", "source-�", preparedPhase, false},
+		{"backed up", "parent", "source-\xfe\xff", "source-��", backedUpPhase, false},
+		{"raw parent", "parent-\xfe", "source-\xff", "source-�", backedUpPhase, false},
+		{"raw parent only", "parent-\xfe", "source-�", "source-�", backedUpPhase, false},
+		{"replacement name occupied", "parent", "source-\xff", "source-�", backedUpPhase, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := legacyInPlaceRecord(t, tc.parent, tc.raw, tc.phase)
+			if !strings.ContainsRune(f.wire, '�') {
+				t.Fatal("legacy fixture did not capture the replacement character")
+			}
+			moveRecoveryFile(t, f.source, f.backup)
+			if tc.occupied {
+				putFile(t, filepath.Join(filepath.Dir(f.source), tc.replaced), "unrelated file")
+			}
+			noRename := func(int, string, int, string, uint) error {
+				t.Fatal("ambiguous record attempted a rename")
+				return nil
+			}
+			for _, name := range []string{tc.raw, tc.replaced} {
+				requested := filepath.Join(filepath.Dir(f.source), name)
+				err := scanLegacyRecovery(t, requested, noRename)
+				var recovery *RecoveryError
+				if !errors.Is(err, ErrRecoveryConflict) || !errors.As(err, &recovery) || !strings.Contains(recovery.Reason, "manual reconciliation") ||
+					recovery.Result.RecordPath != f.record || recovery.Result.BackupPath != f.backup || recovery.Result.OutputPath != requested {
+					t.Errorf("request %q: unexpected recovery diagnostic: %v", requested, err)
+				}
+				if tc.occupied && name == tc.replaced {
+					wantBytes(t, requested, "unrelated file")
+				} else {
+					wantAbsent(t, requested)
+				}
+			}
+			unrelated := filepath.Join(filepath.Dir(f.source), "other")
+			if err := scanLegacyRecovery(t, unrelated, noRename); err != nil {
+				t.Fatalf("unrelated target was blocked: %v", err)
+			}
+			wantBytes(t, f.record, f.wire)
+			wantBytes(t, f.backup, "original")
+			wantBytes(t, f.stage, "translated")
+		})
+	}
+}
+
+func TestLegacyRecoveryPreservesUnambiguousUTF8Paths(t *testing.T) {
+	for _, tc := range []struct{ parent, name string }{{"parent", "plain"}, {"parent-�", "valid-�"}, {"parent", `literal-\ufffd`}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := legacyInPlaceRecord(t, tc.parent, tc.name, preparedPhase)
+			if err := scanLegacyRecovery(t, f.source, unix.Renameat2); err != nil {
+				t.Fatal(err)
+			}
+			record := readOperationRecord(t, f.record)
+			if record.Phase != abandonedPhase || record.Output.Path != f.source || record.SchemaVersion != 1 {
+				t.Fatalf("unexpected reconciled record: %+v", record)
+			}
+			wantBytes(t, f.source, "original")
+			wantBytes(t, f.stage, "translated")
+			wantAbsent(t, f.backup)
+		})
+	}
+}
+
+func TestLegacyRecoverySkipsAmbiguousTerminalRecord(t *testing.T) {
+	f := legacyInPlaceRecord(t, "parent-\xfe", "source-\xff", restoredPhase)
+	if err := scanLegacyRecovery(t, f.source, nil); err != nil {
+		t.Fatalf("terminal history blocked a new run: %v", err)
+	}
+	wantBytes(t, f.record, f.wire)
+	wantBytes(t, f.source, "original")
+}
 
 func pendingRecoveryRecord(t *testing.T, r *Run) operationRecord {
 	t.Helper()

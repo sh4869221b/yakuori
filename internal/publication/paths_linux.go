@@ -152,6 +152,16 @@ func observeLimit(l *leaf, limit int) (_ []byte, err error) {
 	} else {
 		h := sha256.New()
 		size, err = io.Copy(h, io.LimitReader(f, id.Size))
+		if err == nil && size == id.Size {
+			// Some regular-looking files expose more data than stat reports.
+			var extra [1]byte
+			if _, err = io.ReadFull(f, extra[:]); err == nil {
+				return nil, fmt.Errorf("leaf has data past its stat size: %w", ErrInvalidPath)
+			}
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+		}
 		if err == nil {
 			digest = hex.EncodeToString(h.Sum(nil))
 		}

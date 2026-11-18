@@ -20,6 +20,7 @@ Linuxのstage公開・原文backup・記録照合による復旧を扱う独立�
 - stage・record・backupの識別情報と実fileを再照合する。
 - record.jsonとstageは、record内pathで探索せず保持済みprivate directoryを基準に読む。
 - recordのschema 1はUTF-8 path、schema 2はpathとbasenameの元bytesをパディングなし標準Base64で保持する。
+- 新規recordで非UTF-8またはU+FFFDを含むpathにはschema 2を使う。旧schema 1の曖昧なpathは証拠を残し、復旧先のbasenameを確認できない場合は手動照合を要求する。
 - 復旧時のsource/outputはrecord内pathから親directoryを開き、保持済みlock・親識別情報・実fileと照合する。
 - Stage callbackは同期実行で、writer/readerを保持・共有しない。
 - stageの書込みFDを閉じてから検証用FDを開く。

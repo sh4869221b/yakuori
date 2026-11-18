@@ -8,11 +8,17 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/sys/unix"
 )
 
 var ErrRecoveryConflict = errors.New("publication recovery requires manual reconciliation")
+
+const legacyPathRecoveryReason = "ambiguous legacy path bytes, manual reconciliation required"
+
+var errAmbiguousLegacyPath = fmt.Errorf("schema 1 cannot prove the original path: %w", ErrRecoveryConflict)
 
 // RecoveryError separates an observed publication/restoration result from the
 // failure that prevents Prepare or its caller from continuing.
@@ -75,6 +81,14 @@ func (r *Run) reconcileRecord(record operationRecord, dir *directory) (result Re
 	}
 	if matchesRecord(backup, record.Source) {
 		result.State = SourceBackedUp
+	}
+	// Schema 1 cannot distinguish a literal replacement rune from an invalid
+	// byte. Require a known file at that spelling before reconciling the record.
+	if record.SchemaVersion == recordUTF8Schema && strings.ContainsRune(record.Output.Basename, utf8.RuneError) {
+		existing := record.ExistingOutput.File
+		if !matchesRecord(final, record.Stage) && (existing == nil || !matchesRecord(final, *existing)) {
+			return result, errAmbiguousLegacyPath
+		}
 	}
 	if err = observe(&stage); err != nil {
 		return result, fmt.Errorf("observe recovery stage: %w: %w", ErrRecoveryConflict, err)

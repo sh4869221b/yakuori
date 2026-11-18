@@ -74,9 +74,18 @@ func TestRecoveryRecordRoundTrip(t *testing.T) {
 }
 
 func TestRecordPreservesNonUTF8Paths(t *testing.T) {
+	testRecordPreservesPathBytes(t, "dir-\xfe-�", "name-\xff-�")
+}
+
+func TestRecordPreservesLiteralReplacementRune(t *testing.T) {
+	testRecordPreservesPathBytes(t, "dir-�", "name-�")
+}
+
+func testRecordPreservesPathBytes(t *testing.T, parentName, sourceName string) {
+	t.Helper()
 	root := t.TempDir()
 	const runID = "1234567890abcdef1234567890abcdef"
-	parent := filepath.Join(root, "dir-\xfe-�")
+	parent := filepath.Join(root, parentName)
 	runPath := filepath.Join(parent, ".yakuori-run-"+runID)
 	if err := os.MkdirAll(runPath, 0700); err != nil {
 		t.Fatal(err)
@@ -93,7 +102,7 @@ func TestRecordPreservesNonUTF8Paths(t *testing.T) {
 		}
 		return l
 	}
-	source := open(filepath.Join(parent, "name-\xff-�"), "original")
+	source := open(filepath.Join(parent, sourceName), "original")
 	stage := open(filepath.Join(runPath, "stage"), "translated")
 	backup := filepath.Join(parent, ".yakuori-backup-"+runID)
 	r := &Run{runID: runID, mode: InPlace, source: source, output: source, stage: stage, runDir: stage.parent,

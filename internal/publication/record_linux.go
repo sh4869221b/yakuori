@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"unicode/utf8"
 
 	"golang.org/x/sys/unix"
@@ -77,6 +78,9 @@ func (r *operationRecord) pathFields() []*string {
 }
 
 func encodeRecord(record operationRecord) ([]byte, error) {
+	if record.SchemaVersion != recordBytesSchema {
+		return json.Marshal(record)
+	}
 	// Rewriting a recovery snapshot must not mutate its decoded paths.
 	if record.Backup != nil {
 		backup := *record.Backup
@@ -86,17 +90,8 @@ func encodeRecord(record operationRecord) ([]byte, error) {
 		file := *record.ExistingOutput.File
 		record.ExistingOutput.File = &file
 	}
-	fields := record.pathFields()
-	for _, field := range fields {
-		if !utf8.ValidString(*field) {
-			record.SchemaVersion = recordBytesSchema
-			break
-		}
-	}
-	if record.SchemaVersion == recordBytesSchema {
-		for _, field := range fields {
-			*field = base64.RawStdEncoding.EncodeToString([]byte(*field))
-		}
+	for _, field := range record.pathFields() {
+		*field = base64.RawStdEncoding.EncodeToString([]byte(*field))
 	}
 	return json.Marshal(record)
 }
@@ -115,6 +110,13 @@ func (r *Run) writeRecord(phase recordPhase, operation string) error {
 	if r.output.present {
 		file := recordedFile(r.output)
 		record.ExistingOutput.File = &file
+	}
+	for _, field := range record.pathFields() {
+		// Both invalid UTF-8 and a literal replacement rune need a lossless record.
+		if strings.ContainsRune(*field, utf8.RuneError) {
+			record.SchemaVersion = recordBytesSchema
+			break
+		}
 	}
 	w := recordWriter{r.runDir, r.recordWrite, r.recordSync, r.recordClose, r.rename}
 	return w.write(record, ".record-"+string(phase))
