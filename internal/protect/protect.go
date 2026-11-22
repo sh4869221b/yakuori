@@ -64,26 +64,8 @@ func PrepareWithGlossary(session unit.Session, id unit.UnitID, g glossary.Glossa
 	}
 	m := &manifest{session: session, id: id, source: source, tokens: make(map[string]int)}
 	spans := u.ProtectionSpans()
-	for _, span := range spans {
-		item := literal{text: source[span.Start:span.End], kind: span.Kind, pair: span.Pair, ordered: span.Ordered}
-		index := -1
-		for i, known := range m.literals {
-			if known.text == item.text {
-				if known != item {
-					return Prepared{}, fmt.Errorf("%w: inconsistent literal metadata", ErrInvalidSource)
-				}
-				index = i
-				break
-			}
-		}
-		if index < 0 {
-			index = len(m.literals)
-			m.literals = append(m.literals, item)
-		}
-		m.occurrences = append(m.occurrences, occurrence{start: span.Start, end: span.End, literal: index})
-		if item.ordered {
-			m.ordered = append(m.ordered, index)
-		}
+	if err := m.addExplicitSpans(spans); err != nil {
+		return Prepared{}, err
 	}
 	if err := m.addGlossary(matches, spans); err != nil {
 		return Prepared{}, err

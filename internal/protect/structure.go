@@ -2,6 +2,7 @@ package protect
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -16,6 +17,61 @@ type literal struct {
 }
 
 type occurrence struct{ start, end, literal int }
+
+// CheckDeclaredSpans checks adapter declarations without building generation tokens
+// or allocating an entry for every undeclared source match.
+func CheckDeclaredSpans(u unit.TranslationUnit) error {
+	m := manifest{source: string(u.Source())}
+	if err := m.addExplicitSpans(u.ProtectionSpans()); err != nil {
+		return err
+	}
+	for i, item := range m.literals {
+		offset := 0
+		for _, want := range m.occurrences {
+			if want.literal != i {
+				continue
+			}
+			relative := strings.Index(m.source[offset:], item.text)
+			if relative < 0 || offset+relative != want.start {
+				return fmt.Errorf("%w: undeclared literal occurrence", ErrInvalidSource)
+			}
+			// Include overlaps within a single literal in the search.
+			offset = want.start + 1
+		}
+		if strings.Contains(m.source[offset:], item.text) {
+			return fmt.Errorf("%w: undeclared literal occurrence", ErrInvalidSource)
+		}
+	}
+	if err := m.checkStructure(m.occurrences); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidSource, err)
+	}
+	return nil
+}
+
+func (m *manifest) addExplicitSpans(spans []unit.ProtectionSpan) error {
+	for _, span := range spans {
+		item := literal{text: m.source[span.Start:span.End], kind: span.Kind, pair: span.Pair, ordered: span.Ordered}
+		index := -1
+		for i, known := range m.literals {
+			if known.text == item.text {
+				if known != item {
+					return fmt.Errorf("%w: inconsistent literal metadata", ErrInvalidSource)
+				}
+				index = i
+				break
+			}
+		}
+		if index < 0 {
+			index = len(m.literals)
+			m.literals = append(m.literals, item)
+		}
+		m.occurrences = append(m.occurrences, occurrence{start: span.Start, end: span.End, literal: index})
+		if item.ordered {
+			m.ordered = append(m.ordered, index)
+		}
+	}
+	return nil
+}
 
 // Every exact occurrence participates, including overlaps within the same literal.
 func scanLiterals(text string, literals []literal) ([]occurrence, error) {
