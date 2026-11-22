@@ -1,0 +1,703 @@
+{
+  "target_revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+  "gpu_device": "AMD Radeon RX 9070 XT",
+  "gpu_limits": {
+    "wall_seconds": 60,
+    "worker_rss_bytes": 25769803776,
+    "sampled_vram_bytes": 12884901888
+  },
+  "sources": {
+    "component-tests": {
+      "kind": "component",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "docs/evidence/acceptance/report-79.md#local-checks",
+      "command": "CGO_ENABLED=0 GOTOOLCHAIN=local go test -count=1 -v ./internal/unit ./internal/validate ./internal/identity ./internal/localize ./internal/artifact ./internal/adapter/w3strings ./internal/segment ./internal/protect ./internal/glossary ./internal/inference/goinfer -run '^(TestSessionIsolationAndInvalidInput|TestAcceptedCannotBeForged|TestBindingRejectsMismatch|TestSourceIdentityFieldChanges|TestProfileIdentityFieldChanges|TestGlossarySemanticFieldsChangeExactKey|TestTMHitRevalidation|TestTMInvalidRowGeneration|TestTMScopeManifestMismatch|TestPrepareExportRejectsMismatch|TestExportBindings|TestCompareStageTampering|TestFinalizeRejects|TestBudgetBoundary|TestSegmentProtectionMappingAndCuts|TestSegmentJoin|TestSegmentRejectsPartition|TestSegmentedCoreFailure|TestTMSegmentedParent|TestValidateCurrentUnit|TestValidateRejectsInvalidCandidate|TestReviewFindings|TestContentRejectsAdditions|TestProtectionRejectsInvalid|TestProtectionRejectsInvalidStructure|TestMatchConflicts|TestParseRejectMalformed|TestParseLimits|TestCountBoundaries|FuzzParse|TestCoreInputBoundaries|TestGenerateDeadline|TestReuseAfterCancellation|TestCancelDrain|TestGenerateFailure)$'",
+      "environment": "Linux/amd64, Go 1.27.4-X:nodwarf5, CGO_ENABLED=0",
+      "covers": [
+        "R1.bindings",
+        "R2.identity-validation",
+        "R5.structure",
+        "R6.segment-plan-join",
+        "R6.atomic-parent",
+        "R8.fixed-cases",
+        "R9.parser-limits-fuzz",
+        "R9.deadline-drain-no-retry"
+      ]
+    },
+    "w3-sqlite": {
+      "kind": "component",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "docs/evidence/acceptance/report-79.md#local-checks",
+      "command": "CGO_ENABLED=0 GOTOOLCHAIN=local go test -count=1 -v ./internal/localize -run '^TestW3StringsSQLite$'",
+      "environment": "Linux/amd64, Go 1.27.4-X:nodwarf5, CGO_ENABLED=0, non-root, TMPDIR on Btrfs",
+      "covers": [
+        "R2.w3-sqlite"
+      ]
+    },
+    "fuzz": {
+      "kind": "component",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "docs/evidence/acceptance/report-79.md#local-checks",
+      "command": "CGO_ENABLED=0 GOTOOLCHAIN=local go test ./internal/adapter/w3strings -run '^$' -fuzz '^FuzzParse$' -fuzztime=5s -parallel=2",
+      "environment": "Linux/amd64, Go 1.27.4-X:nodwarf5, CGO_ENABLED=0",
+      "covers": [
+        "R9.parser-limits-fuzz"
+      ]
+    },
+    "pull-tests": {
+      "kind": "component",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "docs/evidence/acceptance/report-79.md#local-checks",
+      "command": "CGO_ENABLED=0 GOTOOLCHAIN=local go test -count=1 ./internal/models -run '^(TestPull|TestPullLeftovers)$'",
+      "environment": "Linux/amd64, Go 1.27.4-X:nodwarf5, CGO_ENABLED=0, loopback HTTPS test listener enabled",
+      "covers": [
+        "R10.pull-driver-logs"
+      ]
+    },
+    "diagnostics-test": {
+      "kind": "component",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "docs/evidence/acceptance/report-79.md#local-checks",
+      "command": "CGO_ENABLED=0 GOTOOLCHAIN=local go test -count=1 ./internal/cli -run '^TestPipelineDiagnostics$'",
+      "environment": "Linux/amd64, Go 1.27.4-X:nodwarf5, CGO_ENABLED=0",
+      "covers": [
+        "R10.pull-driver-logs"
+      ]
+    },
+    "clean-ci": {
+      "kind": "component",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "https://github.com/sh4869221b/yakuori/actions/runs/45010347210/job/137171069844#step:4:1",
+      "command": "docker build --progress=plain -f ci/Dockerfile .",
+      "environment": "GitHub-hosted Ubuntu 24.04, Linux/amd64, container Go 1.27.3, CGO_ENABLED=0, Intel Xeon 6975P-C, Linux arm64 cross-build",
+      "covers": [
+        "R7.clean-gate",
+        "R10.cpu-offline-controls",
+        "R10.pull-driver-logs"
+      ]
+    },
+    "filesystem-ci": {
+      "kind": "component",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "https://github.com/sh4869221b/yakuori/actions/runs/45010347210/job/137171069777#step:5:1",
+      "command": "Run the non-root-filesystems job in .github/workflows/ci.yml at the target revision; uses ci/run-test-binary.sh and ci/check-test-events.py.",
+      "environment": "GitHub-hosted Ubuntu 24.04, Linux/amd64, container Go 1.27.3, CGO_ENABLED=0, Intel Xeon 6975P-C, unprivileged test user, ext4, tmpfs and separate mounts",
+      "covers": [
+        "R3.publication",
+        "R4.failures",
+        "R4.cancellation-process-stop",
+        "R4.commit-publication-stdout",
+        "R6.atomic-parent",
+        "R10.cpu-offline-controls",
+        "R10.pull-driver-logs"
+      ]
+    },
+    "offline-pipeline-artifact": {
+      "kind": "component",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "https://github.com/sh4869221b/yakuori/actions/runs/45010347210/artifacts/14749781644",
+      "command": "Run the offline95 lane of the non-root-filesystems job in .github/workflows/ci.yml at the target revision.",
+      "environment": "GitHub-hosted Ubuntu 24.04, Linux/amd64, container Go 1.27.3, CGO_ENABLED=0, strace observer, unprivileged test user",
+      "pins": {
+        "artifact_sha256": "510e2507d8c106d20b52674b743a5ded18dbd6082273511dc613961f54192f73"
+      },
+      "covers": [
+        "R10.cpu-offline-controls"
+      ]
+    },
+    "independent-ci": {
+      "kind": "component",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "https://github.com/sh4869221b/yakuori/actions/runs/45010347210/job/137171069603#step:4:1",
+      "command": "docker build --progress=plain -f ci/w3strings-spike.Dockerfile .",
+      "environment": "GitHub-hosted Ubuntu 24.04, Linux/amd64, pinned fixture downloads and separately built Rust oracle",
+      "covers": [
+        "R5.independent-roundtrip"
+      ]
+    },
+    "cpu-smoke-ci": {
+      "kind": "cpu",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "https://github.com/sh4869221b/yakuori/actions/runs/45010347210/job/137171069798#step:6:1",
+      "command": "Run steps 4–6 of linux-cpu-gguf in .github/workflows/ci.yml at the target revision (CPU spike and TestCPUWrapperSmoke).",
+      "environment": "GitHub-hosted Ubuntu 24.04, Linux/amd64, container Go 1.27.3, CGO_ENABLED=0, AMD EPYC 9V74, --network none, 2 CPUs and 4 GiB",
+      "pins": {
+        "goinfer": "github.com/sh4869221b/goinfer@v0.0.0-20261106011512-994cbf5ee38d",
+        "cpu_model_sha256": "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32"
+      },
+      "covers": [
+        "R7.cpu-smoke"
+      ]
+    },
+    "w3-cpu-ci": {
+      "kind": "cpu",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "https://github.com/sh4869221b/yakuori/actions/runs/45010347210/job/137171069798#step:7:1",
+      "command": "Run steps 4 and 7 of linux-cpu-gguf in .github/workflows/ci.yml at the target revision (TestW3CPURegression).",
+      "environment": "GitHub-hosted Ubuntu 24.04, Linux/amd64, container Go 1.27.3, CGO_ENABLED=0, AMD EPYC 9V74, --network none, 2 CPUs and 4 GiB, supported publication filesystem",
+      "pins": {
+        "goinfer": "github.com/sh4869221b/goinfer@v0.0.0-20261106011512-994cbf5ee38d",
+        "cpu_model_sha256": "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32",
+        "w3_cpu_fixture_sha256": "25323d821de4848c10871f2373f773f94f8d4d7ab9f8eed5a6cb4cc4537ba6ad"
+      },
+      "covers": [
+        "R7.w3-cpu"
+      ]
+    },
+    "fixture-readiness": {
+      "kind": "fixtures",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "docs/evidence/acceptance/report-79.md#local-checks",
+      "command": "CGO_ENABLED=0 GOTOOLCHAIN=local go run ./tools/acceptance/cmd/check --manifest docs/evidence/acceptance/fixtures.json --criteria docs/evidence/acceptance/criteria.json --root . --require-ready",
+      "environment": "Linux/amd64, Go 1.27.4-X:nodwarf5, CGO_ENABLED=0, local originals",
+      "pins": {
+        "manifest": "fixture-candidates-v2",
+        "criteria": "criteria-candidates-v4",
+        "fixture/better-keybinds-en": "d3c9e9e51fa666381d3530293e3334de142edf4a32da4227194108933845b57c",
+        "fixture/monster-of-the-week-en": "9f0227c983bcdf9d145afc6e614c88e2fb6ad4fc50027adf9efbd4c082b59cb3",
+        "fixture/representative-authored-en": "0f1896b71371a643f2c4994fb0f1f0deccd7b7085da73ee765880b1c0876dfff"
+      },
+      "covers": [
+        "R8.confirmation"
+      ]
+    },
+    "gpu-assessment": {
+      "kind": "assessment",
+      "status": "not_run",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "docs/evidence/acceptance/gpu-assessment-79.md",
+      "environment": "AMD Radeon RX 9070 XT is the adopted target. No AMD execution was performed for this acceptance assessment."
+    },
+    "gpu-2026-11-03": {
+      "kind": "gpu",
+      "status": "pass",
+      "revision": "27d59b07ce2c774a5b170eba79d624d165f82b5f",
+      "location": "docs/evidence/acceptance/gpu-measurement-2026-11-03.json",
+      "command": "See docs/evidence/acceptance/gpu-run-2026-11-03.md for the measured runner command, prerequisites and original output pins.",
+      "environment": "Linux/amd64, RTX 4070, NVIDIA driver 615.78.08, Index-Translate-2B Q4_K_M, CUDA resident",
+      "pins": {
+        "manifest": "fixture-candidates-v2",
+        "criteria": "criteria-candidates-v3",
+        "fixture/better-keybinds-en": "d3c9e9e51fa666381d3530293e3334de142edf4a32da4227194108933845b57c",
+        "fixture/monster-of-the-week-en": "9f0227c983bcdf9d145afc6e614c88e2fb6ad4fc50027adf9efbd4c082b59cb3",
+        "fixture/representative-authored-en": "0f1896b71371a643f2c4994fb0f1f0deccd7b7085da73ee765880b1c0876dfff",
+        "goinfer": "v0.23.0",
+        "goinfer/backend/cuda": "v0.23.0",
+        "gpu_model_sha256": "044b313d29342bd3b2c77cbb64023ca0d209bd9b3247763f9d162767ef2d746a",
+        "gpu_device": "NVIDIA GeForce RTX 4070",
+        "gpu_backend": "CUDA v0.23.0"
+      }
+    },
+    "gpu-db-2026-11-03": {
+      "kind": "gpu",
+      "status": "pass",
+      "revision": "2e97bdb7b82d2c83c0360e537d6b4b6c8a21f6a2",
+      "location": "docs/evidence/acceptance/gpu-db-measurement-2026-11-03.json",
+      "command": "See docs/evidence/acceptance/gpu-db-run-2026-11-03.md for the measured runner command, prerequisites and original output pins.",
+      "environment": "Linux/amd64, RTX 4070, NVIDIA driver 615.78.08, Index-Translate-2B Q4_K_M, CUDA resident",
+      "pins": {
+        "manifest": "fixture-candidates-v2",
+        "criteria": "criteria-candidates-v3",
+        "fixture/better-keybinds-en": "d3c9e9e51fa666381d3530293e3334de142edf4a32da4227194108933845b57c",
+        "fixture/monster-of-the-week-en": "9f0227c983bcdf9d145afc6e614c88e2fb6ad4fc50027adf9efbd4c082b59cb3",
+        "fixture/representative-authored-en": "0f1896b71371a643f2c4994fb0f1f0deccd7b7085da73ee765880b1c0876dfff",
+        "goinfer": "v0.23.0",
+        "goinfer/backend/cuda": "v0.23.0",
+        "gpu_model_sha256": "044b313d29342bd3b2c77cbb64023ca0d209bd9b3247763f9d162767ef2d746a",
+        "gpu_device": "NVIDIA GeForce RTX 4070",
+        "gpu_backend": "CUDA v0.23.0"
+      }
+    },
+    "issue-79": {
+      "kind": "scope",
+      "status": "deferred",
+      "location": "https://github.com/sh4869221b/yakuori/issues/79"
+    },
+    "offline-history": {
+      "kind": "historical-report",
+      "status": "unavailable",
+      "location": "docs/foundation.md#issue-19-acceptance-evidence-observed-2026-10-17"
+    },
+    "amd-limits-approval": {
+      "kind": "gpu-approval",
+      "status": "pass",
+      "location": "https://github.com/sh4869221b/yakuori/issues/118",
+      "pins": {
+        "gpu_device": "AMD Radeon RX 9070 XT",
+        "manifest": "fixture-candidates-v2"
+      },
+      "gpu_limits": {
+        "wall_seconds": 60,
+        "worker_rss_bytes": 25769803776,
+        "sampled_vram_bytes": 12884901888
+      },
+      "covers": [
+        "R8.gpu-conditions"
+      ]
+    },
+    "issue-87-private-review-summary": {
+      "kind": "historical-report",
+      "status": "fail",
+      "location": "https://github.com/sh4869221b/yakuori/issues/87"
+    },
+    "cpu-offline-core": {
+      "kind": "cpu",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "docs/evidence/acceptance/report-79.md#real-model-cpu-offline-observation",
+      "command": "Follow the build and strict observer commands in the linked report section.",
+      "environment": "Linux/amd64, Go 1.27.3, CGO_ENABLED=0, Btrfs temporary files, strace 7.3 strict, GOMAXPROCS=5",
+      "pins": {
+        "goinfer": "github.com/sh4869221b/goinfer@v0.0.0-20261106011512-994cbf5ee38d",
+        "cpu_model_sha256": "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32"
+      },
+      "covers": [
+        "R10.cpu-offline-real"
+      ],
+      "checks": [
+        "internal/localize/TestOfflineCoreMatrix"
+      ]
+    },
+    "cpu-offline-cli": {
+      "kind": "cpu",
+      "status": "pass",
+      "revision": "f4494a7eba432d69e5775a756a94dd7ec777f433",
+      "location": "docs/evidence/acceptance/report-79.md#real-model-cpu-offline-observation",
+      "command": "Follow the build and strict observer commands in the linked report section.",
+      "environment": "Linux/amd64, Go 1.27.3, CGO_ENABLED=0, Btrfs temporary files, strace 7.3 strict, test driver GOMAXPROCS=2 with CPU affinity 0,1",
+      "pins": {
+        "goinfer": "github.com/sh4869221b/goinfer@v0.0.0-20261106011512-994cbf5ee38d",
+        "cpu_model_sha256": "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32"
+      },
+      "covers": [
+        "R10.cpu-offline-real"
+      ],
+      "checks": [
+        "internal/cli/TestOfflineCLIMatrix/real-model"
+      ]
+    }
+  },
+  "requirements": [
+    {
+      "id": "R1.bindings",
+      "status": "pass",
+      "checks": [
+        "internal/unit/TestSessionIsolationAndInvalidInput",
+        "internal/validate/TestAcceptedCannotBeForged",
+        "internal/validate/TestBindingRejectsMismatch"
+      ],
+      "sources": [
+        "component-tests"
+      ],
+      "notes": "External Accepted construction, zero values, and foreign session, unit, source and profile are covered."
+    },
+    {
+      "id": "R2.identity-validation",
+      "status": "pass",
+      "checks": [
+        "internal/identity/TestSourceIdentityFieldChanges",
+        "internal/identity/TestProfileIdentityFieldChanges",
+        "internal/validate/TestGlossarySemanticFieldsChangeExactKey",
+        "internal/localize/TestTMHitRevalidation",
+        "internal/localize/TestTMInvalidRowGeneration",
+        "internal/localize/TestTMScopeManifestMismatch"
+      ],
+      "sources": [
+        "component-tests"
+      ],
+      "notes": "Source and profile identity changes include model contents, backend, compute and KV precision, dependency, prompts, template, glossary and schemas. TM candidates pass common Validation; invalid rows are repaired through generation."
+    },
+    {
+      "id": "R2.w3-sqlite",
+      "status": "pass",
+      "checks": [
+        "internal/localize/TestW3StringsSQLite/keys",
+        "internal/localize/TestW3StringsSQLite/candidate",
+        "internal/localize/TestW3StringsSQLite/candidate_then_failure",
+        "internal/localize/TestW3StringsSQLite/observed_before_commit"
+      ],
+      "sources": [
+        "w3-sqlite"
+      ],
+      "notes": "Btrfs execution reached real SQLite, commit and publication."
+    },
+    {
+      "id": "R3.publication",
+      "status": "pass",
+      "checks": [
+        "TestPipelineFilesystem",
+        "TestPipelineConcurrentProcess",
+        "TestPipelineNoClobber"
+      ],
+      "sources": [
+        "filesystem-ci"
+      ],
+      "notes": "Existing-output refusal, explicit replacement, concurrent processes, permissions, path aliases, separate mounts and occupied backup or recovery paths are covered by the required subtests."
+    },
+    {
+      "id": "R4.failures",
+      "status": "pass",
+      "checks": [
+        "TestPipelineHarnessFault",
+        "TestPipelinePrecommitContract",
+        "TestPipelinePrecommitInference",
+        "TestPipelinePrecommitFinal",
+        "TestPipelineTMTransactionFailures",
+        "TestPipelinePublicationFailures"
+      ],
+      "sources": [
+        "filesystem-ci"
+      ],
+      "notes": "Required fault cases cover generation, stage write/flush/close, final validation, SQLite transaction and publication."
+    },
+    {
+      "id": "R4.cancellation-process-stop",
+      "status": "pass",
+      "checks": [
+        "TestPipelinePrecommitSignals",
+        "TestPipelineProcessRecovery",
+        "TestPipelineCLIProcessRecovery",
+        "TestPipelineTMCommitCancellation"
+      ],
+      "sources": [
+        "filesystem-ci"
+      ],
+      "notes": "Controlled cancellation and process stop exercised the required recovery branches."
+    },
+    {
+      "id": "R4.commit-publication-stdout",
+      "status": "pass",
+      "checks": [
+        "TestPipelineCommitPublicationState",
+        "TestPipelineFailureRerunAndTMRevalidation",
+        "TestPipelineNoClobber",
+        "TestPipelineStdoutBoundaries",
+        "TestPipelineCLIStdoutExit"
+      ],
+      "sources": [
+        "filesystem-ci"
+      ],
+      "notes": "Post-commit failure preserves validated TM rows, external paths are protected, and the CLI accounts for already-written stdout."
+    },
+    {
+      "id": "R5.structure",
+      "status": "pass",
+      "checks": [
+        "internal/artifact/TestPrepareExportRejectsMismatch",
+        "internal/adapter/w3strings/TestExportBindings",
+        "internal/adapter/w3strings/TestCompareStageTampering",
+        "internal/localize/TestFinalizeRejects"
+      ],
+      "sources": [
+        "component-tests"
+      ],
+      "notes": "Rejects missing, duplicate, extra, swapped and foreign values and mutations of immutable metadata."
+    },
+    {
+      "id": "R5.independent-roundtrip",
+      "status": "pass",
+      "checks": [
+        "Recreate original fixtures and independently read Go roundtrip"
+      ],
+      "sources": [
+        "independent-ci"
+      ],
+      "notes": "The separately built oracle reads pinned fixture round-trips. The known zero-key oracle limitation is reproduced."
+    },
+    {
+      "id": "R5.gpu-published-reader",
+      "status": "not_reached",
+      "checks": [
+        "Independent reader of the three published GPU fresh outputs"
+      ],
+      "sources": [
+        "gpu-assessment"
+      ],
+      "notes": "The independent reader was not reached for any AMD GPU output."
+    },
+    {
+      "id": "R6.segment-plan-join",
+      "status": "pass",
+      "checks": [
+        "internal/segment/TestBudgetBoundary",
+        "internal/protect/TestSegmentProtectionMappingAndCuts",
+        "internal/segment/TestSegmentJoin",
+        "internal/segment/TestSegmentRejectsPartition"
+      ],
+      "sources": [
+        "component-tests"
+      ],
+      "notes": "Effective context, output reservation, protected spans and reconstructed order and separators are checked."
+    },
+    {
+      "id": "R6.atomic-parent",
+      "status": "pass",
+      "checks": [
+        "internal/localize/TestSegmentedCoreFailure",
+        "internal/localize/TestTMSegmentedParent",
+        "TestPipelinePrecommitSegmented"
+      ],
+      "sources": [
+        "component-tests",
+        "filesystem-ci"
+      ],
+      "notes": "Segment failure prevents parent finalization. TM stores the parent only."
+    },
+    {
+      "id": "R7.clean-gate",
+      "status": "pass",
+      "checks": [
+        "Clean Linux amd64 build, test, vet and Linux arm64 cross-build"
+      ],
+      "sources": [
+        "clean-ci"
+      ],
+      "notes": "Compiler-free Linux/amd64 clean gate passed. Linux/arm64 was cross-built."
+    },
+    {
+      "id": "R7.cpu-smoke",
+      "status": "pass",
+      "checks": [
+        "Real CPU generation and failure semantics without network",
+        "internal/inference/goinfer/TestCPUWrapperSmoke"
+      ],
+      "sources": [
+        "cpu-smoke-ci"
+      ],
+      "notes": "Real pinned Qwen GGUF, explicit CPU backend."
+    },
+    {
+      "id": "R7.w3-cpu",
+      "status": "pass",
+      "checks": [
+        "internal/cli/TestW3CPURegression"
+      ],
+      "sources": [
+        "w3-cpu-ci"
+      ],
+      "notes": "Explicit CPU/int4, effective context 4096, 2 completed generations, validation 3/3, final validation, SQLite commit and published readback."
+    },
+    {
+      "id": "R7.gpu-resident-pipeline",
+      "status": "not_run",
+      "checks": [
+        "AMD GPU generation and the effective GPU path",
+        "Stage validation, committed SQLite readback and publication with the adopted fixture set"
+      ],
+      "sources": [
+        "gpu-assessment"
+      ],
+      "notes": "No AMD GPU execution was performed. The effective GPU path and end-to-end evidence are pending."
+    },
+    {
+      "id": "R8.confirmation",
+      "status": "pass",
+      "checks": [
+        "Fixture checker --require-ready"
+      ],
+      "sources": [
+        "fixture-readiness"
+      ],
+      "notes": "Approved mixed selection has 56 units, 927 source bytes and 3,134 binary bytes. All six categories are covered across the set, with five gaps in real-MOD coverage."
+    },
+    {
+      "id": "R8.gpu-conditions",
+      "status": "pass",
+      "checks": [
+        "User approval of per-fresh AMD wall time, worker RSS and sampled worker VRAM ceilings"
+      ],
+      "sources": [
+        "amd-limits-approval"
+      ],
+      "notes": "On 2026-11-22 the user approved 60 seconds, 24 GiB worker RSS and 12 GiB sampled worker VRAM for each fresh run on the adopted AMD GPU."
+    },
+    {
+      "id": "R8.fixed-cases",
+      "status": "pass",
+      "checks": [
+        "internal/validate/TestValidateCurrentUnit",
+        "internal/validate/TestValidateRejectsInvalidCandidate",
+        "internal/validate/TestReviewFindings",
+        "internal/validate/TestContentRejectsAdditions",
+        "internal/protect/TestProtectionRejectsInvalid",
+        "internal/protect/TestProtectionRejectsInvalidStructure",
+        "internal/glossary/TestMatchConflicts"
+      ],
+      "sources": [
+        "component-tests"
+      ],
+      "notes": "Covers empty text, proper-name or unchanged-source review findings, explanatory wrappers, duplicate tokens, crossed tags and glossary conflicts."
+    },
+    {
+      "id": "R9.parser-limits-fuzz",
+      "status": "pass",
+      "checks": [
+        "internal/adapter/w3strings/TestParseRejectMalformed",
+        "internal/adapter/w3strings/TestParseLimits",
+        "internal/adapter/w3strings/TestCountBoundaries",
+        "internal/adapter/w3strings/FuzzParse",
+        "internal/localize/TestCoreInputBoundaries"
+      ],
+      "sources": [
+        "component-tests",
+        "fuzz"
+      ],
+      "notes": "Malformed lengths, offsets, counts and product limits passed. A five-second active FuzzParse run completed 12,248 executions."
+    },
+    {
+      "id": "R9.deadline-drain-no-retry",
+      "status": "pass",
+      "checks": [
+        "internal/inference/goinfer/TestGenerateDeadline",
+        "internal/inference/goinfer/TestReuseAfterCancellation",
+        "internal/inference/goinfer/TestCancelDrain",
+        "internal/localize/TestGenerateFailure"
+      ],
+      "sources": [
+        "component-tests"
+      ],
+      "notes": "Deadline, cancellation drain and reuse, and atomic generation failure with no internal retry."
+    },
+    {
+      "id": "R9.gpu-performance",
+      "status": "not_run",
+      "checks": [
+        "Per-fresh wall time, worker RSS and GPU memory for all selected fixtures on AMD"
+      ],
+      "sources": [
+        "gpu-assessment"
+      ],
+      "notes": "No AMD measurements were recorded at the target revision. Compare each fresh run against the approved AMD ceilings when applicable measurements are available."
+    },
+    {
+      "id": "R10.cpu-offline-controls",
+      "status": "pass",
+      "checks": [
+        "TestOfflineCLIMatrix/model-free",
+        "TestOfflinePipelineMatrix",
+        "TestOfflinePipelineCanaryDetection"
+      ],
+      "sources": [
+        "clean-ci",
+        "filesystem-ci",
+        "offline-pipeline-artifact"
+      ],
+      "notes": "Current observer covers model-free admission and controlled CPU success, failures, cancellation and recovery. CI verifies required cases and the observer canary."
+    },
+    {
+      "id": "R10.cpu-offline-real",
+      "status": "pass",
+      "checks": [
+        "internal/cli/TestOfflineCLIMatrix/real-model",
+        "internal/localize/TestOfflineCoreMatrix"
+      ],
+      "sources": [
+        "cpu-offline-core",
+        "cpu-offline-cli"
+      ],
+      "notes": "Core passed under the strict observer with exit 0, zero forbidden connection attempts and zero remaining children. CLI passed with all 18 observations clean, zero forbidden connection attempts and zero remaining children. Two preceding invalid CLI traces were excluded."
+    },
+    {
+      "id": "R10.gpu-offline",
+      "status": "not_run",
+      "checks": [
+        "Connection-attempt observation for the adopted AMD GPU path",
+        "Regular execution, missing or corrupt model, GPU unavailability and error cases"
+      ],
+      "sources": [
+        "offline-history",
+        "gpu-assessment"
+      ],
+      "notes": "The AMD GPU offline matrix was not run. Historical CUDA and driver-free runs describe NVIDIA-specific cases."
+    },
+    {
+      "id": "R10.pull-driver-logs",
+      "status": "pass",
+      "checks": [
+        "TestPullCLIFailure",
+        "TestPull",
+        "TestPullLeftovers",
+        "TestOfflinePipelineMatrix/cuda-unsupported",
+        "TestPipelineCLIStdoutExit",
+        "TestPipelineDiagnostics"
+      ],
+      "sources": [
+        "clean-ci",
+        "pull-tests",
+        "diagnostics-test",
+        "filesystem-ci"
+      ],
+      "notes": "Interrupted or invalid pull leaves the previous selection safe and the new model unregistered. The current CLI control covers immediate backend refusal and safe diagnostics."
+    }
+  ],
+  "history": [
+    {
+      "id": "GPU-2026-11-03-v3",
+      "status": "pass",
+      "sources": [
+        "gpu-2026-11-03"
+      ],
+      "notes": "Historical NVIDIA/CUDA v3 execution with old pins. Stage, publication and independent reader were observed. A direct committed-row comparison was not performed in this run."
+    },
+    {
+      "id": "GPU-DB-2026-11-03-v3",
+      "status": "pass",
+      "sources": [
+        "gpu-db-2026-11-03"
+      ],
+      "notes": "Historical NVIDIA/CUDA v3 follow-up with old pins. Committed rows and the independently read published files matched the same accepted units. The GPU assessment describes comparisons of the historical numbers."
+    },
+    {
+      "id": "CPU-CUDA-offline-issue-19",
+      "status": "unavailable",
+      "sources": [
+        "offline-history"
+      ],
+      "notes": "The dated report describes older pinned CPU and NVIDIA/CUDA runs and their original trace locations."
+    },
+    {
+      "id": "issue-87-scope",
+      "status": "deferred",
+      "sources": [
+        "issue-79"
+      ],
+      "notes": "Human meaning review and translation accuracy improvements are scheduled after v1."
+    },
+    {
+      "id": "issue-87-historical-human-review",
+      "status": "human_incomplete",
+      "sources": [
+        "gpu-db-2026-11-03"
+      ],
+      "notes": "The committed-row follow-up reports 56 unreviewed fresh rows. Preserve the original human verdicts when recording further history."
+    },
+    {
+      "id": "issue-87-later-private-human-failures",
+      "status": "fail",
+      "sources": [
+        "issue-87-private-review-summary"
+      ],
+      "notes": "Issue #87 records failed human assessments in later private trials. The public record gives no row count or individual verdicts."
+    },
+    {
+      "id": "issue-87-later-private-human-review",
+      "status": "human_incomplete",
+      "sources": [
+        "issue-87-private-review-summary"
+      ],
+      "notes": "Issue #87 also records unreviewed results in later private trials. The public record gives no unreviewed row count."
+    }
+  ]
+}
