@@ -634,6 +634,8 @@ class ObserverTests(unittest.TestCase):
         args = [sys.executable, str(OFFLINE), "--evidence", str(prefix), "--expect-exit", "0", "--", str(target)]
         observer = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.await_ready(fifo)
+        child_pid = int((self.root / "repeated.pid").read_text())
+        self.assertNotIn(self.process_state(child_pid), (None, "Z"), "the child exited before the interruptions")
         # SIGTERM and SIGINT cannot coalesce, so the second one is delivered inside the
         # teardown: an interruptible teardown aborted there and left strace, the target
         # and the child alive while still claiming the traced group had stopped.
@@ -642,12 +644,12 @@ class ObserverTests(unittest.TestCase):
         # Both signals end the run; which one Python processes first decides 128+signum.
         self.assertIn(observer.wait(timeout=20), (130, 143))
         self.assert_no_live_process(str(child))
-        self.assertIn(self.process_state(int((self.root / "repeated.pid").read_text())), (None, "Z"))
+        # A child killed on tracer exit may have no individual SIGKILL record.
+        self.assertIn(self.process_state(child_pid), (None, "Z"), "the child survived the interruptions")
         evidence = self.evidence(prefix)
         self.assertEqual(evidence["status"], "interrupted")
         self.assertEqual(evidence["descendants_after_exit"], [])
         self.assertIn("verified", evidence["invalid_reasons"][0])
-        self.assertIn(int((self.root / "repeated.pid").read_text()), evidence["descendants_stopped"])
 
     def test_group_escaping_descendant_is_stopped_on_timeout(self):
         fifo = self.ready_fifo()
