@@ -110,6 +110,32 @@ func TestDoctorRejectsUnregisteredSelection(t *testing.T) {
 func (e *doctorEngine) Info(context.Context) (inference.ModelInfo, error) { return e.info, e.infoErr }
 func (e *doctorEngine) Close() error                                      { e.closed = true; return e.closeErr }
 
+func TestDoctorWebGPU(t *testing.T) {
+	command, err := parseStorage([]string{"doctor", "--check-model", "--backend", "webgpu"})
+	if err != nil || !command.checkModel || command.backend != "webgpu" {
+		t.Fatalf("doctor args = %+v error=%v", command, err)
+	}
+	engine := &doctorEngine{info: inference.ModelInfo{
+		RequestedBackend: "webgpu", Backend: "webgpu", WebGPUBackendPin: "webgpu-v1",
+		ResidentActive: true, ResidentContextCap: 4096, KVPrecision: "f32",
+		DecodePath: "webgpu:vulkan-resident (int4)", GPUName: "Radeon RX 9070 XT", GPUDriver: "RADV",
+	}}
+	out, err := checkModel(context.Background(), command.backend, func(_ context.Context, backend string) (string, inference.Engine, error) {
+		if backend != "webgpu" {
+			t.Fatalf("requested %q", backend)
+		}
+		return "model", engine, nil
+	})
+	if err != nil || !engine.closed {
+		t.Fatalf("closed=%t error=%v", engine.closed, err)
+	}
+	for _, line := range []string{"effective_backend: webgpu", "webgpu_backend_pin: webgpu-v1", "webgpu_resident_active: true", "webgpu_resident_context_cap: 4096", "decode_path: webgpu:vulkan-resident (int4)", "gpu_name: Radeon RX 9070 XT", "gpu_driver: RADV"} {
+		if !strings.Contains(out, line+"\n") {
+			t.Errorf("missing %q in %q", line, out)
+		}
+	}
+}
+
 func TestDoctorModelCheck(t *testing.T) {
 	for _, backend := range []string{"cpu", "cuda"} {
 		t.Run(backend, func(t *testing.T) {

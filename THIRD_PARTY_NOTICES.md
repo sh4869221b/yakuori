@@ -9,7 +9,7 @@ for future research binaries, vendor trees or model-bearing images.
 
 ## Scope and retained notices
 
-The current Go module versions and their module sums are recorded in
+The Go dependency inventory at the 2026-11-06 update is recorded in
 `licenses/go-module-sums.json`; `go mod verify` passed after the 2026-11-06
 PLaMo integration update. Replacement module paths and immutable revisions are
 included. Original root notices for the current pins are retained under
@@ -28,6 +28,10 @@ listed below.
 | golang.org/x/sys | v0.49.0 | BSD-3-Clause, retained | Linux publisher in CLI |
 | github.com/townsendmerino/goinfer → sh4869221b/goinfer | 994cbf5ee38dd8dcc612aad6e6803ac79f772f3b | MIT, [retained](licenses/upstream/goinfer-plamo3-994cbf5/LICENSE) | CPU/CUDA inference engines and research tools; source-only PLaMo reference fixtures have separate terms |
 | github.com/townsendmerino/goinfer/backend/cuda → sh4869221b/goinfer/backend/cuda | 994cbf5ee38dd8dcc612aad6e6803ac79f772f3b | MIT, [retained](licenses/upstream/goinfer-cuda-plamo3-994cbf5/LICENSE) | CUDA inference backend (`cuda && linux && amd64`) |
+| github.com/townsendmerino/goinfer/backend/webgpu → sh4869221b/goinfer/backend/webgpu | 994cbf5ee38dd8dcc612aad6e6803ac79f772f3b | MIT, [fork notice](https://github.com/sh4869221b/goinfer/blob/994cbf5ee38dd8dcc612aad6e6803ac79f772f3b/LICENSE) | AMD WebGPU/Vulkan inference (`gpu && cgo && linux && amd64`) |
+| github.com/oliverbestmann/webgpu | v1.37.1 | Apache-2.0, [upstream text](https://github.com/oliverbestmann/webgpu/blob/v1.37.1/LICENSE) | Go cgo bindings for the AMD build |
+| github.com/oliverbestmann/webgpu/libs-linux | v0.0.0-20260628152803-421b8a341d08 | Bundles wgpu-native; [binding's build source](https://github.com/oliverbestmann/webgpu/blob/v1.37.1/update-wgpu.sh) | Linux static library selected by the Go bindings |
+| wgpu-native | v29.0.1.1 | MIT OR Apache-2.0, [upstream package declarations](https://github.com/gfx-rs/wgpu-native/blob/v29.0.1.1/Cargo.toml) | Native WebGPU library in the AMD build |
 | github.com/townsendmerino/aikit | v1.76.0 | MIT, [retained](licenses/upstream/aikit-v1.76.0/LICENSE) | Inference transitive dependency |
 | [github.com/eitamring/gocudrv](https://github.com/eitamring/gocudrv/blob/v0.3.2/LICENSE) | v0.3.2 | MIT, [retained](licenses/upstream/gocudrv-v0.3.2/LICENSE) | CUDA driver API binding |
 | [github.com/ebitengine/purego](https://github.com/ebitengine/purego/blob/v0.11.2/LICENSE) | v0.11.2 | Apache-2.0, [retained](licenses/upstream/purego-v0.11.2/LICENSE) | CUDA driver loading |
@@ -53,7 +57,10 @@ inference or evaluation requires a working
 NVIDIA driver; gocudrv dynamically loads the host's `libcuda.so.1` at runtime
 ([upstream requirement](https://github.com/eitamring/gocudrv/blob/v0.3.2/README.md)).
 The driver is supplied by the runtime host and is not distributed by this
-repository.
+repository. The optional AMD build uses the host Vulkan loader and AMD
+Vulkan driver. Its static wgpu-native library has a separate Rust dependency
+closure; the rows above document only the direct components and their
+upstream notices.
 
 ### File-level findings and distribution limits
 

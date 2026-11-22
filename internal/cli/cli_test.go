@@ -192,6 +192,18 @@ func TestRunLocalizeRejectsUnselectedModelWithoutChangingFiles(t *testing.T) {
 	}
 }
 
+func TestWebGPUTranslationArguments(t *testing.T) {
+	for _, args := range [][]string{
+		translationArgs("translate", "--backend", "webgpu", "source"),
+		translationArgs("localize", "--backend", "webgpu", "--output", "output", "source"),
+	} {
+		command, _, err := parseTranslation(args[0], args[1:])
+		if err != nil || command.backend != "webgpu" {
+			t.Fatalf("%s WebGPU parser: backend=%q error=%v", args[0], command.backend, err)
+		}
+	}
+}
+
 func testTranslationArguments(t *testing.T) {
 	for _, action := range []string{"translate", "localize"} {
 		for _, args := range [][]string{

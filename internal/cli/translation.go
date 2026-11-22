@@ -66,7 +66,8 @@ func (command translationCommand) executeWithStoreClose(ctx context.Context, std
 	}
 	if details != nil {
 		details.ModelID, details.Info = id, info
-		if id != details.ExpectedModelID || info.ModelSHA256 != details.ExpectedModelSHA256 || info.RequestedBackend != command.backend || info.Backend != command.backend || (command.backend == "cuda" && (!info.ResidentActive || info.ResidentContextCap <= 0)) {
+		requireResident := command.backend == "cuda" || command.backend == "webgpu"
+		if id != details.ExpectedModelID || info.ModelSHA256 != details.ExpectedModelSHA256 || info.RequestedBackend != command.backend || info.Backend != command.backend || requireResident && (!info.ResidentActive || info.ResidentContextCap <= 0) {
 			return result, &localize.Error{Phase: "profile", Err: errors.New("acceptance model or backend mismatch")}
 		}
 	}

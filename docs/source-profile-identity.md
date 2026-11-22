@@ -14,8 +14,9 @@ configuration remain separate work.
 The current versions are `SourceVersion=1`, `ProfileVersion=1` and `KeySchema=1`.
 The wire format is `encoding/json.Marshal` of fixed-order structs with explicit
 JSON tags, no maps, and no trailing newline. Remote-only `remote_model` and
-`generation.sampling_mode` are omitted for CPU/CUDA, preserving existing v1
-canonical bytes; all other fields remain explicit. Numbers are
+`generation.sampling_mode` are omitted for local models. `webgpu_backend_pin`
+appears only for effective WebGPU, preserving the v1 canonical bytes of earlier
+CPU, CUDA and OpenAI profiles. Numbers are
 integers; digests are 64 lowercase hexadecimal characters. Opaque byte sequences
 are base64 JSON strings, including the empty string for empty bytes. Empty key,
 span and stop-ID collections are `[]`, never `null`. Disabled optional features
@@ -68,7 +69,8 @@ not establish model or generation equivalence.
 | `version` | Profile serialization version, currently 1. |
 | `model_id`, `model_digest` | Explicit caller ID and digest of the actual loaded model bytes. Same ID with different bytes misses. |
 | `remote_model` | For OpenAI, the date-pinned API model snapshot; absent for local models. |
-| `backend`, `backend_pin`, `cuda_backend_pin` | Effective CPU/CUDA/OpenAI backend and pinned implementation releases. CPU canonicalizes the unused CUDA pin to empty. |
+| `backend`, `backend_pin`, `cuda_backend_pin` | Effective CPU/CUDA/WebGPU/OpenAI backend and pinned implementation releases. The unused CUDA pin is empty. |
+| `webgpu_backend_pin` | Pinned WebGPU backend module for the AMD Vulkan resident path. Present only when the effective backend is WebGPU. |
 | `compute_quant`, `kv_precision` | Actual compute quantization and effective KV precision. Runtime CPU projection uses `not-applicable` for unavailable CPU KV precision. |
 | `tokenizer` | `model_digest`, `backend_pin` identifying tokenizer contents/implementation. |
 | `template` | `family`, `source`, `renderer_version` for model template rendering. |
@@ -93,7 +95,7 @@ Local generation uses fixed greedy sampling. OpenAI uses `sampling_mode=provider
 `prefill` contains `exact`, `path`, `cpu_fast_attention`, `batched`,
 `batched_capability`, `fast`, `floor`, `chunk`. It is a model-load snapshot from
 public `ExactPrefill()`, `PrefillPath()` and `Knob()` values, not a later reread
-of process environment. `path` is a static CPU/CUDA/none policy identifier;
+of process environment. `path` is a static CPU/CUDA/WebGPU/none policy identifier;
 `batched_capability` is static capability. Neither asserts the execution path
 of an individual request. Diagnostic reason strings are excluded.
 
@@ -108,10 +110,12 @@ of an individual request. Diagnostic reason strings are excluded.
   ignores floor. **Chunk remains included whenever CUDA batched policy and
   capability use it, including ExactPrefill and `fast=off`.** Without batched
   policy or capability, fast, floor and chunk are inactive.
+- WebGPU records its batched switch and model's reported batched capability.
+  The CUDA fast selector, floor and chunk are inactive.
 
 Requested backend, decline reasons, timings, driver names and configured limits
 that are not effective are excluded. Changes to these diagnostics alone retain
-identity; effective CPU/CUDA, release, precision and policy changes do not.
+identity. Changes to the effective backend, release, precision or policy change the profile.
 
 ## Executable glossary contract (#17)
 

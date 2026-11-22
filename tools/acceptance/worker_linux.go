@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"runtime/debug"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/localize"
 	"github.com/sh4869221b/yakuori/internal/models"
+	"github.com/sh4869221b/yakuori/internal/prompt"
 )
 
 // WorkerRequest describes one production translation; it is also the direct
@@ -24,6 +26,7 @@ type WorkerRequest struct {
 	Source, Output, SourceLanguage     string
 	SourceSHA256, ModelID, ModelSHA256 string
 	Backend, Game, Artifact            string
+	GPUPCI                             string `json:",omitempty"`
 	TMData                             string
 	ModelPaths                         config.Paths
 }
@@ -69,6 +72,7 @@ type WorkerResult struct {
 	FailurePhase string                         `json:"failure_phase,omitempty"`
 	LoadSeconds  *float64                       `json:"load_seconds"`
 	LoadStatus   string                         `json:"load_status"`
+	AMDActivity  *AMDActivity                   `json:"amd_generation_activity,omitempty"`
 }
 
 type EngineOpener func(context.Context, string) (string, inference.Engine, error)
@@ -96,7 +100,7 @@ func RunWorker(ctx context.Context, req WorkerRequest, open EngineOpener) (resul
 			}
 		}
 	}()
-	if req.RunID == "" || req.FixtureID == "" || (req.Mode != "fresh" && req.Mode != "reuse") || req.Source == "" || req.Output == "" || req.TMData == "" || req.ModelID == "" || req.Game == "" || req.Artifact == "" || req.Backend != "cuda" || open == nil {
+	if req.RunID == "" || req.FixtureID == "" || (req.Mode != "fresh" && req.Mode != "reuse") || req.Source == "" || req.Output == "" || req.TMData == "" || req.ModelID == "" || req.Game == "" || req.Artifact == "" || (req.Backend != "cuda" && req.Backend != "webgpu") || (req.Backend == "webgpu" && !pciAddress.MatchString(req.GPUPCI)) || open == nil {
 		return result, errors.New("invalid worker request")
 	}
 	source, err := decodeDigest(req.SourceSHA256)
@@ -120,10 +124,51 @@ func RunWorker(ctx context.Context, req WorkerRequest, open EngineOpener) (resul
 		result.LoadStatus = "complete"
 		if openErr != nil {
 			result.LoadStatus = "failed"
+		} else if backend == "webgpu" {
+			factory, ok := engine.(interface {
+				NewRequest(context.Context, prompt.Input, inference.GenerationPolicy) (inference.GenerationRequest, error)
+			})
+			if !ok {
+				// Keep the original engine so the CLI can report the missing request factory.
+				return id, engine, nil
+			}
+			result.AMDActivity = &AMDActivity{}
+			engine = &amdObservedEngine{Engine: engine, newRequest: factory.NewRequest, pci: req.GPUPCI, activity: result.AMDActivity}
 		}
 		return id, engine, openErr
 	}
 	result.Result, err = cli.RunW3Acceptance(ctx, args, paths, timedOpen, &result.Observation, &result.Details)
+	return result, err
+}
+
+type AMDActivity struct {
+	Observed int `json:"observed"`
+	Advanced int `json:"advanced"`
+}
+
+type amdObservedEngine struct {
+	inference.Engine
+	newRequest func(context.Context, prompt.Input, inference.GenerationPolicy) (inference.GenerationRequest, error)
+	pci        string
+	activity   *AMDActivity
+}
+
+func (e *amdObservedEngine) NewRequest(ctx context.Context, input prompt.Input, policy inference.GenerationPolicy) (inference.GenerationRequest, error) {
+	return e.newRequest(ctx, input, policy)
+}
+
+func (e *amdObservedEngine) Generate(ctx context.Context, req inference.GenerationRequest) (inference.GenerationResult, error) {
+	before, _ := readAMDProcess(os.Getpid(), e.pci)
+	result, err := e.Engine.Generate(ctx, req)
+	if err == nil {
+		after, _ := readAMDProcess(os.Getpid(), e.pci)
+		if observed, advanced := amdEngineActivity(before, after); observed {
+			e.activity.Observed++
+			if advanced {
+				e.activity.Advanced++
+			}
+		}
+	}
 	return result, err
 }
 

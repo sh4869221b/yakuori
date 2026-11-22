@@ -35,6 +35,10 @@ type ModelInfo struct {
 	RemoteModel             string
 	BackendPin              string
 	CUDABackendPin          string
+	WebGPUBackendPin        string `json:",omitempty"`
+	DecodePath              string `json:",omitempty"`
+	GPUName                 string `json:",omitempty"`
+	GPUDriver               string `json:",omitempty"`
 	RequestedBackend        string
 	Backend                 string
 	ComputeQuant            string

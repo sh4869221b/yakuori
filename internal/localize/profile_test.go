@@ -121,6 +121,32 @@ func TestCanonicalInferenceProfileEffectiveConditions(t *testing.T) {
 	}
 }
 
+func TestWebGPUCanonicalProfile(t *testing.T) {
+	info, prepared, input := inferenceProfileFixture()
+	request := profileRequest(t, prepared, 128, time.Second)
+	cpu, err := localize.NewCanonicalInferenceProfile(info, request, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info.Backend = "webgpu"
+	info.Prefill = inference.PrefillPolicy{Path: "webgpu", Fast: "off"}
+	info.ResidentActive, info.ResidentContextCap, info.ContextTokens = true, 4096, 4096
+	info.WebGPUBackendPin, info.KVPrecision = "webgpu-v1", "f32"
+	gpu, err := localize.NewCanonicalInferenceProfile(info, request, input)
+	if err != nil || cpu.Digest() == gpu.Digest() {
+		t.Fatalf("WebGPU identity changed=%t error=%v", cpu.Digest() != gpu.Digest(), err)
+	}
+	info.WebGPUBackendPin = "webgpu-v2"
+	update, err := localize.NewCanonicalInferenceProfile(info, request, input)
+	if err != nil || update.Digest() == gpu.Digest() {
+		t.Fatalf("WebGPU revision changed=%t error=%v", update.Digest() != gpu.Digest(), err)
+	}
+	info.ResidentActive = false
+	if _, err := localize.NewCanonicalInferenceProfile(info, request, input); !errors.Is(err, localize.ErrInferenceProfile) {
+		t.Fatalf("WebGPU without residency: %v", err)
+	}
+}
+
 func TestPlamoCanonicalProfile(t *testing.T) {
 	info, prepared, input := inferenceProfileFixture()
 	info.Prompt = prompt.Plamo3Identity()
