@@ -1,0 +1,98 @@
+{
+  "source_language": "en",
+  "schema": "yakuori.context/v1",
+  "scope": {
+    "game_namespace": "example-game",
+    "artifacts": [
+      {"artifact_namespace": "mod-b", "original_artifact_digest": "2222222222222222222222222222222222222222222222222222222222222222"},
+      {"artifact_namespace": "mod-a", "original_artifact_digest": "1111111111111111111111111111111111111111111111111111111111111111"}
+    ]
+  },
+  "target_language": "ja",
+  "world": [
+    {
+      "id": "the-coast",
+      "text": "港の記録 <log> & notes\r\nCafe\u0301\u2028夕方",
+      "artifacts": ["mod-b", "mod-a"],
+      "tags": ["設定", "coast"],
+      "provenance": {
+        "status": "confirmed", "method": "manual", "version": "1", "user_edited": true,
+        "sources": [
+          {"kind": "manual", "reference": "design-notes#coast"},
+          {"kind": "artifact", "artifact_namespace": "mod-a"}
+        ]
+      }
+    }
+  ],
+  "characters": [
+    {
+      "id": "navigator", "name": "Navigator", "description": "Charts the coast.",
+      "artifacts": ["mod-b", "mod-a"],
+      "provenance": {
+        "method": "extraction", "version": "metadata-v1", "status": "confirmed", "user_edited": false,
+        "sources": [{"kind": "metadata", "artifact_namespace": "mod-a", "metadata_key": "crew/navigator"}]
+      }
+    },
+    {
+      "id": "captain", "name": "Captain", "description": "Runs the ship.",
+      "artifacts": ["mod-a", "mod-b"],
+      "provenance": {
+        "method": "manual", "version": "1", "status": "confirmed", "user_edited": false,
+        "sources": [{"kind": "unit", "unit_id": "port-greeting"}]
+      }
+    }
+  ],
+  "scenes": [
+    {
+      "id": "port", "summary": "The crew meets before departure.",
+      "artifacts": ["mod-a"], "speaker_ids": ["navigator", "captain"],
+      "provenance": {"method": "llm", "version": "example-1", "status": "candidate", "user_edited": false}
+    },
+    {
+      "id": "deck", "summary": "The captain greets the watch.",
+      "artifacts": ["mod-b", "mod-a"], "speaker_ids": ["captain"],
+      "provenance": {
+        "method": "manual", "version": "1", "status": "confirmed", "user_edited": true,
+        "sources": [{"kind": "manual", "reference": "design-notes#deck"}]
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "port-greeting", "artifact_namespace": "mod-a", "adapter": "witcher3-w3strings", "format_schema": "w3strings-v162-en-jp-v1", "stable_id": "101",
+      "raw_source_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+      "scene_id": "port", "speaker_id": "captain",
+      "provenance": {"method": "extraction", "version": "1", "status": "candidate", "user_edited": false}
+    },
+    {
+      "id": "port-reply", "artifact_namespace": "mod-a", "adapter": "witcher3-w3strings", "format_schema": "w3strings-v162-en-jp-v1", "stable_id": "103",
+      "raw_source_digest": "4444444444444444444444444444444444444444444444444444444444444444",
+      "scene_id": "port", "speaker_id": "navigator", "previous_unit_id": "port-greeting", "tags": ["reply"],
+      "provenance": {
+        "method": "manual", "version": "1", "status": "confirmed", "user_edited": true,
+        "sources": [{"kind": "unit", "unit_id": "port-greeting"}]
+      }
+    },
+    {
+      "id": "deck-greeting", "artifact_namespace": "mod-a", "adapter": "witcher3-w3strings", "format_schema": "w3strings-v162-en-jp-v1", "stable_id": "102",
+      "raw_source_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+      "scene_id": "deck", "speaker_id": "captain",
+      "provenance": {"method": "extraction", "version": "1", "status": "candidate", "user_edited": false}
+    },
+    {
+      "id": "mod-b-greeting", "artifact_namespace": "mod-b", "adapter": "witcher3-w3strings", "format_schema": "w3strings-v162-en-jp-v1", "stable_id": "101",
+      "raw_source_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+      "scene_id": "deck", "speaker_id": "captain",
+      "provenance": {"method": "extraction", "version": "1", "status": "candidate", "user_edited": false}
+    }
+  ],
+  "glossary_refs": [
+    {
+      "id": "crew-terms", "schema": "glossary-v1", "reference": "crew-terms.json",
+      "provenance": {
+        "method": "manual", "version": "1", "status": "confirmed", "user_edited": false,
+        "sources": [{"kind": "manual", "reference": "design-notes#terms"}]
+      }
+    }
+  ]
+}

@@ -148,6 +148,9 @@ the GPU matrix passed; report the run's actual traces and status separately.
 ## Current CLI / error contract
 
 - `help`, `-h`, `--help`: exit 0, help on stdout, empty stderr; no config access.
+- `context validate FILE`: validates a local regular JSON file and prints its
+  fingerprint to stdout. Diagnostics contain fixed reasons and positions. This
+  command uses no configuration or model. See the [Context Pack v1 contract](context-pack-v1.md).
 - `doctor`: prints the four resolved directories and concrete config, registry,
   model, TM, snapshot and lock paths with presence/mode status. It stats these
   paths and reads only the small config and registry JSON; it does not hash or
