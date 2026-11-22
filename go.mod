@@ -10,6 +10,7 @@ require (
 	github.com/townsendmerino/goinfer/backend/cuda v0.0.0-20261106011512-994cbf5ee38d
 	github.com/townsendmerino/goinfer/backend/webgpu v0.0.0-20261106011512-994cbf5ee38d
 	golang.org/x/sys v0.49.0
+	golang.org/x/text v0.43.0
 	modernc.org/sqlite v1.61.1
 )
 
@@ -25,7 +26,6 @@ require (
 	github.com/oliverbestmann/webgpu/libs-windows v0.0.0-20260628152801-f47d1b682eb8 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/townsendmerino/aikit v1.76.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
 	modernc.org/libc v1.80.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect

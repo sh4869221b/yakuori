@@ -35,7 +35,7 @@ listed below.
 | github.com/townsendmerino/aikit | v1.76.0 | MIT, [retained](licenses/upstream/aikit-v1.76.0/LICENSE) | Inference transitive dependency |
 | [github.com/eitamring/gocudrv](https://github.com/eitamring/gocudrv/blob/v0.3.2/LICENSE) | v0.3.2 | MIT, [retained](licenses/upstream/gocudrv-v0.3.2/LICENSE) | CUDA driver API binding |
 | [github.com/ebitengine/purego](https://github.com/ebitengine/purego/blob/v0.11.2/LICENSE) | v0.11.2 | Apache-2.0, [retained](licenses/upstream/purego-v0.11.2/LICENSE) | CUDA driver loading |
-| golang.org/x/text | v0.43.0 | BSD-3-Clause, retained | Inference transitive dependency |
+| golang.org/x/text | v0.43.0 | BSD-3-Clause, retained | Context Pack language tags and inference |
 | modernc.org/sqlite | v1.61.1 | BSD-3-Clause wrapper plus scoped engine/third-party notices, retained | Translation-memory persistence and SQLite probes |
 | modernc.org/libc | v1.80.0 | BSD-3-Clause root plus scoped third-party notices, retained | SQLite dependency |
 | modernc.org/mathutil | v1.7.1 | BSD-3-Clause root plus scoped third-party notices, retained | SQLite dependency |

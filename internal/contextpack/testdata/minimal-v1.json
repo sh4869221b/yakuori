@@ -1,0 +1,6 @@
+{
+  "schema": "yakuori.context/v1",
+  "scope": {"game_namespace": "example-game"},
+  "source_language": "en",
+  "target_language": "ja"
+}
