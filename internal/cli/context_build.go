@@ -19,9 +19,15 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func runContextBuild(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	var scope contextpack.BuildScope
-	var outputDir string
+type contextBuildCommand struct {
+	scope                              contextpack.BuildScope
+	input, outputDir, backend, against string
+	infer                              bool
+}
+
+func parseContextBuild(args []string) (contextBuildCommand, string, error) {
+	var command contextBuildCommand
+	scope := &command.scope
 	var help strings.Builder
 	flags := flag.NewFlagSet("context build", flag.ContinueOnError)
 	flags.SetOutput(&help)
@@ -29,7 +35,10 @@ func runContextBuild(ctx context.Context, args []string, stdout, stderr io.Write
 	flags.StringVar(&scope.TargetLanguage, "target-language", "", "required target language")
 	flags.StringVar(&scope.GameNamespace, "game", "", "required game namespace")
 	flags.StringVar(&scope.ArtifactNamespace, "artifact", "", "required artifact namespace")
-	flags.StringVar(&outputDir, "output-dir", "", "existing directory for a new candidate file")
+	flags.StringVar(&command.outputDir, "output-dir", "", "existing directory for a new candidate file")
+	flags.BoolVar(&command.infer, "infer", false, "generate additional candidates using the selected local model")
+	flags.StringVar(&command.backend, "backend", "cpu", "inference backend: cpu, cuda or webgpu (requires --infer)")
+	flags.StringVar(&command.against, "against", "", "compare with a validated pack and report collisions (requires --infer)")
 	flags.Usage = func() {
 		fmt.Fprintln(flags.Output(), "Usage: yakuori context build [options] FILE")
 		fmt.Fprintln(flags.Output(), "FILE must be a regular Generic JSON v1 file. Flags precede FILE.")
@@ -38,12 +47,39 @@ func runContextBuild(ctx context.Context, args []string, stdout, stderr io.Write
 	}
 	flagErr := flags.Parse(args)
 	if flagErr == flag.ErrHelp {
-		return writeOutput(stdout, stderr, help.String(), nil)
+		return command, help.String(), nil
 	}
 	if flagErr != nil || flags.NArg() != 1 || flags.Arg(0) == "" || flags.Arg(0) == "-" ||
 		scope.SourceLanguage == "" || scope.TargetLanguage == "" || scope.GameNamespace == "" ||
-		scope.ArtifactNamespace == "" || outputDir == "" {
-		return reportFailure(stderr, ExitUsage, "invalid context build arguments; use context build --help")
+		scope.ArtifactNamespace == "" || command.outputDir == "" ||
+		command.backend != "cpu" && command.backend != "cuda" && command.backend != "webgpu" {
+		return command, "", errInvalidContextBuildArguments
+	}
+	var invalid bool
+	flags.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "backend":
+			invalid = invalid || !command.infer
+		case "against":
+			invalid = invalid || !command.infer || command.against == ""
+		}
+	})
+	if invalid {
+		return command, "", errInvalidContextBuildArguments
+	}
+	command.input = flags.Arg(0)
+	return command, "", nil
+}
+
+var errInvalidContextBuildArguments = errors.New("invalid context build arguments; use context build --help")
+
+func runContextBuild(ctx context.Context, args []string, stdout, stderr io.Writer, resolve func() (config.Paths, error), open selectedEngineOpener) int {
+	command, help, err := parseContextBuild(args)
+	if err != nil {
+		return reportFailure(stderr, ExitUsage, err.Error())
+	}
+	if help != "" {
+		return writeOutput(stdout, stderr, help, nil)
 	}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -51,6 +87,7 @@ func runContextBuild(ctx context.Context, args []string, stdout, stderr io.Write
 		return reportFailure(stderr, ExitFailure, "context build: canceled")
 	}
 
+	scope := command.scope
 	limits := config.DefaultLimits()
 	adapter, err := genericjson.New(genericjson.Metadata{
 		SourceLanguage: scope.SourceLanguage, TargetLanguage: scope.TargetLanguage,
@@ -59,7 +96,7 @@ func runContextBuild(ctx context.Context, args []string, stdout, stderr io.Write
 	if err != nil {
 		return reportFailure(stderr, ExitFailure, "context build: "+err.Error())
 	}
-	raw, err := readTranslationInput(flags.Arg(0), limits)
+	raw, err := readTranslationInput(command.input, limits)
 	if err != nil {
 		reason := "cannot read input file"
 		var limitErr *config.LimitError
@@ -78,11 +115,21 @@ func runContextBuild(ctx context.Context, args []string, stdout, stderr io.Write
 	if err != nil {
 		return reportFailure(stderr, ExitFailure, "context build: "+err.Error())
 	}
-	candidate, err := publishContextCandidate(ctx, outputDir, doc.Canonical)
+	var collisions string
+	if command.infer {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, contextpack.InferTimeout)
+		defer cancel()
+		doc, collisions, err = inferContextPack(ctx, command, doc, session, resolve, open)
+		if err != nil {
+			return reportFailure(stderr, ExitFailure, "context build: "+err.Error())
+		}
+	}
+	candidate, err := publishContextCandidate(ctx, command.outputDir, doc.Canonical)
 	if err != nil {
 		return reportFailure(stderr, ExitFailure, "context build: "+err.Error())
 	}
-	result := fmt.Sprintf("candidate: %s\nfingerprint: %x\n", candidate, doc.Fingerprint)
+	result := fmt.Sprintf("candidate: %s\nfingerprint: %x\n%s", candidate, doc.Fingerprint, collisions)
 	if n, err := io.WriteString(stdout, result); err != nil || n != len(result) {
 		return reportFailure(stderr, ExitFailure, fmt.Sprintf("context build: candidate %q saved, but write stdout failed", candidate))
 	}

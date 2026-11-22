@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/unit"
 	"golang.org/x/text/language"
@@ -237,6 +238,11 @@ func validateProvenance(p Provenance, artifacts map[string]struct{}, units map[s
 	default:
 		return invalid(loc, "unknown confirmation status")
 	}
+	if p.Generation != nil {
+		if p.Method != "llm" || !p.Generation.valid() || !slices.ContainsFunc(p.Sources, func(s Source) bool { return s.Kind == "unit" }) {
+			return invalid(loc, "generation requires valid identity and unit evidence for an llm record")
+		}
+	}
 	seen := make(map[[5]string]struct{}, len(p.Sources))
 	for i, s := range p.Sources {
 		at := position(loc+".sources", i)
@@ -258,6 +264,12 @@ func validateProvenance(p Provenance, artifacts map[string]struct{}, units map[s
 		}
 	}
 	return nil
+}
+
+func (g GenerationOrigin) valid() bool {
+	return config.ValidateModelID(g.ModelID) == nil && validDigest(g.ModelSHA256) &&
+		nonblank(g.PromptVersion) && nonblank(g.TemplateFamily) && nonblank(g.TemplateSource) &&
+		nonblank(g.TemplateRendererVersion) && nonblank(g.PolicyVersion)
 }
 
 func (s Source) validFields() bool {

@@ -20,6 +20,46 @@ const (
 )
 
 func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy inference.GenerationPolicy) (inference.GenerationRequest, error) {
+	return e.prepareRequest(ctx, inference.PreparedRequest{Identity: e.identity(), StopIDs: e.stopIDs, Terms: input.Terms}, policy, func() ([]tokenizer.Segment, error) {
+		if e.info.Template.Family == plamo3Family {
+			return plamo3Segments(input)
+		}
+		messages := prompt.Build(input)
+		if e.info.Template.Source == indexChatTemplate {
+			messages = prompt.BuildIndex(input)
+			messages.System = strings.TrimSpace(messages.System)
+			messages.User = strings.TrimSpace(messages.User)
+		}
+		return e.chatSegments(messages.System, messages.User), nil
+	})
+}
+
+// NewContextRequest renders the separate Context Pack extraction prompt using
+// the local ChatML template and its literal user turn.
+func (e *Engine) NewContextRequest(ctx context.Context, data string, policy inference.GenerationPolicy) (inference.GenerationRequest, error) {
+	return e.prepareRequest(ctx, inference.PreparedRequest{Identity: e.contextIdentity(), StopIDs: e.stopIDs}, policy, func() ([]tokenizer.Segment, error) {
+		if e.info.Template.Family != "chatml" {
+			return nil, ErrUnknownTemplate
+		}
+		task := prompt.ContextIdentity()
+		return e.chatSegments(task.SystemTemplate, fmt.Sprintf(task.UserTemplate, data)), nil
+	})
+}
+
+func (e *Engine) chatSegments(system, user string) []tokenizer.Segment {
+	segments := e.template.RenderSegments(system, []chat.Turn{{Role: "user", Content: user}})
+	if e.info.Template.Source == indexChatTemplate {
+		// The official disabled-thinking generation prefix closes an empty block.
+		segments = append(segments,
+			tokenizer.Segment{Text: thinkingOpen, Special: true},
+			tokenizer.Segment{Text: thinkingSeparator},
+			tokenizer.Segment{Text: thinkingClose, Special: true},
+			tokenizer.Segment{Text: thinkingSeparator})
+	}
+	return segments
+}
+
+func (e *Engine) prepareRequest(ctx context.Context, prepared inference.PreparedRequest, policy inference.GenerationPolicy, render func() ([]tokenizer.Segment, error)) (inference.GenerationRequest, error) {
 	e.mu.Lock()
 	closing := e.closing
 	e.mu.Unlock()
@@ -40,29 +80,9 @@ func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy infe
 	if policy.Schema() != inference.PolicySchemaV1 {
 		return inference.GenerationRequest{}, inference.ErrInvalidPolicy
 	}
-	var segments []tokenizer.Segment
-	if e.info.Template.Family == plamo3Family {
-		var err error
-		segments, err = plamo3Segments(input)
-		if err != nil {
-			return inference.GenerationRequest{}, err
-		}
-	} else {
-		messages := prompt.Build(input)
-		if e.info.Template.Source == indexChatTemplate {
-			messages = prompt.BuildIndex(input)
-			messages.System = strings.TrimSpace(messages.System)
-			messages.User = strings.TrimSpace(messages.User)
-		}
-		segments = e.template.RenderSegments(messages.System, []chat.Turn{{Role: "user", Content: messages.User}})
-		if e.info.Template.Source == indexChatTemplate {
-			// The official disabled-thinking generation prefix closes an empty block.
-			segments = append(segments,
-				tokenizer.Segment{Text: thinkingOpen, Special: true},
-				tokenizer.Segment{Text: thinkingSeparator},
-				tokenizer.Segment{Text: thinkingClose, Special: true},
-				tokenizer.Segment{Text: thinkingSeparator})
-		}
+	segments, err := render()
+	if err != nil {
+		return inference.GenerationRequest{}, err
 	}
 	ids, err := e.tokenizer.EncodeSegments(segments, false)
 	if err != nil {
@@ -77,10 +97,8 @@ func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy infe
 		rendered.WriteString(segment.Text)
 		spans[i] = inference.PromptSpan{Text: segment.Text, Special: segment.Special}
 	}
-	return inference.NewGenerationRequest(inference.PreparedRequest{
-		RenderedPrompt: rendered.String(), Spans: spans, TokenIDs: ids,
-		Identity: e.identity(), StopIDs: e.stopIDs, Terms: input.Terms,
-	}, policy)
+	prepared.RenderedPrompt, prepared.Spans, prepared.TokenIDs = rendered.String(), spans, ids
+	return inference.NewGenerationRequest(prepared, policy)
 }
 
 func (e *Engine) CountTokens(ctx context.Context, request inference.GenerationRequest) (int, error) {
@@ -92,8 +110,19 @@ func (e *Engine) CountTokens(ctx context.Context, request inference.GenerationRe
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	if request.Identity() != e.identity() {
+	if !e.acceptsIdentity(request.Identity()) {
 		return 0, ErrForeignRequest
 	}
 	return len(request.TokenIDs()), nil
+}
+
+func (e *Engine) contextIdentity() inference.RequestIdentity {
+	id := e.identity()
+	id.Prompt = prompt.ContextIdentity()
+	id.PromptSchema = id.Prompt.Schema
+	return id
+}
+
+func (e *Engine) acceptsIdentity(id inference.RequestIdentity) bool {
+	return id == e.identity() || e.info.Template.Family == "chatml" && id == e.contextIdentity()
 }

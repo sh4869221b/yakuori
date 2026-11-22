@@ -75,7 +75,7 @@ func runWithTranslationExecutor(ctx context.Context, args []string, stdout, stde
 		return runStorage(ctx, args, stdout, stderr, resolve)
 	}
 	if args[0] == "context" {
-		return runContext(ctx, args[1:], stdout, stderr)
+		return runContext(ctx, args[1:], stdout, stderr, resolve, open)
 	}
 	if args[0] == "localize" || args[0] == "translate" {
 		command, help, err := parseTranslation(args[0], args[1:])

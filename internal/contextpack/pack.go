@@ -80,11 +80,23 @@ type GlossaryRef struct {
 }
 
 type Provenance struct {
-	Method     string   `json:"method"`
-	Version    string   `json:"version"`
-	Status     string   `json:"status"`
-	UserEdited *bool    `json:"user_edited,omitempty"`
-	Sources    []Source `json:"sources,omitempty"`
+	Method     string            `json:"method"`
+	Version    string            `json:"version"`
+	Status     string            `json:"status"`
+	UserEdited *bool             `json:"user_edited,omitempty"`
+	Sources    []Source          `json:"sources,omitempty"`
+	Generation *GenerationOrigin `json:"generation,omitempty"`
+}
+
+// GenerationOrigin identifies the local model and request that made a proposal.
+type GenerationOrigin struct {
+	ModelID                 string `json:"model_id"`
+	ModelSHA256             string `json:"model_sha256"`
+	PromptVersion           string `json:"prompt_version"`
+	TemplateFamily          string `json:"template_family"`
+	TemplateSource          string `json:"template_source"`
+	TemplateRendererVersion string `json:"template_renderer_version"`
+	PolicyVersion           string `json:"policy_version"`
 }
 
 type Source struct {

@@ -22,6 +22,11 @@ func TestUsesWebGPU(t *testing.T) {
 		{"translate" + scope + " --backend webgpu --backend cpu source", false},
 		{"translate" + scope + " -- --backend=webgpu", false},
 		{"models use webgpu", false},
+		{"context build" + scope + " --infer --backend webgpu --output-dir out source", true},
+		{"context build" + scope + " --backend webgpu --output-dir out source", false},
+		{"context build" + scope + " --infer --backend cpu --output-dir out source", false},
+		{"context build" + scope + " --infer --backend webgpu source", false},
+		{"context build --infer --backend webgpu --help", false},
 	} {
 		if got := usesWebGPU(strings.Fields(tt.args)); got != tt.want {
 			t.Errorf("usesWebGPU(%q) = %t, want %t", tt.args, got, tt.want)

@@ -27,6 +27,12 @@ func usesWebGPU(args []string) bool {
 	case "translate", "localize":
 		cmd, help, err := parseTranslation(args[0], args[1:])
 		return err == nil && help == "" && cmd.backend == "webgpu"
+	case "context":
+		if len(args) < 2 || args[1] != "build" {
+			return false
+		}
+		cmd, help, err := parseContextBuild(args[2:])
+		return err == nil && help == "" && cmd.infer && cmd.backend == "webgpu"
 	case "doctor":
 		cmd, err := parseStorage(args)
 		return err == nil && cmd.help == "" && cmd.checkModel && cmd.backend == "webgpu"
