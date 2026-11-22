@@ -48,3 +48,18 @@ func TestAMDClientsAndActivity(t *testing.T) {
 		t.Fatal("missing VRAM was treated as observed")
 	}
 }
+
+func TestWebGPUModelPinMatchesWorkerReplace(t *testing.T) {
+	const fork = "github.com/sh4869221b/goinfer/backend/webgpu"
+	const revision = "994cbf5ee38dd8dcc612aad6e6803ac79f772f3b"
+	const version = "v0.0.0-20261106011512-994cbf5ee38d"
+	build := BuildInfo{WebGPUModulePath: fork, Modules: map[string]string{webGPUModule: version}}
+	if !webGPUPinMatches(build, fork+"@"+revision) {
+		t.Fatal("full revision did not match the worker pseudo-version")
+	}
+	for _, pin := range []string{webGPUModule + "@" + revision, fork + "@" + version, fork + "@0" + revision[1:]} {
+		if webGPUPinMatches(build, pin) {
+			t.Fatalf("accepted mismatched model pin %q", pin)
+		}
+	}
+}

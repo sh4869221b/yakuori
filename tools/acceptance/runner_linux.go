@@ -77,6 +77,21 @@ type PairCleanup struct {
 	Seconds    float64 `json:"seconds"`
 }
 
+// The model pin carries the source path and full revision. Go build
+// metadata reports the replacement path and a pseudo-version's short revision.
+func webGPUPinMatches(build BuildInfo, pin string) bool {
+	path, revision, ok := strings.Cut(pin, "@")
+	version := build.Modules[webGPUModule]
+	n := strings.LastIndexByte(version, '-')
+	if !ok || path == "" || path != build.WebGPUModulePath || len(revision) != 40 || n < 0 {
+		return false
+	}
+	if _, err := hex.DecodeString(revision); err != nil {
+		return false
+	}
+	return version[n+1:] == revision[:12]
+}
+
 func measurementMissing(session *measurementSession, entry FixtureRun) []string {
 	var missing []string
 	env, m := session.supervisor.Environment, entry.Measurement
@@ -106,12 +121,12 @@ func measurementMissing(session *measurementSession, entry FixtureRun) []string 
 		modulePin = modules["github.com/townsendmerino/goinfer/cuda"]
 	}
 	if env.GPUPCI != "" {
-		modulePin = modules["github.com/townsendmerino/goinfer/backend/webgpu"]
-		if entry.Details == nil || entry.Details.Info.WebGPUBackendPin != modulePin || entry.Details.Info.GPUName == "" || entry.Details.Info.GPUDriver == "" {
+		modulePin = modules[webGPUModule]
+		if entry.Details == nil || !webGPUPinMatches(entry.WorkerBuild, entry.Details.Info.WebGPUBackendPin) || entry.Details.Info.GPUName == "" || entry.Details.Info.GPUDriver == "" {
 			modulePin = ""
 		}
 		if entry.Mode == "fresh" && (m == nil || m.AMDActivity == nil || m.GenerateCompleted == nil ||
-			*m.GenerateCompleted <= 0 || m.AMDActivity.Observed != *m.GenerateCompleted || m.AMDActivity.Advanced <= 0) {
+			*m.GenerateCompleted <= 0 || m.AMDActivity.Observed != *m.GenerateCompleted || m.AMDActivity.Advanced != *m.GenerateCompleted) {
 			missing = append(missing, "amd_generation_gpu_activity")
 		}
 	}

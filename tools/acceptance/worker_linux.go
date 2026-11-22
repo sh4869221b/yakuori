@@ -31,11 +31,14 @@ type WorkerRequest struct {
 	ModelPaths                         config.Paths
 }
 
+const webGPUModule = "github.com/townsendmerino/goinfer/backend/webgpu"
+
 type BuildInfo struct {
-	Revision  string            `json:"revision"`
-	Modified  string            `json:"modified"`
-	GoVersion string            `json:"go_version"`
-	Modules   map[string]string `json:"modules"`
+	Revision         string            `json:"revision"`
+	Modified         string            `json:"modified"`
+	GoVersion        string            `json:"go_version"`
+	Modules          map[string]string `json:"modules"`
+	WebGPUModulePath string            `json:"webgpu_module_path,omitempty"`
 }
 
 func CurrentBuild() BuildInfo {
@@ -51,6 +54,12 @@ func CurrentBuild() BuildInfo {
 			}
 		}
 		for _, dep := range info.Deps {
+			if dep.Path == webGPUModule {
+				out.WebGPUModulePath = dep.Path
+				if dep.Replace != nil {
+					out.WebGPUModulePath = dep.Replace.Path
+				}
+			}
 			if dep.Replace != nil {
 				out.Modules[dep.Path] = dep.Replace.Version
 			} else {
