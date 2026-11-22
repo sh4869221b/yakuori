@@ -14,6 +14,7 @@ var ErrInvalidProfile = errors.New("invalid canonical profile")
 
 // ProfileInput contains only effective, import-wide translation conditions.
 type ProfileInput struct {
+	RemoteModel    string
 	Version        int
 	ModelID        string
 	ModelDigest    [32]byte
@@ -51,6 +52,7 @@ type PromptInput struct {
 	DisabledThinkingPrefix []byte `json:"disabled_thinking_prefix"`
 }
 type GenerationInput struct {
+	SamplingMode     string       `json:"sampling_mode,omitempty"`
 	Schema           int          `json:"schema"`
 	MaxOutputTokens  int          `json:"max_output_tokens"`
 	RequestTimeoutNS int64        `json:"request_timeout_ns"`
@@ -101,6 +103,7 @@ type tokenizerRecord struct {
 	BackendPin  string `json:"backend_pin"`
 }
 type profileRecord struct {
+	RemoteModel    string            `json:"remote_model,omitempty"`
 	Version        int               `json:"version"`
 	ModelID        string            `json:"model_id"`
 	ModelDigest    string            `json:"model_digest"`
@@ -165,7 +168,7 @@ func NewProfileIdentity(input ProfileInput) (ProfileIdentity, error) {
 	input.Glossary.Entries = append([]byte{}, input.Glossary.Entries...)
 	input.Context.Additional = append([]byte{}, input.Context.Additional...)
 	record := profileRecord{
-		input.Version, input.ModelID, digestHex(input.ModelDigest), input.Backend, input.BackendPin, input.CUDABackendPin, input.ComputeQuant, input.KVPrecision,
+		input.RemoteModel, input.Version, input.ModelID, digestHex(input.ModelDigest), input.Backend, input.BackendPin, input.CUDABackendPin, input.ComputeQuant, input.KVPrecision,
 		tokenizerRecord{digestHex(input.Tokenizer.ModelDigest), input.Tokenizer.BackendPin}, input.Template, input.Prompt, input.Generation,
 		input.Segmentation, input.Glossary, input.Protection, input.Validation, input.Context,
 	}
@@ -178,7 +181,7 @@ func NewProfileIdentity(input ProfileInput) (ProfileIdentity, error) {
 	if err != nil {
 		return ProfileIdentity{}, fmt.Errorf("marshal effective profile conditions: %w", err)
 	}
-	record.Generation = GenerationInput{Schema: record.Generation.Schema, Thinking: record.Generation.Thinking, Prefill: record.Generation.Prefill}
+	record.Generation = GenerationInput{SamplingMode: record.Generation.SamplingMode, Schema: record.Generation.Schema, Thinking: record.Generation.Thinking, Prefill: record.Generation.Prefill}
 	model, err := json.Marshal(record)
 	if err != nil {
 		return ProfileIdentity{}, fmt.Errorf("marshal model profile conditions: %w", err)
@@ -206,7 +209,7 @@ func (p ProfileIdentity) MatchesEffective(input ProfileInput) (bool, error) {
 // imports with no generation, while retaining thinking and model-load prefill.
 func (p ProfileIdentity) MatchesModel(input ProfileInput) (bool, error) {
 	input.ModelID, input.Glossary = "effective", GlossaryInput{Mode: "none"}
-	input.Generation = GenerationInput{Schema: input.Generation.Schema, MaxOutputTokens: 1, RequestTimeoutNS: 1, Thinking: input.Generation.Thinking, Prefill: input.Generation.Prefill}
+	input.Generation = GenerationInput{SamplingMode: input.Generation.SamplingMode, Schema: input.Generation.Schema, MaxOutputTokens: 1, RequestTimeoutNS: 1, Thinking: input.Generation.Thinking, Prefill: input.Generation.Prefill}
 	other, err := NewProfileIdentity(input)
 	if err != nil {
 		return false, err
@@ -232,14 +235,17 @@ func checkProfile(i ProfileInput) error {
 			return fmt.Errorf("%w: missing effective identity field", ErrInvalidProfile)
 		}
 	}
-	strings := append(required, i.Backend, i.CUDABackendPin, i.Generation.Prefill.Fast, i.Segmentation.Mode, i.Segmentation.Schema, i.Segmentation.BoundaryFixtures, i.Glossary.Mode, i.Glossary.Schema, i.Context.Mode)
+	strings := append(required, i.Backend, i.RemoteModel, i.Generation.SamplingMode, i.CUDABackendPin, i.Generation.Prefill.Fast, i.Segmentation.Mode, i.Segmentation.Schema, i.Segmentation.BoundaryFixtures, i.Glossary.Mode, i.Glossary.Schema, i.Context.Mode)
 	for _, field := range strings {
 		if !utf8.ValidString(field) {
 			return fmt.Errorf("%w: invalid UTF-8 identity field", ErrInvalidProfile)
 		}
 	}
-	if i.ModelDigest == ([32]byte{}) || i.Tokenizer.ModelDigest == ([32]byte{}) || i.Prompt.Schema <= 0 || len(i.Prompt.SystemTemplate) == 0 || len(i.Prompt.UserTemplate) == 0 || i.Generation.Schema <= 0 || i.Generation.MaxOutputTokens <= 0 || i.Generation.RequestTimeoutNS <= 0 || i.Context.Tokens <= 0 {
+	if ((i.Backend != "openai" && (i.ModelDigest == ([32]byte{}) || i.Tokenizer.ModelDigest == ([32]byte{}))) || (i.Backend == "openai" && (i.RemoteModel == "" || i.ModelDigest != ([32]byte{}) || i.Tokenizer.ModelDigest != ([32]byte{}) || i.Generation.SamplingMode != "provider-default" || i.Generation.SeedFixed))) || i.Prompt.Schema <= 0 || len(i.Prompt.SystemTemplate) == 0 || len(i.Prompt.UserTemplate) == 0 || i.Generation.Schema <= 0 || i.Generation.MaxOutputTokens <= 0 || i.Generation.RequestTimeoutNS <= 0 || i.Context.Tokens <= 0 {
 		return fmt.Errorf("%w: missing model, prompt or generation conditions", ErrInvalidProfile)
+	}
+	if i.Backend != "openai" && (i.RemoteModel != "" || i.Generation.SamplingMode != "") {
+		return fmt.Errorf("%w: remote settings on local backend", ErrInvalidProfile)
 	}
 	switch i.Generation.Prefill.Path {
 	case "cpu", "cuda", "none":
@@ -248,6 +254,10 @@ func checkProfile(i ProfileInput) error {
 	}
 	switch i.Backend {
 	case "cpu":
+	case "openai":
+		if i.Generation.Prefill.Path != "none" || i.CUDABackendPin != "" {
+			return fmt.Errorf("%w: invalid remote settings", ErrInvalidProfile)
+		}
 	case "cuda":
 		if i.CUDABackendPin == "" {
 			return fmt.Errorf("%w: missing CUDA release", ErrInvalidProfile)

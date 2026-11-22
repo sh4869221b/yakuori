@@ -4,7 +4,7 @@
 
 ## 状態
 
-#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDAを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。`localize --format w3strings` も同じ選択済みmodel・canonical profile・SQLite TM・Core・公開処理へ接続され、同一原文の再実行では検証済みTM候補を再利用します。PLaMo 3 Translate 0.8Bは実modelのCPU int4で英日・日英とTM再利用を確認済みです。実GPUと実MODの訳質は未確認です。人手による訳質確認、releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。Engineは同じmodel snapshotのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
+#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDA/OpenAIを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。`localize --format w3strings` も同じ選択済みmodel・canonical profile・SQLite TM・Core・公開処理へ接続され、同一原文の再実行では検証済みTM候補を再利用します。PLaMo 3 Translate 0.8Bは実modelのCPU int4で英日・日英とTM再利用を確認済みです。実GPUと実MODの訳質は未確認です。人手による訳質確認、releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。ローカルEngineは同じmodel snapshotのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 - [PLaMo 3 Translateの導入・実モデル検証](docs/plamo3.md)（Built with PLaMo）
@@ -21,19 +21,25 @@
 - 最終staged artifact検証 → 短いTM commit → 安全なpublish。既存outputは既定拒否、明示時のみ置換
 - 同一pathでは原文backupをrenameして保持。2 rename全体は非atomicで、backup上書きや復旧先の他fileの自動置換は禁止
 - 通常I/O失敗とプロセス停止からの安全な復旧を対象とし、電源断耐性はv1の正式保証外
-- 通常処理はoffline。取得は明示的な `models pull`（絶対HTTPS URL、期待size・SHA-256・digest出所指定）と、指定されたローカルfileまたはPLaMo 3 checkpoint directoryを読む `models import` の2経路のみ。自動取得・更新や既存IDの上書きはなく、通常処理は一切通信しない。取得元・期待値・digest出所の意味と取得履歴・失敗・取消し・残骸の扱いは「ローカルmodelの登録」を参照。MVP完了には実MODの独立読み取りと代表訳の人手確認が必要
+- ローカルbackendでの翻訳処理はoffline。取得は明示的な `models pull`（GGUF限定、絶対HTTPS URL、期待size・SHA-256・digest出所指定）と、指定されたローカルfileまたはPLaMo 3 checkpoint directoryを読む `models import` の2経路のみ。自動取得・更新や既存IDの上書きは行わない。取得元・期待値・digest出所の意味と取得履歴・失敗・取消し・残骸の扱いは「ローカルmodelの登録」を参照。MVP完了には実MODの独立読み取りと代表訳の人手確認が必要
 
 CLI・XDG namespaceは`yakuori`。旧Kotobaのコード・設定・TM・registryを暗黙移行しません。single binaryはmodel本体やGPU driverの内包を意味しません。
 
 ## テキスト翻訳
 
-選択済みのローカルGGUFを使います。先にmodelを登録して選択してください。`models import` はローカルfileを登録し、`models pull` は期待size・SHA-256・digest出所を指定した明示的なHTTPS取得です。どちらも取得したmodelを自動選択しません。翻訳commandにmodel overrideや標準入力の入口はなく、`SOURCE` はregularなUTF-8 file pathです。`--backend` は `cpu` が既定で、CUDAを使うときだけ `cuda` を指定します。CUDAにはLinux amd64向け `-tags cuda` buildとNVIDIA driverが必要で、失敗時にCPUへ切り替わりません。
+CPU/CUDAでは選択済みのローカルGGUFまたはPLaMo 3を使います。先にmodelを登録して選択してください。`models import` はローカルGGUFまたはPLaMo 3 checkpoint directoryを登録し、`models pull` は期待size・SHA-256・digest出所を指定してGGUFをHTTPSで取得します。どちらも取得したmodelを自動選択しません。ローカルmodelを使う翻訳commandにmodel overrideや標準入力の入口はなく、`SOURCE` はregularなUTF-8 file pathです。`--backend` は `cpu` が既定で、CUDA または OpenAI を使う場合は明示的に指定します。CUDAにはLinux amd64向け `-tags cuda` buildとNVIDIA driverが必要で、失敗時にCPUへ切り替わりません。
 
 ```sh
 ./yakuori translate --source-language en --target-language ja --game qa --artifact sample --backend cpu ./source.txt
 ./yakuori localize --format text --source-language en --target-language ja --game qa --artifact sample --backend cpu --output ./translated.txt ./source.txt
 ./yakuori localize --format text --source-language en --target-language ja --game qa --artifact sample --backend cpu --output ./translated.txt --replace-output ./source.txt
 ./yakuori localize --format text --source-language en --target-language ja --game qa --artifact sample --backend cpu --in-place ./source.txt
+```
+
+OpenAI API を使う場合は `--backend openai` と日付付きモデル snapshot を `--openai-model` で明示し、環境変数 `OPENAI_API_KEY` を設定します。実行時には原文を含むリクエストが OpenAI に送信され、API 利用料金が発生し得ます。入力トークン数は Responses API の計数 endpoint で確認し、生成結果の usage と一致しない場合は失敗します。レスポンスの保存は無効にし、モデルの sampling は provider 既定値です。snapshot 名は翻訳メモリの識別に含まれます。実 API との通信は未検証です。
+
+```sh
+./yakuori translate --source-language en --target-language ja --game qa --artifact sample --backend openai --openai-model gpt-4o-2024-08-06 ./source.txt
 ```
 
 言語、game namespace、artifact namespaceは空でない値を明示します。CLIは値を正規化したり、file pathからnamespaceを推定したりしません。`translate` は全文をstdoutへ返します。`localize` は形式 `text` を必須とし、`--output OUT` で新規公開、`--output OUT --replace-output` で既存出力の置換、または `--in-place` で原文をbackupとして残す置換をします。`--replace-output` には `--output` が必要で、公開モードは同時指定できません。

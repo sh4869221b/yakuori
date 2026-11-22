@@ -20,7 +20,7 @@ func sameDirectory(a, b identity) bool {
 func verifyLeaf(want leaf, currentParent *directory) error {
 	for _, parent := range []*directory{want.parent, currentParent} {
 		current := leaf{parent: parent, name: want.name}
-		if _, err := observe(&current); err != nil {
+		if err := observe(&current); err != nil {
 			return fmt.Errorf("observe current leaf: %w: %w", ErrChanged, err)
 		}
 		if current.present != want.present || current.id != want.id || current.digest != want.digest {

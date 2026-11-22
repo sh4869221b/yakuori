@@ -32,6 +32,7 @@ type TemplateIdentity struct {
 }
 
 type ModelInfo struct {
+	RemoteModel             string
 	BackendPin              string
 	CUDABackendPin          string
 	RequestedBackend        string

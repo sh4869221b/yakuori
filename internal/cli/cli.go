@@ -14,6 +14,8 @@ import (
 	"syscall"
 
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/inference"
+	openaibackend "github.com/sh4869221b/yakuori/internal/inference/openai"
 	"github.com/sh4869221b/yakuori/internal/localize"
 	"github.com/sh4869221b/yakuori/internal/models"
 	"github.com/sh4869221b/yakuori/internal/publication"
@@ -65,13 +67,8 @@ func runWithTranslationOpener(ctx context.Context, args []string, stdout, stderr
 }
 
 func runWithTranslationExecutor(ctx context.Context, args []string, stdout, stderr io.Writer, resolve func() (config.Paths, error), runner fileRunner, open selectedEngineOpener, execute func(translationCommand, context.Context, io.Writer, config.Paths, selectedEngineOpener) (localize.Result, error)) int {
-	fail := func(code int, message string) int {
-		// A failed diagnostic write must still return failure.
-		_, _ = fmt.Fprintf(stderr, "yakuori: %s\n", message)
-		return code
-	}
 	if len(args) == 0 {
-		return fail(ExitUsage, "missing command; use --help")
+		return reportFailure(stderr, ExitUsage, "missing command; use --help")
 	}
 	if args[0] == "models" || args[0] == "doctor" {
 		return runStorage(ctx, args, stdout, stderr, resolve)
@@ -80,9 +77,9 @@ func runWithTranslationExecutor(ctx context.Context, args []string, stdout, stde
 		command, help, err := parseTranslation(args[0], args[1:])
 		if err != nil {
 			if errors.Is(err, errSameLocalizePath) {
-				return fail(ExitUsage, "source and output are the same path; use --in-place")
+				return reportFailure(stderr, ExitUsage, "source and output are the same path; use --in-place")
 			}
-			return fail(ExitUsage, "invalid "+args[0]+" arguments; use --help")
+			return reportFailure(stderr, ExitUsage, "invalid "+args[0]+" arguments; use --help")
 		}
 		if help == "" {
 			ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -96,19 +93,22 @@ func runWithTranslationExecutor(ctx context.Context, args []string, stdout, stde
 				return reportPipeline(stderr, localize.Result{}, &localize.Error{Phase: "config", Err: err})
 			}
 			if open == nil {
-				open = models.New(paths).OpenSelected
+				if command.backend == "openai" {
+					open = func(ctx context.Context, _ string) (string, inference.Engine, error) {
+						e, err := openaibackend.NewEngine(command.openaiModel, os.Getenv("OPENAI_API_KEY"))
+						return command.openaiModel, e, err
+					}
+				} else {
+					open = models.New(paths).OpenSelected
+				}
 			}
 			result, err := execute(command, ctx, stdout, paths, open)
 			return reportPipeline(stderr, result, err)
 		}
-		n, err := io.WriteString(stdout, help)
-		if err != nil || n != len(help) {
-			return fail(ExitFailure, "write stdout failed")
-		}
-		return ExitOK
+		return writeOutput(stdout, stderr, help, nil)
 	}
 	if len(args) != 1 {
-		return fail(ExitUsage, "unexpected arguments; use --help")
+		return reportFailure(stderr, ExitUsage, "unexpected arguments; use --help")
 	}
 	var result string
 	switch args[0] {
@@ -117,15 +117,11 @@ func runWithTranslationExecutor(ctx context.Context, args []string, stdout, stde
 	default:
 		// Do not echo user-supplied text into ordinary diagnostics.
 		if strings.HasPrefix(args[0], "-") {
-			return fail(ExitUsage, "unknown option; use --help")
+			return reportFailure(stderr, ExitUsage, "unknown option; use --help")
 		}
-		return fail(ExitUsage, "unknown command; use --help")
+		return reportFailure(stderr, ExitUsage, "unknown command; use --help")
 	}
-	n, err := io.WriteString(stdout, result)
-	if err != nil || n != len(result) {
-		return fail(ExitFailure, "write stdout failed")
-	}
-	return ExitOK
+	return writeOutput(stdout, stderr, result, nil)
 }
 
 func reportPipeline(stderr io.Writer, result localize.Result, err error) int {
@@ -155,6 +151,7 @@ func reportPipeline(stderr io.Writer, result localize.Result, err error) int {
 
 type translationCommand struct {
 	action, format, sourceLanguage, targetLanguage, backend string
+	openaiModel                                             string
 	scope                                                   tm.Scope
 	options                                                 publication.Options
 }
@@ -171,7 +168,8 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 	flags.StringVar(&command.targetLanguage, "target-language", "", "required target language")
 	flags.StringVar(&command.scope.GameNamespace, "game", "", "required game namespace")
 	flags.StringVar(&command.scope.ArtifactNamespace, "artifact", "", "required artifact namespace")
-	flags.StringVar(&command.backend, "backend", "cpu", "cpu or cuda")
+	flags.StringVar(&command.backend, "backend", "cpu", "cpu, cuda or openai")
+	flags.StringVar(&command.openaiModel, "openai-model", "", "pinned OpenAI model snapshot (required for openai)")
 	if action == "localize" {
 		flags.StringVar(&command.format, "format", "", "required format: text or w3strings (binary Witcher 3 table)")
 		flags.StringVar(&output, "output", "", "write the result to OUT")
@@ -199,7 +197,7 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 	if flags.NArg() != 1 || flags.Arg(0) == "" || flags.Arg(0) == "-" ||
 		command.sourceLanguage == "" || command.targetLanguage == "" ||
 		command.scope.GameNamespace == "" || command.scope.ArtifactNamespace == "" ||
-		command.backend != "cpu" && command.backend != "cuda" {
+		command.backend != "cpu" && command.backend != "cuda" && command.backend != "openai" || (command.backend == "openai") != (command.openaiModel != "") {
 		return command, "", errInvalidLocalizeArguments
 	}
 	if action == "localize" && command.format != "text" && command.format != "w3strings" {
@@ -233,7 +231,7 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 		command.options = publication.Options{Source: source, Output: source, Mode: publication.InPlace}
 		return command, "", nil
 	}
-	if !outputSpecified || output == "" || len(flags.Args()) != 1 || flags.Arg(0) == "" {
+	if !outputSpecified || output == "" {
 		return command, "", errInvalidLocalizeArguments
 	}
 	source := flags.Arg(0)

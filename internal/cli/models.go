@@ -27,7 +27,7 @@ const modelsUsage = `Usage: yakuori models import --id ID FILE_OR_DIRECTORY
 
 Import accepts a GGUF file or a PLaMo 3 safetensors directory (including LICENSE/en).
 It keeps a private copy of the complete model and does not select it. Flags precede the path.
-Pull fetches URL once over HTTPS and registers the received bytes only when
+Pull fetches a GGUF file once over HTTPS and registers it only when
 they match the expected size and SHA-256. It selects nothing, never retries
 and leaves leftovers of an interrupted run alone. Flags precede URL.
 `
@@ -161,14 +161,14 @@ func validatePullArguments(command storageCommand) error {
 func runStorage(ctx context.Context, args []string, stdout, stderr io.Writer, resolve func() (config.Paths, error)) int {
 	command, err := parseStorage(args)
 	if err != nil {
-		return storageFailure(stderr, ExitUsage, "invalid storage command arguments; use --help")
+		return reportFailure(stderr, ExitUsage, "invalid storage command arguments; use --help")
 	}
 	if command.help != "" {
-		return storageOutput(stdout, stderr, command.help, nil)
+		return writeOutput(stdout, stderr, command.help, nil)
 	}
 	paths, err := resolve()
 	if err != nil {
-		return storageFailure(stderr, ExitFailure, "resolve storage paths: "+err.Error())
+		return reportFailure(stderr, ExitFailure, "resolve storage paths: "+err.Error())
 	}
 	registry := models.New(paths)
 	if command.action == "doctor" {
@@ -178,7 +178,7 @@ func runStorage(ctx context.Context, args []string, stdout, stderr io.Writer, re
 			metadata, err = checkModel(ctx, command.backend, registry.OpenSelected)
 			result += metadata
 		}
-		return storageOutput(stdout, stderr, result, err)
+		return writeOutput(stdout, stderr, result, err)
 	}
 	if command.action == "pull" {
 		// The acquisition notice reaches stderr before the connection is
@@ -186,7 +186,7 @@ func runStorage(ctx context.Context, args []string, stdout, stderr io.Writer, re
 		// network access.
 		notice := fmt.Sprintf("pull id=%q source_url=%q expected_sha256=%s expected_size_bytes=%d digest_source=%q\n", command.id, command.url, command.sha256, command.size, command.digestSource)
 		if n, writeErr := io.WriteString(stderr, notice); writeErr != nil || n != len(notice) {
-			return storageFailure(stderr, ExitFailure, "write pull metadata failed")
+			return reportFailure(stderr, ExitFailure, "write pull metadata failed")
 		}
 		// Only this dispatch maps SIGINT/SIGTERM onto the caller's context, and
 		// a cancelled pull keeps the existing operational exit status.
@@ -205,27 +205,27 @@ func runStorage(ctx context.Context, args []string, stdout, stderr io.Writer, re
 		err = registry.Use(ctx, command.id)
 	}
 	if err != nil {
-		return storageFailure(stderr, ExitFailure, command.action+" model: "+modelDiagnostic(err))
+		return reportFailure(stderr, ExitFailure, command.action+" model: "+modelDiagnostic(err))
 	}
 	result := fmt.Sprintf("%s: %s\n", command.action, command.id)
 	if command.action != "use" {
 		result += fmt.Sprintf("model_sha256: %s\nsize_bytes: %d\n", entry.SHA256, entry.SizeBytes)
 	}
-	return storageOutput(stdout, stderr, result, nil)
+	return writeOutput(stdout, stderr, result, nil)
 }
 
-func storageFailure(stderr io.Writer, code int, message string) int {
+func reportFailure(stderr io.Writer, code int, message string) int {
 	_, _ = fmt.Fprintln(stderr, "yakuori: "+message)
 	return code
 }
 
-func storageOutput(stdout, stderr io.Writer, result string, diagnostic error) int {
+func writeOutput(stdout, stderr io.Writer, result string, diagnostic error) int {
 	n, err := io.WriteString(stdout, result)
 	if err != nil || n != len(result) {
-		return storageFailure(stderr, ExitFailure, "write stdout failed")
+		return reportFailure(stderr, ExitFailure, "write stdout failed")
 	}
 	if diagnostic != nil {
-		return storageFailure(stderr, ExitFailure, diagnostic.Error())
+		return reportFailure(stderr, ExitFailure, diagnostic.Error())
 	}
 	return ExitOK
 }
@@ -236,14 +236,14 @@ func storageOutput(stdout, stderr io.Writer, result string, diagnostic error) in
 // that nothing was registered.
 func reportPull(stdout, stderr io.Writer, id string, entry models.Entry, err error) int {
 	if entry == (models.Entry{}) {
-		return storageFailure(stderr, ExitFailure, "pull model: "+pullDiagnostic(err))
+		return reportFailure(stderr, ExitFailure, "pull model: "+pullDiagnostic(err))
 	}
 	result := fmt.Sprintf("pull: %s\nmodel_sha256: %s\nsize_bytes: %d\n", id, entry.SHA256, entry.SizeBytes)
 	if n, writeErr := io.WriteString(stdout, result); writeErr != nil || n != len(result) {
-		return storageFailure(stderr, ExitFailure, fmt.Sprintf("pull model %q: registered, but write stdout failed", id))
+		return reportFailure(stderr, ExitFailure, fmt.Sprintf("pull model %q: registered, but write stdout failed", id))
 	}
 	if err != nil {
-		return storageFailure(stderr, ExitFailure, fmt.Sprintf("pull model %q: registered, but %s", id, pullDiagnostic(err)))
+		return reportFailure(stderr, ExitFailure, fmt.Sprintf("pull model %q: registered, but %s", id, pullDiagnostic(err)))
 	}
 	return ExitOK
 }
@@ -257,6 +257,9 @@ func pullDiagnostic(err error) string {
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "pull exceeded its deadline"
+	}
+	if errors.Is(err, models.ErrPullFormat) {
+		return models.ErrPullFormat.Error()
 	}
 	if errors.Is(err, models.ErrBusy) || errors.Is(err, models.ErrCollision) {
 		return modelReason(err)

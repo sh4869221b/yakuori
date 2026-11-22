@@ -175,7 +175,7 @@ func TestDoctorModelCheck(t *testing.T) {
 		}
 	})
 	var diag bytes.Buffer
-	if code := storageOutput(brokenWriter{short: true}, &diag, "metadata", nil); code != ExitFailure {
+	if code := writeOutput(brokenWriter{short: true}, &diag, "metadata", nil); code != ExitFailure {
 		t.Fatalf("writer code=%d", code)
 	}
 }

@@ -4,13 +4,360 @@ package publication
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
 )
+
+type legacyRecoveryFixture struct {
+	source, output, record, backup, stage string
+	wire                                  string
+}
+
+func legacyInPlaceRecord(t *testing.T, parentName, name string, phase recordPhase) legacyRecoveryFixture {
+	t.Helper()
+	return legacyRecord(t, parentName, name, name, InPlace, phase)
+}
+
+func legacyRecord(t *testing.T, parentName, sourceName, outputName string, mode Mode, phase recordPhase) legacyRecoveryFixture {
+	t.Helper()
+	const runID = "1234567890abcdef1234567890abcdef"
+	parent := filepath.Join(t.TempDir(), parentName)
+	run := filepath.Join(parent, ".yakuori-run-"+runID)
+	if err := os.MkdirAll(run, 0700); err != nil {
+		t.Fatal(err)
+	}
+	f := legacyRecoveryFixture{source: filepath.Join(parent, sourceName), output: filepath.Join(parent, outputName),
+		record: filepath.Join(run, "record.json"), stage: filepath.Join(run, "stage")}
+	observeFile := func(path, content string) leaf {
+		putFile(t, path, content)
+		l, err := openParent(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = l.parent.file.Close() })
+		if err := observe(&l); err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	source := observeFile(f.source, "original")
+	stage := observeFile(f.stage, "translated")
+	record := operationRecord{SchemaVersion: 1, RunID: runID, Mode: mode,
+		Source: recordedFile(source), Output: recordPath{f.output, outputName}, Stage: recordedFile(stage),
+		SourceParent: source.parent.id, OutputParent: source.parent.id,
+		Phase: phase, LastCompletedOperation: "none"}
+	switch mode {
+	case InPlace:
+		f.backup = filepath.Join(parent, ".yakuori-backup-"+runID)
+		record.Backup = &recordPath{f.backup, filepath.Base(f.backup)}
+		record.ExistingOutput.File = &record.Source
+	case Replace:
+		output := recordedFile(observeFile(f.output, "existing"))
+		record.ExistingOutput.File = &output
+	case Create:
+		record.ExistingOutput.Absent = true
+	}
+	switch phase {
+	case backedUpPhase:
+		record.LastCompletedOperation = "backup-rename"
+	case restoredPhase:
+		record.LastCompletedOperation = "restore-rename"
+	case publishedPhase:
+		record.LastCompletedOperation = "publish-rename"
+		moveRecoveryFile(t, f.stage, f.output)
+	}
+	// Schema 1 originally passed Linux paths straight to encoding/json.
+	b, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.wire = string(b)
+	putFile(t, f.record, f.wire)
+	return f
+}
+
+func scanLegacyRecovery(t *testing.T, path string, rename renameFunc) error {
+	t.Helper()
+	return scanRecovery(t, Options{path, path, InPlace}, rename)
+}
+
+func scanRecovery(t *testing.T, options Options, rename renameFunc) error {
+	t.Helper()
+	source, err := openParent(options.Source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &Run{source: source, mode: options.Mode, rename: rename, recordWrite: (*os.File).Write, recordSync: (*os.File).Sync, recordClose: (*os.File).Close}
+	defer func() { closeRun(t, r) }()
+	r.output, err = openParent(options.Output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.lockDirectories(); err != nil {
+		t.Fatal(err)
+	}
+	return r.recoverPendingRecords(context.Background())
+}
+
+func noRecoveryRename(t *testing.T) renameFunc {
+	t.Helper()
+	return func(int, string, int, string, uint) error {
+		t.Fatal("recovery attempted a rename")
+		return nil
+	}
+}
+
+func TestLegacyRecoveryWithCollidingOrdinaryPaths(t *testing.T) {
+	for _, mode := range []Mode{Create, Replace} {
+		for _, phase := range []recordPhase{preparedPhase, publishedPhase} {
+			t.Run(string(mode)+"/"+string(phase), func(t *testing.T) {
+				f := legacyRecord(t, "parent", "slot-\xff", "slot-\xfe", mode, phase)
+				wire := readOperationRecord(t, f.record)
+				if wire.Source.Path != wire.Output.Path || wire.Output.Basename != "slot-�" {
+					t.Fatal("fixture did not lose the source/output distinction")
+				}
+				noRename := noRecoveryRename(t)
+				otherSource := filepath.Join(filepath.Dir(f.source), "other-source")
+				putFile(t, otherSource, "other source")
+				for _, name := range []string{"other", "slot-\xff", "slot-\xfe", "slot-�"} {
+					requested := filepath.Join(filepath.Dir(f.output), name)
+					err := scanRecovery(t, Options{otherSource, requested, mode}, noRename)
+					if name == "other" || phase == publishedPhase {
+						if err != nil {
+							t.Errorf("request %q was blocked: %v", requested, err)
+						}
+						continue
+					}
+					var recovery *RecoveryError
+					if !errors.Is(err, ErrRecoveryConflict) || errors.Is(err, ErrInvalidRecord) || !errors.As(err, &recovery) ||
+						recovery.Reason != legacyPathRecoveryReason || recovery.Result.State != NotPublished || recovery.Result.RecordPath != f.record ||
+						recovery.Result.OutputPath != requested || recovery.Result.BackupPath != "" {
+						t.Errorf("request %q: unexpected recovery diagnostic: %v", requested, err)
+					}
+				}
+				wantBytes(t, f.record, f.wire)
+				wantBytes(t, f.source, "original")
+				wantAbsent(t, filepath.Join(filepath.Dir(f.output), "slot-�"))
+				if phase == publishedPhase {
+					wantBytes(t, f.output, "translated")
+					wantAbsent(t, f.stage)
+				} else {
+					wantBytes(t, f.stage, "translated")
+					if mode == Replace {
+						wantBytes(t, f.output, "existing")
+					} else {
+						wantAbsent(t, f.output)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestLegacyRecoveryRejectsAmbiguousPathSpellings(t *testing.T) {
+	for _, tc := range []struct {
+		name, parent, raw, replaced string
+		phase                       recordPhase
+		occupied                    bool
+	}{
+		{"prepared", "parent", "source-\xff", "source-�", preparedPhase, false},
+		{"backed up", "parent", "source-\xfe\xff", "source-��", backedUpPhase, false},
+		{"raw parent", "parent-\xfe", "source-\xff", "source-�", backedUpPhase, false},
+		{"raw parent only", "parent-\xfe", "source-�", "source-�", backedUpPhase, false},
+		{"replacement name occupied", "parent", "source-\xff", "source-�", backedUpPhase, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := legacyInPlaceRecord(t, tc.parent, tc.raw, tc.phase)
+			if !strings.ContainsRune(f.wire, '�') {
+				t.Fatal("legacy fixture did not capture the replacement character")
+			}
+			moveRecoveryFile(t, f.source, f.backup)
+			if tc.occupied {
+				putFile(t, filepath.Join(filepath.Dir(f.source), tc.replaced), "unrelated file")
+			}
+			noRename := noRecoveryRename(t)
+			for _, name := range []string{tc.raw, tc.replaced} {
+				requested := filepath.Join(filepath.Dir(f.source), name)
+				err := scanLegacyRecovery(t, requested, noRename)
+				var recovery *RecoveryError
+				if !errors.Is(err, ErrRecoveryConflict) || !errors.As(err, &recovery) || !strings.Contains(recovery.Reason, "manual reconciliation") ||
+					recovery.Result.RecordPath != f.record || recovery.Result.BackupPath != f.backup || recovery.Result.OutputPath != requested || recovery.Result.State != SourceBackedUp {
+					t.Errorf("request %q: unexpected recovery diagnostic: %v", requested, err)
+				}
+				if tc.occupied && name == tc.replaced {
+					wantBytes(t, requested, "unrelated file")
+				} else {
+					wantAbsent(t, requested)
+				}
+			}
+			unrelated := filepath.Join(filepath.Dir(f.source), "other")
+			if err := scanLegacyRecovery(t, unrelated, noRename); err != nil {
+				t.Fatalf("unrelated target was blocked: %v", err)
+			}
+			wantBytes(t, f.record, f.wire)
+			wantBytes(t, f.backup, "original")
+			wantBytes(t, f.stage, "translated")
+		})
+	}
+}
+
+func TestLegacyRecoveryReportsOnlyVerifiedBackups(t *testing.T) {
+	for _, kind := range []string{"wrong run ID", "wrong inode", "wrong digest", "symlink", "hardlink"} {
+		t.Run(kind, func(t *testing.T) {
+			f := legacyInPlaceRecord(t, "parent", "source-\xff", backedUpPhase)
+			retained := filepath.Join(filepath.Dir(f.backup), ".yakuori-backup-fedcba0987654321fedcba0987654321")
+			if kind == "wrong digest" {
+				moveRecoveryFile(t, f.source, f.backup)
+				putFile(t, f.backup, "tampered") // Same inode and size as the recorded source.
+			} else {
+				moveRecoveryFile(t, f.source, retained)
+			}
+			switch kind {
+			case "wrong inode":
+				putFile(t, f.backup, "original")
+			case "symlink":
+				if err := os.Symlink(retained, f.backup); err != nil {
+					t.Fatal(err)
+				}
+			case "hardlink":
+				if err := os.Link(retained, f.backup); err != nil {
+					t.Fatal(err)
+				}
+			}
+			linked := kind == "symlink" || kind == "hardlink"
+			var linkBefore os.FileInfo
+			if linked {
+				var err error
+				linkBefore, err = os.Lstat(f.backup)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, requested := range []string{f.source, filepath.Join(filepath.Dir(f.source), "source-�")} {
+				err := scanLegacyRecovery(t, requested, noRecoveryRename(t))
+				var recovery *RecoveryError
+				if !errors.Is(err, ErrRecoveryConflict) || !errors.As(err, &recovery) || recovery.Result.State != NotPublished ||
+					recovery.Result.RecordPath != f.record || recovery.Result.BackupPath != f.backup || recovery.Result.OutputPath != requested {
+					t.Errorf("request %q: unexpected recovery diagnostic: %v", requested, err)
+				}
+				if linked {
+					if !errors.Is(err, ErrInvalidPath) || recovery == nil || recovery.Reason != legacyPathRecoveryReason {
+						t.Errorf("request %q: expected unsafe backup and manual reconciliation reason: %v", requested, err)
+					}
+					after, statErr := os.Lstat(f.backup)
+					if statErr != nil || !os.SameFile(linkBefore, after) || linkBefore.Mode() != after.Mode() {
+						t.Fatalf("request %q changed the backup link: %v", requested, statErr)
+					}
+				}
+				if kind == "symlink" && !errors.Is(err, unix.ELOOP) {
+					t.Errorf("request %q: missing no-follow error: %v", requested, err)
+				}
+				wantAbsent(t, requested)
+			}
+			wantBytes(t, f.record, f.wire)
+			wantBytes(t, f.stage, "translated")
+			if kind != "wrong digest" {
+				wantBytes(t, retained, "original")
+			}
+			switch kind {
+			case "symlink":
+				if target, err := os.Readlink(f.backup); err != nil || target != retained {
+					t.Fatalf("backup symlink target = %q, error = %v", target, err)
+				}
+			case "hardlink":
+				if target, err := os.Stat(retained); err != nil || !os.SameFile(linkBefore, target) {
+					t.Fatalf("backup hardlink target changed: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestLegacyRecoveryRejectsLinksAtReplacementDestination(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		link func(string, string) error
+	}{{"symlink", os.Symlink}, {"hardlink", os.Link}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := legacyInPlaceRecord(t, "parent", "source-\xff", backedUpPhase)
+			moveRecoveryFile(t, f.source, f.backup)
+			parent := filepath.Dir(f.source)
+			replacement := filepath.Join(parent, "source-�")
+			target := filepath.Join(parent, "retained-target")
+			putFile(t, target, "unrelated file")
+			if err := tc.link(target, replacement); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.Lstat(replacement)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, request := range []struct{ name, path string }{{"raw", f.source}, {"replacement", replacement}} {
+				t.Run(request.name, func(t *testing.T) {
+					err := scanLegacyRecovery(t, request.path, noRecoveryRename(t))
+					var recovery *RecoveryError
+					if !errors.Is(err, ErrRecoveryConflict) || !errors.As(err, &recovery) || recovery.Reason != legacyPathRecoveryReason ||
+						recovery.Result.State != SourceBackedUp || recovery.Result.RecordPath != f.record ||
+						recovery.Result.BackupPath != f.backup || recovery.Result.OutputPath != request.path {
+						t.Errorf("unexpected recovery diagnostic: %v", err)
+					}
+					if request.path == replacement && (!errors.Is(err, ErrInvalidPath) || (tc.name == "symlink" && !errors.Is(err, unix.ELOOP))) {
+						t.Errorf("missing destination link rejection cause: %v", err)
+					}
+					after, err := os.Lstat(replacement)
+					if err != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() {
+						t.Fatalf("replacement link changed: %v", err)
+					}
+					if tc.name == "symlink" {
+						if got, err := os.Readlink(replacement); err != nil || got != target {
+							t.Fatalf("replacement symlink points to %q: %v", got, err)
+						}
+					} else if got, err := os.Stat(target); err != nil || !os.SameFile(after, got) {
+						t.Fatalf("replacement hardlink target changed: %v", err)
+					}
+					wantAbsent(t, f.source)
+					wantBytes(t, target, "unrelated file")
+					wantBytes(t, f.backup, "original")
+					wantBytes(t, f.record, f.wire)
+					wantBytes(t, f.stage, "translated")
+				})
+			}
+		})
+	}
+}
+
+func TestLegacyRecoveryPreservesUnambiguousUTF8Paths(t *testing.T) {
+	for _, tc := range []struct{ parent, name string }{{"parent", "plain"}, {"parent-�", "valid-�"}, {"parent", `literal-\ufffd`}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := legacyInPlaceRecord(t, tc.parent, tc.name, preparedPhase)
+			if err := scanLegacyRecovery(t, f.source, unix.Renameat2); err != nil {
+				t.Fatal(err)
+			}
+			record := readOperationRecord(t, f.record)
+			if record.Phase != abandonedPhase || record.Output.Path != f.source || record.SchemaVersion != 1 {
+				t.Fatalf("unexpected reconciled record: %+v", record)
+			}
+			wantBytes(t, f.source, "original")
+			wantBytes(t, f.stage, "translated")
+			wantAbsent(t, f.backup)
+		})
+	}
+}
+
+func TestLegacyRecoverySkipsAmbiguousTerminalRecord(t *testing.T) {
+	f := legacyInPlaceRecord(t, "parent-\xfe", "source-\xff", restoredPhase)
+	if err := scanLegacyRecovery(t, f.source, nil); err != nil {
+		t.Fatalf("terminal history blocked a new run: %v", err)
+	}
+	wantBytes(t, f.record, f.wire)
+	wantBytes(t, f.source, "original")
+}
 
 func pendingRecoveryRecord(t *testing.T, r *Run) operationRecord {
 	t.Helper()
@@ -28,6 +375,54 @@ func moveRecoveryFile(t *testing.T, from, to string) {
 	t.Helper()
 	if err := os.Rename(from, to); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRecoveryRestoresNonUTF8Filename(t *testing.T) {
+	for _, phase := range []recordPhase{preparedPhase, backedUpPhase} {
+		t.Run(string(phase), func(t *testing.T) {
+			root := publicationFixture(t)
+			parent := filepath.Join(root, "dir-\xfe")
+			if err := os.Mkdir(parent, 0700); err != nil {
+				t.Fatal(err)
+			}
+			source := filepath.Join(parent, "source-\xff")
+			putFile(t, source, "original")
+			options := Options{source, source, InPlace}
+			r, err := Prepare(context.Background(), options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { closeRun(t, r) })
+			stageBytes(t, r, "translated")
+			if err := r.writeRecord(preparedPhase, "none"); err != nil {
+				t.Fatal(err)
+			}
+			moveRecoveryFile(t, source, r.backupPath())
+			if phase == backedUpPhase {
+				if err := r.writeRecord(backedUpPhase, "backup-rename"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			closeRun(t, r)
+			next, err := Prepare(context.Background(), options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { closeRun(t, next) })
+			wantBytes(t, source, "original")
+			wantBytes(t, r.stage.path, "translated")
+			wantAbsent(t, r.backupPath())
+			stage, err := openParent(r.stage.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = stage.parent.file.Close() })
+			got, err := readRecord(stage.parent)
+			if err != nil || got.Phase != restoredPhase || got.Output.Path != source {
+				t.Fatalf("recovery record: %+v, %v", got, err)
+			}
+		})
 	}
 }
 

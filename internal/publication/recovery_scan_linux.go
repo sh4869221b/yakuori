@@ -62,7 +62,11 @@ func (r *Run) recoverPendingRecords(ctx context.Context) (err error) {
 		case abandonedPhase:
 			terminal = true
 		}
-		if terminal || record.Output.Basename != r.output.name {
+		outputName := r.output.name
+		if record.SchemaVersion == recordUTF8Schema {
+			outputName = legacyPathSpelling(outputName)
+		}
+		if terminal || record.Output.Basename != outputName {
 			if e = closeCandidate(); e != nil {
 				return e
 			}
@@ -70,6 +74,17 @@ func (r *Run) recoverPendingRecords(ctx context.Context) (err error) {
 		}
 		if !sameDirectory(record.OutputParent, r.output.parent.id) {
 			return errors.Join(&RecoveryError{Result: result, Reason: "recorded output parent differs", Cause: ErrRecoveryConflict}, closeCandidate())
+		}
+		legacyPathMismatch := record.SchemaVersion == recordUTF8Schema && (record.Output.Path != r.output.path ||
+			(record.Source.Path != r.source.path && record.Source.Path == legacyPathSpelling(r.source.path)))
+		if record.hasLegacyPathCollision() || legacyPathMismatch {
+			result.OutputPath = r.output.path
+			if record.Backup != nil {
+				result.BackupPath = filepath.Join(r.output.parent.path, backupBasename(record.RunID))
+			}
+			_, backupErr := r.observeRecoveryBackup(record, &result)
+			cause := errors.Join(errAmbiguousLegacyPath, backupErr)
+			return errors.Join(&RecoveryError{Result: result, Reason: legacyPathRecoveryReason, Cause: cause}, closeCandidate())
 		}
 		if record.Source.Path != r.source.path || record.Source.Basename != r.source.name || !sameDirectory(record.SourceParent, r.source.parent.id) {
 			return errors.Join(&RecoveryError{Result: result, Reason: "recorded source or parent differs", Cause: ErrRecoveryConflict}, closeCandidate())
@@ -91,7 +106,11 @@ func (r *Run) recoverPendingRecords(ctx context.Context) (err error) {
 	result, err := r.reconcileRecord(pendingRecord, pending)
 	*pendingResult = result
 	if err != nil {
-		return &RecoveryError{Result: result, Reason: "reconcile interrupted publication", Cause: err}
+		reason := "reconcile interrupted publication"
+		if errors.Is(err, errAmbiguousLegacyPath) {
+			reason = legacyPathRecoveryReason
+		}
+		return &RecoveryError{Result: result, Reason: reason, Cause: err}
 	}
 	return nil
 }

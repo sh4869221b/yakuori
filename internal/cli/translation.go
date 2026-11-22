@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"unicode/utf8"
 
 	textadapter "github.com/sh4869221b/yakuori/internal/adapter/text"
@@ -96,7 +97,9 @@ func (command translationCommand) executeWithStoreClose(ctx context.Context, std
 	_, statErr := os.Lstat(path)
 	switch {
 	case errors.Is(statErr, os.ErrNotExist):
-		store, err = tm.Create(ctx, path, limits)
+		if err = os.MkdirAll(filepath.Dir(path), 0700); err == nil {
+			store, err = tm.Create(ctx, path, limits)
+		}
 	case statErr != nil:
 		err = statErr
 	default:

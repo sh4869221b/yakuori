@@ -6,8 +6,10 @@ import (
 	"database/sql"
 	"errors"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,6 +20,60 @@ import (
 	"github.com/sh4869221b/yakuori/internal/localize"
 	"golang.org/x/sys/unix"
 )
+
+type translationTransport func(*http.Request) (*http.Response, error)
+
+func (f translationTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestOpenAITranslationFreshXDG(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "cache"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	paths, err := config.Resolve(os.Getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(root, "source.txt")
+	if err := os.WriteFile(source, []byte("Hello."), 0600); err != nil {
+		t.Fatal(err)
+	}
+	const model = "gpt-5.4-2026-03-05"
+	const translated = "こんにちは。"
+	var generated int
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	http.DefaultTransport = translationTransport(func(r *http.Request) (*http.Response, error) {
+		var body string
+		switch r.URL.Path {
+		case "/v1/responses/input_tokens":
+			body = `{"object":"response.input_tokens","input_tokens":7}`
+		case "/v1/responses":
+			generated++
+			body = `{"status":"completed","model":"` + model + `","usage":{"input_tokens":7,"output_tokens":5},"output":[` +
+				`{"type":"message","phase":"commentary","content":[{"type":"output_text","text":"Preparing the translation."}]},` +
+				`{"type":"message","phase":"final_answer","content":[{"type":"output_text","text":"` + translated + `"}]}]}`
+		default:
+			t.Fatalf("unexpected API endpoint %s", r.URL.Path)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+	})
+	args := []string{"translate", "--backend", "openai", "--openai-model", model, "--source-language", "en", "--target-language", "ja", "--game", "qa", "--artifact", "fresh-xdg", source}
+	for i := 0; i < 2; i++ {
+		var out, diag bytes.Buffer
+		if code := Run(args, &out, &diag); code != ExitOK || out.String() != translated || diag.Len() != 0 {
+			t.Fatalf("run %d: code=%d stdout=%q stderr=%q", i, code, out.String(), diag.String())
+		}
+	}
+	if rows := translationRows(t, paths); generated != 1 || !slices.Equal(rows, []string{translated}) {
+		t.Fatalf("generation calls=%d TM rows=%q", generated, rows)
+	}
+	if info, err := os.Stat(paths.Data); err != nil || info.Mode().Perm() != 0700 {
+		t.Fatalf("TM directory: %v, %v", info, err)
+	}
+}
 
 type brokenWriter struct{ short bool }
 

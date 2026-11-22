@@ -73,6 +73,106 @@ func TestRecoveryRecordRoundTrip(t *testing.T) {
 	}
 }
 
+func TestRecordPreservesNonUTF8Paths(t *testing.T) {
+	testRecordPreservesPathBytes(t, "dir-\xfe-�", "name-\xff-�")
+}
+
+func TestRecordPreservesLiteralReplacementRune(t *testing.T) {
+	testRecordPreservesPathBytes(t, "dir-�", "name-�")
+}
+
+func TestCollidingLegacyRecordKeepsStructuralChecks(t *testing.T) {
+	f := legacyRecord(t, "parent", "slot-\xff", "slot-\xfe", Replace, preparedPhase)
+	stage, err := openParent(f.stage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stage.parent.file.Close() })
+	for _, tc := range []struct {
+		name   string
+		change func(*operationRecord)
+	}{
+		{"plain same path", func(r *operationRecord) {
+			r.Output.Basename = "plain"
+			r.Output.Path = filepath.Join(filepath.Dir(r.Output.Path), r.Output.Basename)
+			r.Source.Path, r.Source.Basename = r.Output.Path, r.Output.Basename
+			r.ExistingOutput.File.Path, r.ExistingOutput.File.Basename = r.Output.Path, r.Output.Basename
+		}},
+		{"lossless schema", func(r *operationRecord) { r.SchemaVersion = recordBytesSchema }},
+		{"create with existing output", func(r *operationRecord) { r.Mode = Create }},
+		{"ordinary mode with backup", func(r *operationRecord) { r.Backup = &r.Output }},
+		{"existing output aliases source", func(r *operationRecord) { r.ExistingOutput.File = &r.Source }},
+		{"wrong operation", func(r *operationRecord) { r.LastCompletedOperation = "backup-rename" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			record := readOperationRecord(t, f.record)
+			tc.change(&record)
+			b, err := encodeRecord(record)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = parseRecord(b, stage.parent); !errors.Is(err, ErrInvalidRecord) {
+				t.Fatalf("invalid record accepted: %v", err)
+			}
+		})
+	}
+}
+
+func testRecordPreservesPathBytes(t *testing.T, parentName, sourceName string) {
+	t.Helper()
+	root := t.TempDir()
+	const runID = "1234567890abcdef1234567890abcdef"
+	parent := filepath.Join(root, parentName)
+	runPath := filepath.Join(parent, ".yakuori-run-"+runID)
+	if err := os.MkdirAll(runPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	open := func(path, content string) leaf {
+		putFile(t, path, content)
+		l, err := openParent(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = l.parent.file.Close() })
+		if err := observe(&l); err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	source := open(filepath.Join(parent, sourceName), "original")
+	stage := open(filepath.Join(runPath, "stage"), "translated")
+	backup := filepath.Join(parent, ".yakuori-backup-"+runID)
+	r := &Run{runID: runID, mode: InPlace, source: source, output: source, stage: stage, runDir: stage.parent,
+		rename: unix.Renameat2, recordWrite: (*os.File).Write, recordSync: (*os.File).Sync, recordClose: (*os.File).Close}
+	if err := r.writeRecord(preparedPhase, "none"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readRecord(r.runDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SchemaVersion != recordBytesSchema || got.Source != recordedFile(source) || got.Output != (recordPath{source.path, source.name}) || got.Stage != recordedFile(stage) ||
+		got.Backup == nil || *got.Backup != (recordPath{backup, filepath.Base(backup)}) || got.ExistingOutput.File == nil || *got.ExistingOutput.File != got.Source {
+		t.Fatalf("record lost path bytes: %+v", got)
+	}
+	if err := r.completeRecoveryRecord(got, r.runDir, Restored); err != nil {
+		t.Fatal(err)
+	}
+	got.Phase, got.LastCompletedOperation = restoredPhase, "restore-rename"
+	if rewritten, err := readRecord(r.runDir); err != nil || !reflect.DeepEqual(rewritten, got) || got.Backup.Path != backup || got.ExistingOutput.File.Path != source.path {
+		t.Fatalf("recovery record rewrite: %+v, %v", rewritten, err)
+	}
+	wire := readOperationRecord(t, filepath.Join(runPath, "record.json"))
+	wire.Output.Basename += "\n"
+	malformed, err := json.Marshal(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseRecord(malformed, r.runDir); !errors.Is(err, ErrInvalidRecord) {
+		t.Fatalf("accepted noncanonical base64 path: %v", err)
+	}
+}
+
 func TestRecoveryRecordRejectsInvalid(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

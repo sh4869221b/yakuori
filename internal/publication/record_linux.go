@@ -3,12 +3,15 @@
 package publication
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/sys/unix"
 )
@@ -18,6 +21,9 @@ var ErrRecordTooLarge = errors.New("publication record exceeds 64 KiB")
 type recordPhase string
 
 const (
+	recordUTF8Schema  = 1
+	recordBytesSchema = 2
+
 	preparedPhase  recordPhase = "prepared"
 	backedUpPhase  recordPhase = "source-backed-up"
 	publishedPhase recordPhase = "published"
@@ -60,9 +66,39 @@ func recordedFile(l leaf) recordFile {
 	return recordFile{l.path, l.name, l.id, l.digest, l.id.Size}
 }
 
+func (r *operationRecord) pathFields() []*string {
+	fields := []*string{&r.Source.Path, &r.Source.Basename, &r.Output.Path, &r.Output.Basename, &r.Stage.Path, &r.Stage.Basename}
+	if r.Backup != nil {
+		fields = append(fields, &r.Backup.Path, &r.Backup.Basename)
+	}
+	if f := r.ExistingOutput.File; f != nil {
+		fields = append(fields, &f.Path, &f.Basename)
+	}
+	return fields
+}
+
+func encodeRecord(record operationRecord) ([]byte, error) {
+	if record.SchemaVersion != recordBytesSchema {
+		return json.Marshal(record)
+	}
+	// Rewriting a recovery snapshot must not mutate its decoded paths.
+	if record.Backup != nil {
+		backup := *record.Backup
+		record.Backup = &backup
+	}
+	if record.ExistingOutput.File != nil {
+		file := *record.ExistingOutput.File
+		record.ExistingOutput.File = &file
+	}
+	for _, field := range record.pathFields() {
+		*field = base64.RawStdEncoding.EncodeToString([]byte(*field))
+	}
+	return json.Marshal(record)
+}
+
 func (r *Run) writeRecord(phase recordPhase, operation string) error {
 	record := operationRecord{
-		SchemaVersion: 1, RunID: r.runID, Mode: r.mode,
+		SchemaVersion: recordUTF8Schema, RunID: r.runID, Mode: r.mode,
 		Source: recordedFile(r.source), Output: recordPath{r.output.path, r.output.name}, Stage: recordedFile(r.stage),
 		SourceParent: r.source.parent.id, OutputParent: r.output.parent.id,
 		Phase: phase, LastCompletedOperation: operation,
@@ -74,6 +110,13 @@ func (r *Run) writeRecord(phase recordPhase, operation string) error {
 	if r.output.present {
 		file := recordedFile(r.output)
 		record.ExistingOutput.File = &file
+	}
+	for _, field := range record.pathFields() {
+		// Both invalid UTF-8 and a literal replacement rune need a lossless record.
+		if strings.ContainsRune(*field, utf8.RuneError) {
+			record.SchemaVersion = recordBytesSchema
+			break
+		}
 	}
 	w := recordWriter{r.runDir, r.recordWrite, r.recordSync, r.recordClose, r.rename}
 	return w.write(record, ".record-"+string(phase))
@@ -88,7 +131,7 @@ type recordWriter struct {
 }
 
 func (w recordWriter) write(record operationRecord, name string) (err error) {
-	b, err := json.Marshal(record)
+	b, err := encodeRecord(record)
 	if err != nil {
 		return fmt.Errorf("encode publication record: %w", err)
 	}
@@ -127,6 +170,8 @@ func (w recordWriter) write(record operationRecord, name string) (err error) {
 	return nil
 }
 
-func (r *Run) backupName() string { return ".yakuori-backup-" + r.runID }
+func backupBasename(runID string) string { return ".yakuori-backup-" + runID }
+
+func (r *Run) backupName() string { return backupBasename(r.runID) }
 
 func (r *Run) backupPath() string { return filepath.Join(r.source.parent.path, r.backupName()) }

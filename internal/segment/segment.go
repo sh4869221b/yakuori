@@ -147,7 +147,7 @@ func BuildWithLimits(ctx context.Context, parent unit.UnitID, prepared protect.P
 			return inference.GenerationRequest{}, 0, false, err
 		}
 		id, p := request.Identity(), request.Policy()
-		if id.ModelSHA256 != info.ModelSHA256 || id.Tokenizer != info.Tokenizer || id.Template != info.Template || id.PromptSchema != prompt.SchemaV1 || p.Schema != info.PolicySchema || p.Schema != inference.PolicySchemaV1 || p.MaxOutputTokens <= 0 || p.MaxOutputTokens > limits.MaxOutputTokens || p.RequestTimeout <= 0 || p.RequestTimeout > limits.RequestTimeout {
+		if id.RemoteModel != info.RemoteModel || id.ModelSHA256 != info.ModelSHA256 || id.Tokenizer != info.Tokenizer || id.Template != info.Template || id.PromptSchema != prompt.SchemaV1 || p.Schema != info.PolicySchema || p.Schema != inference.PolicySchemaV1 || p.MaxOutputTokens <= 0 || p.MaxOutputTokens > limits.MaxOutputTokens || p.RequestTimeout <= 0 || p.RequestTimeout > limits.RequestTimeout {
 			return inference.GenerationRequest{}, 0, false, ErrInvalidRequest
 		}
 		if initialized && (id != identity || !reflect.DeepEqual(p, policy)) {
@@ -163,7 +163,9 @@ func BuildWithLimits(ctx context.Context, parent unit.UnitID, prepared protect.P
 		if err := ctx.Err(); err != nil {
 			return inference.GenerationRequest{}, 0, false, err
 		}
-		if n <= 0 || n != len(request.TokenIDs()) {
+		ids := len(request.TokenIDs())
+		serverCountOnly := id.RemoteModel != "" && ids == 0
+		if n <= 0 || (!serverCountOnly && n != ids) {
 			return inference.GenerationRequest{}, 0, false, ErrInvalidRequest
 		}
 		return request, n, n <= info.ContextTokens && p.MaxOutputTokens <= info.ContextTokens-n, nil

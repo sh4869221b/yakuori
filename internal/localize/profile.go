@@ -46,14 +46,14 @@ func EffectiveInferenceProfile(info inference.ModelInfo, request inference.Gener
 		return identity.ProfileInput{}, err
 	}
 	id, policy := request.Identity(), request.Policy()
-	if id.ModelSHA256 != info.ModelSHA256 || id.Tokenizer != info.Tokenizer || id.Template != info.Template ||
+	if id.RemoteModel != info.RemoteModel || id.ModelSHA256 != info.ModelSHA256 || id.Tokenizer != info.Tokenizer || id.Template != info.Template ||
 		id.PromptSchema != info.Prompt.Schema || id.Prompt != info.Prompt || id.Thinking != info.Thinking || id.DisabledThinkingPrefix != info.DisabledThinkingPrefix ||
 		policy.Schema != info.PolicySchema || policy.Schema != inference.PolicySchemaV1 || policy.MaxOutputTokens <= 0 || policy.MaxOutputTokens > limits.MaxOutputTokens ||
 		policy.RequestTimeout <= 0 || policy.RequestTimeout > limits.RequestTimeout {
 		return identity.ProfileInput{}, ErrInferenceProfile
 	}
 	input.Generation = identity.GenerationInput{
-		Schema: policy.Schema, MaxOutputTokens: policy.MaxOutputTokens, RequestTimeoutNS: int64(policy.RequestTimeout),
+		SamplingMode: policy.SamplingMode, Schema: policy.Schema, MaxOutputTokens: policy.MaxOutputTokens, RequestTimeoutNS: int64(policy.RequestTimeout),
 		Seed: policy.Seed, SeedFixed: policy.SeedFixed, StopIDs: policy.StopIDs, Thinking: id.Thinking, Prefill: input.Generation.Prefill,
 	}
 	return input, nil
@@ -65,12 +65,17 @@ func EffectiveModelProfile(info inference.ModelInfo, limits config.Limits, segme
 	if err := limits.Check(); err != nil {
 		return identity.ProfileInput{}, err
 	}
-	if info.ModelSHA256 == ([32]byte{}) || info.Tokenizer.ModelSHA256 != info.ModelSHA256 || info.PolicySchema != inference.PolicySchemaV1 || info.ContextTokens <= 0 || info.Prefill.Path != info.Backend ||
-		info.Prompt.Schema != prompt.SchemaV1 || (info.Prompt != prompt.PlainIdentity() && info.Prompt != prompt.IndexIdentity() && info.Prompt != prompt.Plamo3Identity()) || info.Thinking != inference.ThinkingDisabled {
+	if (info.Backend != "openai" && (info.ModelSHA256 == ([32]byte{}) || info.Tokenizer.ModelSHA256 != info.ModelSHA256 || info.Prefill.Path != info.Backend)) ||
+		(info.Backend == "openai" && (info.RemoteModel == "" || info.ModelSHA256 != ([32]byte{}) || info.Tokenizer.ModelSHA256 != ([32]byte{}) || info.Prefill.Path != "none")) || info.PolicySchema != inference.PolicySchemaV1 || info.ContextTokens <= 0 ||
+		info.Prompt.Schema != prompt.SchemaV1 ||
+		(info.Prompt != prompt.PlainIdentity() && info.Prompt != prompt.IndexIdentity() && (info.Backend == "openai" || info.Prompt != prompt.Plamo3Identity())) ||
+		(info.Backend != "openai" && info.Thinking != inference.ThinkingDisabled) || (info.Backend == "openai" && info.Thinking != "provider-default") {
 		return identity.ProfileInput{}, ErrInferenceProfile
 	}
 	kv, cudaPin := info.KVPrecision, info.CUDABackendPin
 	switch info.Backend {
+	case "openai":
+		kv, cudaPin = "not-applicable", ""
 	case "cpu":
 		kv, cudaPin = "not-applicable", ""
 	case "cuda":
@@ -85,12 +90,16 @@ func EffectiveModelProfile(info inference.ModelInfo, limits config.Limits, segme
 		segmentation = identity.SegmentationInput{Mode: "enabled", Schema: segment.Schema, BoundaryFixtures: segment.BoundaryFixtures, UnitTextBytes: limits.UnitTextBytes, Segments: limits.Segments}
 	}
 	p := info.Prefill
+	sampling := ""
+	if info.Backend == "openai" {
+		sampling = "provider-default"
+	}
 	return identity.ProfileInput{
-		Version: identity.ProfileVersion, ModelDigest: info.ModelSHA256, Backend: info.Backend, BackendPin: info.BackendPin, CUDABackendPin: cudaPin,
+		RemoteModel: info.RemoteModel, Version: identity.ProfileVersion, ModelDigest: info.ModelSHA256, Backend: info.Backend, BackendPin: info.BackendPin, CUDABackendPin: cudaPin,
 		ComputeQuant: info.ComputeQuant, KVPrecision: kv, Tokenizer: identity.TokenizerInput{ModelDigest: info.Tokenizer.ModelSHA256, BackendPin: info.Tokenizer.BackendPin},
 		Template:     identity.TemplateInput{Family: info.Template.Family, Source: info.Template.Source, RendererVersion: info.Template.RendererVersion},
 		Prompt:       identity.PromptInput{Schema: info.Prompt.Schema, Variant: info.Prompt.Variant, SystemTemplate: []byte(info.Prompt.SystemTemplate), UserTemplate: []byte(info.Prompt.UserTemplate + info.Prompt.TermsTemplate), LanguageAliases: info.Prompt.LanguageAliases, DisabledThinkingPrefix: []byte(info.DisabledThinkingPrefix)},
-		Generation:   identity.GenerationInput{Schema: info.PolicySchema, Thinking: info.Thinking, Prefill: identity.PrefillInput{Exact: p.Exact, Path: p.Path, CPUFastAttention: p.CPUFastAttention, Batched: p.Batched, BatchedCapability: p.BatchedCapability, Fast: p.Fast, Floor: p.Floor, Chunk: p.Chunk}},
+		Generation:   identity.GenerationInput{SamplingMode: sampling, Schema: info.PolicySchema, Thinking: info.Thinking, Prefill: identity.PrefillInput{Exact: p.Exact, Path: p.Path, CPUFastAttention: p.CPUFastAttention, Batched: p.Batched, BatchedCapability: p.BatchedCapability, Fast: p.Fast, Floor: p.Floor, Chunk: p.Chunk}},
 		Segmentation: segmentation, Protection: identity.SchemaInput{Schema: protect.Schema, FixtureSet: ProtectionFixtures}, Validation: identity.SchemaInput{Schema: validate.Schema, FixtureSet: ValidationFixtures},
 		Context: identity.ContextInput{Tokens: min(limits.ContextTokens, info.ContextTokens), Mode: "none"},
 	}, nil

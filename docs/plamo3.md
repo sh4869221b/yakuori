@@ -39,7 +39,7 @@ The build uses Go 1.27.3. Import needs these regular files in the directory:
 `chat_template.jinja`, `model.safetensors`, and `LICENSE/en`. Symlinks are rejected;
 use a local-directory download, not symlinks into a shared cache. No Python model
 code is executed. Yakuori does not download these files automatically, and
-`models pull` remains the existing single-file acquisition command.
+`models pull` accepts only GGUF files.
 The downloaded checkpoint was public and usable here without authentication;
 future distribution/access requirements are controlled by PFN and Hugging Face.
 
