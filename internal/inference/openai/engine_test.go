@@ -3,6 +3,7 @@ package openai
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 
 	textadapter "github.com/sh4869221b/yakuori/internal/adapter/text"
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/contextselection"
 	"github.com/sh4869221b/yakuori/internal/identity"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/localize"
@@ -19,6 +21,54 @@ import (
 	"github.com/sh4869221b/yakuori/internal/tm"
 	"github.com/sh4869221b/yakuori/internal/unit"
 )
+
+func TestEngineRejectsResolvedContextTranslation(t *testing.T) {
+	e, err := NewEngine("gpt-4o-2024-08-06", "test-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	e.client.http.Transport = transport(func(*http.Request) (*http.Response, error) {
+		t.Fatal("resolved context reached the remote API")
+		return nil, nil
+	})
+	selection, err := contextselection.New([]contextselection.Item{{Category: contextselection.World, Text: "Snow."}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits := config.DefaultLimits()
+	policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, limits.MaxOutputTokens, limits.RequestTimeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := prompt.Input{SourceLanguage: "en", TargetLanguage: "ja", Text: "Hello", ResolvedContext: selection}
+	if _, err = e.NewRequest(t.Context(), input, policy); !errors.Is(err, ErrAPI) {
+		t.Fatalf("NewRequest accepted context: %v", err)
+	}
+	input.ResolvedContext = contextselection.ResolvedContext{}
+	plain, err := e.NewRequest(t.Context(), input, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := plain.Identity()
+	identity.Prompt, _ = prompt.ResolvedContextIdentity(identity.Prompt)
+	for _, prepared := range []inference.PreparedRequest{
+		{Identity: plain.Identity(), ResolvedContext: selection},
+		{Identity: identity},
+	} {
+		prepared.RenderedPrompt = plain.RenderedPrompt()
+		r, err := inference.NewGenerationRequest(prepared, policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.CountTokens(t.Context(), r); !errors.Is(err, ErrAPI) {
+			t.Fatalf("CountTokens accepted context: %v", err)
+		}
+		if _, err := e.Generate(t.Context(), r); !errors.Is(err, ErrAPI) {
+			t.Fatalf("Generate accepted context: %v", err)
+		}
+	}
+}
 
 func TestEngineProfileAndGeneration(t *testing.T) {
 	e, err := NewEngine("gpt-4o-2024-08-06", "test-key")

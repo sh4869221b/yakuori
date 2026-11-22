@@ -8,6 +8,7 @@ import (
 
 	"github.com/sh4869221b/yakuori/internal/artifact"
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/contextresolve"
 	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/identity"
 	"github.com/sh4869221b/yakuori/internal/inference"
@@ -106,7 +107,25 @@ func (c Core) Generate(ctx context.Context, session unit.Session, profile valida
 	return c.generate(ctx, session, profile, nil)
 }
 
+// GenerateWithResolvedContext evaluates an already resolved selection for each
+// unit. It returns the complete validated texts for evaluation only.
+func (c Core) GenerateWithResolvedContext(ctx context.Context, session unit.Session, profile validate.Profile, resolved map[unit.UnitID]contextresolve.ResolvedContext) (map[unit.UnitID]string, error) {
+	accepted, err := c.WithAcceptanceObservation(nil).generateWithContext(ctx, session, profile, nil, resolved)
+	if err != nil {
+		return nil, err
+	}
+	translations := make(map[unit.UnitID]string, len(accepted))
+	for _, translation := range accepted {
+		translations[translation.UnitID()] = translation.Text()
+	}
+	return translations, nil
+}
+
 func (c Core) generate(ctx context.Context, session unit.Session, profile validate.Profile, memory *tmExecution) ([]validate.AcceptedTranslation, error) {
+	return c.generateWithContext(ctx, session, profile, memory, nil)
+}
+
+func (c Core) generateWithContext(ctx context.Context, session unit.Session, profile validate.Profile, memory *tmExecution, resolved map[unit.UnitID]contextresolve.ResolvedContext) ([]validate.AcceptedTranslation, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.limits.GenerationTimeout)
 	defer cancel()
 	if err := session.Check(); err != nil {
@@ -127,6 +146,16 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 		return nil, &Error{Phase: "input", Err: validate.ErrInvalidProfile}
 	}
 	canonical := profile.CanonicalIdentity()
+	hasContext := false
+	for id, selection := range resolved {
+		if _, err := session.Unit(id); err != nil {
+			return nil, &Error{Phase: "input", UnitID: id, Err: err}
+		}
+		hasContext = hasContext || !selection.Empty()
+	}
+	if hasContext && (canonical == (identity.ProfileIdentity{}) || c.segmented == nil && c.inference == nil) {
+		return nil, &Error{Phase: "input", Err: ErrInferenceProfile}
+	}
 	var info inference.ModelInfo
 	if canonical != (identity.ProfileIdentity{}) {
 		segmentation := identity.SegmentationInput{Mode: "none"}
@@ -142,6 +171,9 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 		} else if c.inference != nil {
 			engine = c.inference.engine
 		}
+		if hasContext && engine == nil {
+			return nil, &Error{Phase: "input", Err: ErrInferenceProfile}
+		}
 		if engine != nil {
 			var err error
 			info, err = engine.Info(ctx)
@@ -154,6 +186,9 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 			}
 			if matches, err := canonical.MatchesModel(effective); err != nil || !matches {
 				return nil, &Error{Phase: "input", Err: errors.Join(ErrInferenceProfile, err)}
+			}
+			if _, ok := resolvedContextPrompt(info); hasContext && !ok {
+				return nil, &Error{Phase: "input", Err: ErrInferenceProfile}
 			}
 		}
 	}
@@ -189,6 +224,7 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 		if err != nil {
 			return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 		}
+		input := RequestInput{Text: prepared.Text(), Terms: terms, ResolvedContext: resolved[id]}
 		var plan segment.Plan
 		if c.segmented != nil {
 			limits := c.limits
@@ -196,7 +232,7 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 			if limits.Segments <= 0 {
 				return nil, &Error{Phase: "plan", UnitID: id, Err: c.limits.CheckSegments(segments + 1)}
 			}
-			plan, err = c.segmented.planWithTerms(ctx, id, prepared, limits, terms)
+			plan, err = c.segmented.planWithInput(ctx, id, prepared, limits, input)
 			if err != nil {
 				return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 			}
@@ -220,7 +256,7 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 				if canonical != (identity.ProfileIdentity{}) {
 					planner.limits.ContextTokens = min(planner.limits.ContextTokens, info.ContextTokens)
 				}
-				inferencePlans[len(preparedUnits)], err = planner.planWithTerms(ctx, id, RequestInput{Text: prepared.Text(), Terms: terms})
+				inferencePlans[len(preparedUnits)], err = planner.planWithTerms(ctx, id, input)
 				if err != nil {
 					return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 				}
@@ -320,7 +356,15 @@ func (c Core) generate(ctx context.Context, session unit.Session, profile valida
 }
 
 func (c Core) checkRequestProfile(profile validate.Profile, info inference.ModelInfo, request inference.GenerationRequest) error {
-	effective, err := EffectiveInferenceProfile(info, request, c.limits, c.segmented != nil)
+	expectedPrompt := info.Prompt
+	if !request.ResolvedContext().Empty() {
+		var ok bool
+		expectedPrompt, ok = resolvedContextPrompt(info)
+		if !ok {
+			return ErrInferenceProfile
+		}
+	}
+	effective, err := effectiveInferenceProfile(info, request, c.limits, c.segmented != nil, expectedPrompt)
 	if err != nil {
 		return err
 	}

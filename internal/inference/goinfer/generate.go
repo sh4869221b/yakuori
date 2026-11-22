@@ -27,7 +27,7 @@ func (e *Engine) Generate(ctx context.Context, request inference.GenerationReque
 		e.mu.Unlock()
 		return result, ErrBusy
 	}
-	if !e.acceptsIdentity(request.Identity()) {
+	if !e.acceptsRequest(request) {
 		e.mu.Unlock()
 		return result, ErrForeignRequest
 	}

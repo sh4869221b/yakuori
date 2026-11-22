@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/contextresolve"
 	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/inference"
+	"github.com/sh4869221b/yakuori/internal/prompt"
 	"github.com/sh4869221b/yakuori/internal/segment"
 	"github.com/sh4869221b/yakuori/internal/unit"
 )
@@ -61,6 +63,9 @@ func (e InferenceEngine) planWithTerms(ctx context.Context, id unit.UnitID, inpu
 	if err != nil {
 		return inferencePlan{}, err
 	}
+	if !input.ResolvedContext.Empty() && (count <= 0 || count != len(request.TokenIDs())) {
+		return inferencePlan{}, segment.ErrInvalidRequest
+	}
 	if count > limits.ContextTokens-policy.MaxOutputTokens {
 		return inferencePlan{}, segment.ErrContextLimit
 	}
@@ -68,8 +73,9 @@ func (e InferenceEngine) planWithTerms(ctx context.Context, id unit.UnitID, inpu
 }
 
 type RequestInput struct {
-	Text  string
-	Terms glossary.Glossary
+	Text            string
+	Terms           glossary.Glossary
+	ResolvedContext contextresolve.ResolvedContext
 }
 
 type TermsRequestBuilder func(context.Context, unit.UnitID, RequestInput) (inference.GenerationRequest, error)
@@ -79,10 +85,10 @@ func NewGlossaryInferenceEngine(engine inference.Engine, build TermsRequestBuild
 }
 
 // textRequestBuilder adapts the text-only constructor once, before planning.
-// It must reject applicable terms rather than silently dropping them.
+// It rejects inputs that the text-only builder cannot represent.
 func textRequestBuilder(build func(context.Context, unit.UnitID, string) (inference.GenerationRequest, error)) TermsRequestBuilder {
 	return func(ctx context.Context, id unit.UnitID, input RequestInput) (inference.GenerationRequest, error) {
-		if !input.Terms.Empty() || build == nil {
+		if !input.Terms.Empty() || !input.ResolvedContext.Empty() || build == nil {
 			return inference.GenerationRequest{}, ErrInferenceProfile
 		}
 		return build(ctx, id, input.Text)
@@ -97,7 +103,11 @@ func buildTermsRequest(ctx context.Context, id unit.UnitID, input RequestInput, 
 	if err != nil {
 		return inference.GenerationRequest{}, err
 	}
-	if request.Terms() != input.Terms {
+	if request.Terms() != input.Terms || !request.ResolvedContext().Equal(input.ResolvedContext) {
+		return inference.GenerationRequest{}, ErrInferenceProfile
+	}
+	if input.ResolvedContext.Empty() && prompt.IsContextTask(request.Identity().Prompt) ||
+		!input.ResolvedContext.Empty() && request.ProtectedSource() != input.Text {
 		return inference.GenerationRequest{}, ErrInferenceProfile
 	}
 	return request, nil

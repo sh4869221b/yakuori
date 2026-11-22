@@ -5,17 +5,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/sh4869221b/yakuori/internal/contextpack"
+	"github.com/sh4869221b/yakuori/internal/contextselection"
 	"github.com/sh4869221b/yakuori/internal/unit"
 )
-
-const selectionVersion = "yakuori.context-selection/v1"
 
 var (
 	ErrGameScope      = errors.New("context game scope mismatch")
@@ -78,49 +76,22 @@ type Request struct {
 	Budget            Budget
 }
 
-type Category string
+type Category = contextselection.Category
 
 const (
-	World    Category = "world"
-	Scene    Category = "scene"
-	Speaker  Category = "speaker"
-	Neighbor Category = "neighbor"
+	World    = contextselection.World
+	Scene    = contextselection.Scene
+	Speaker  = contextselection.Speaker
+	Neighbor = contextselection.Neighbor
 )
 
-// Item contains the fields eligible for generation. Text holds world text,
-// a scene summary, a speaker description, or the previous unit's raw source.
-// Name is used for speakers.
-type Item struct {
-	Category Category `json:"category"`
-	Name     string   `json:"name,omitempty"`
-	Text     string   `json:"text,omitempty"`
-}
+type Item = contextselection.Item
 
 // CountTokens counts the context cost of the entire ordered selection. The
 // caller can account for rendering and token boundaries in one invocation.
 type CountTokens func(context.Context, []Item) (int, error)
 
-// ResolvedContext is an immutable selection for a single translation unit.
-// Its zero value represents empty context.
-type ResolvedContext struct {
-	items       []Item
-	canonical   []byte
-	fingerprint [sha256.Size]byte
-}
-
-func (r ResolvedContext) Items() []Item { return slices.Clone(r.items) }
-
-// Canonical returns the selection version and ordered category and payload
-// fields as compact JSON. Empty context has empty canonical bytes. Rendering
-// version belongs to the downstream generation profile.
-func (r ResolvedContext) Canonical() []byte { return slices.Clone(r.canonical) }
-
-func (r ResolvedContext) Fingerprint() [sha256.Size]byte {
-	if len(r.items) == 0 {
-		return sha256.Sum256(nil)
-	}
-	return r.fingerprint
-}
+type ResolvedContext = contextselection.ResolvedContext
 
 type Decision struct {
 	ID     string
@@ -177,15 +148,12 @@ func Resolve(ctx context.Context, req Request, count CountTokens) (ResolvedConte
 		return ResolvedContext{}, diag, ErrTokenLimit
 	}
 
-	canonical, err := json.Marshal(struct {
-		Version string `json:"version"`
-		Items   []Item `json:"items"`
-	}{selectionVersion, items})
+	selection, err := contextselection.New(items)
 	if err != nil {
 		return ResolvedContext{}, diag, errors.New("encode context selection failed")
 	}
-	diag.Fingerprint = sha256.Sum256(canonical)
-	return ResolvedContext{items: items, canonical: canonical, fingerprint: diag.Fingerprint}, diag, nil
+	diag.Fingerprint = selection.Fingerprint()
+	return selection, diag, nil
 }
 
 func selectItems(req Request, current unit.TranslationUnit, diag *Diagnostics) ([]Item, error) {

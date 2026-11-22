@@ -41,13 +41,21 @@ func NewCanonicalInferenceProfile(info inference.ModelInfo, request inference.Ge
 // EffectiveInferenceProfile projects only common runtime conditions. The caller
 // supplies ModelID and Glossary when constructing a persistent profile.
 func EffectiveInferenceProfile(info inference.ModelInfo, request inference.GenerationRequest, limits config.Limits, segmented bool) (identity.ProfileInput, error) {
+	if !request.ResolvedContext().Empty() {
+		return identity.ProfileInput{}, ErrInferenceProfile
+	}
+	return effectiveInferenceProfile(info, request, limits, segmented, info.Prompt)
+}
+
+// expectedPrompt may differ from the base prompt only during private evaluation.
+func effectiveInferenceProfile(info inference.ModelInfo, request inference.GenerationRequest, limits config.Limits, segmented bool, expectedPrompt prompt.Identity) (identity.ProfileInput, error) {
 	input, err := EffectiveModelProfile(info, limits, segmented)
 	if err != nil {
 		return identity.ProfileInput{}, err
 	}
 	id, policy := request.Identity(), request.Policy()
 	if id.RemoteModel != info.RemoteModel || id.ModelSHA256 != info.ModelSHA256 || id.Tokenizer != info.Tokenizer || id.Template != info.Template ||
-		id.PromptSchema != info.Prompt.Schema || id.Prompt != info.Prompt || id.Thinking != info.Thinking || id.DisabledThinkingPrefix != info.DisabledThinkingPrefix ||
+		id.PromptSchema != expectedPrompt.Schema || id.Prompt != expectedPrompt || id.Thinking != info.Thinking || id.DisabledThinkingPrefix != info.DisabledThinkingPrefix ||
 		policy.Schema != info.PolicySchema || policy.Schema != inference.PolicySchemaV1 || policy.MaxOutputTokens <= 0 || policy.MaxOutputTokens > limits.MaxOutputTokens ||
 		policy.RequestTimeout <= 0 || policy.RequestTimeout > limits.RequestTimeout {
 		return identity.ProfileInput{}, ErrInferenceProfile
@@ -57,6 +65,13 @@ func EffectiveInferenceProfile(info inference.ModelInfo, request inference.Gener
 		Seed: policy.Seed, SeedFixed: policy.SeedFixed, StopIDs: policy.StopIDs, Thinking: id.Thinking, Prefill: input.Generation.Prefill,
 	}
 	return input, nil
+}
+
+func resolvedContextPrompt(info inference.ModelInfo) (prompt.Identity, bool) {
+	if info.RemoteModel != "" || info.Backend == "openai" || info.Template.Family != "chatml" {
+		return prompt.Identity{}, false
+	}
+	return prompt.ResolvedContextIdentity(info.Prompt)
 }
 
 // EffectiveModelProfile also supports checking the entry conditions of an import
