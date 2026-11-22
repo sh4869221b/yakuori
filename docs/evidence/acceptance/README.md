@@ -386,6 +386,9 @@ warm resident model. Neither mode flushes the OS page cache.
 
 ### AMD WebGPU Vulkan run
 
+The [2026-11-22 RX 9070 XT run](amd-webgpu-run-2026-11-22.md) records the
+results for the pinned Index model and three approved fixtures.
+
 Build the Linux/amd64 runner with cgo and WebGPU. Use the AMD criteria and the
 Vulkan device's PCI address, including the domain. Use the same Vulkan ICD
 selection when checking the model and running acceptance. On the RX 9070 XT
