@@ -6,7 +6,7 @@
   "scope": {"game_namespace": "sample-game", "artifact_namespace": "dialogue"},
   "units": [
     {"id": "river-2", "source": "I am Rowan, the ferryman. Our ferry crosses the Moonwater.", "context": {"speaker": "rowan-ferry", "scene": "river"}},
-    {"id": "gate-1", "source": "I am Rowan, the north gate guard. The gate closes at sunset.", "context": {"speaker": "rowan-guard", "scene": "gate"}},
+    {"id": "gate-1", "source": "I am Rowan, the north gate guard. The gate closes at sunset. Halt. State your name. Show your papers.", "context": {"speaker": "rowan-guard", "scene": "gate"}},
     {"id": "river-1", "source": "The Moonwater divides the valley in two. The ferry crosses it.", "context": {"speaker": "rowan-ferry", "scene": "river"}},
     {"id": "rumor-1", "source": "A rumor says the old bell was destroyed years ago."},
     {"id": "rumor-2", "source": "A rumor says the old bell is intact under the inn."},
