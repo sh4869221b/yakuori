@@ -20,7 +20,24 @@ const (
 )
 
 func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy inference.GenerationPolicy) (inference.GenerationRequest, error) {
-	return e.prepareRequest(ctx, inference.PreparedRequest{Identity: e.identity(), StopIDs: e.stopIDs, Terms: input.Terms}, policy, func() ([]tokenizer.Segment, error) {
+	prepared := inference.PreparedRequest{
+		Identity: e.identity(), StopIDs: e.stopIDs, ProtectedSource: input.Text, Terms: input.Terms, ResolvedContext: input.ResolvedContext,
+	}
+	if !input.ResolvedContext.Empty() {
+		identity, ok := e.resolvedContextIdentity()
+		if !ok {
+			return inference.GenerationRequest{}, ErrUnknownTemplate
+		}
+		prepared.Identity = identity
+		return e.prepareRequest(ctx, prepared, policy, func() ([]tokenizer.Segment, error) {
+			messages, err := prompt.BuildResolvedContext(input)
+			if err != nil {
+				return nil, err
+			}
+			return e.chatSegments(messages.System, messages.User), nil
+		})
+	}
+	return e.prepareRequest(ctx, prepared, policy, func() ([]tokenizer.Segment, error) {
 		if e.info.Template.Family == plamo3Family {
 			return plamo3Segments(input)
 		}
@@ -110,7 +127,7 @@ func (e *Engine) CountTokens(ctx context.Context, request inference.GenerationRe
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	if !e.acceptsIdentity(request.Identity()) {
+	if !e.acceptsRequest(request) {
 		return 0, ErrForeignRequest
 	}
 	return len(request.TokenIDs()), nil
@@ -123,6 +140,21 @@ func (e *Engine) contextIdentity() inference.RequestIdentity {
 	return id
 }
 
-func (e *Engine) acceptsIdentity(id inference.RequestIdentity) bool {
-	return id == e.identity() || e.info.Template.Family == "chatml" && id == e.contextIdentity()
+func (e *Engine) resolvedContextIdentity() (inference.RequestIdentity, bool) {
+	id := e.identity()
+	p, ok := prompt.ResolvedContextIdentity(id.Prompt)
+	if !ok || e.info.Template.Family != "chatml" {
+		return inference.RequestIdentity{}, false
+	}
+	id.Prompt, id.PromptSchema = p, p.Schema
+	return id, true
+}
+
+func (e *Engine) acceptsRequest(request inference.GenerationRequest) bool {
+	id := request.Identity()
+	if request.ResolvedContext().Empty() {
+		return id == e.identity() || e.info.Template.Family == "chatml" && id == e.contextIdentity()
+	}
+	expected, ok := e.resolvedContextIdentity()
+	return ok && id == expected
 }

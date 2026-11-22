@@ -48,19 +48,22 @@ func (e *Engine) NewRequest(ctx context.Context, input prompt.Input, policy infe
 	if _, err := e.Info(ctx); err != nil {
 		return inference.GenerationRequest{}, err
 	}
+	if !input.ResolvedContext.Empty() {
+		return inference.GenerationRequest{}, ErrAPI
+	}
 	messages := prompt.Build(input)
 	data, err := json.Marshal([]Message{{Role: "system", Content: messages.System}, {Role: "user", Content: messages.User}})
 	if err != nil {
 		return inference.GenerationRequest{}, ErrAPI
 	}
-	return inference.NewGenerationRequest(inference.PreparedRequest{RenderedPrompt: string(data), Identity: inference.RequestIdentity{RemoteModel: e.info.RemoteModel, Template: e.info.Template, PromptSchema: prompt.SchemaV1, Prompt: e.info.Prompt, Thinking: e.info.Thinking, Tokenizer: e.info.Tokenizer}, Terms: input.Terms}, policy)
+	return inference.NewGenerationRequest(inference.PreparedRequest{RenderedPrompt: string(data), Identity: inference.RequestIdentity{RemoteModel: e.info.RemoteModel, Template: e.info.Template, PromptSchema: prompt.SchemaV1, Prompt: e.info.Prompt, Thinking: e.info.Thinking, Tokenizer: e.info.Tokenizer}, ProtectedSource: input.Text, Terms: input.Terms}, policy)
 }
 func (e *Engine) request(ctx context.Context, r inference.GenerationRequest) (Request, error) {
 	if _, err := e.Info(ctx); err != nil {
 		return Request{}, err
 	}
 	id, p := r.Identity(), r.Policy()
-	if id.RemoteModel != e.info.RemoteModel || id.Template != e.info.Template || id.Prompt != e.info.Prompt || p.Schema != inference.PolicySchemaV1 || p.SamplingMode != "provider-default" {
+	if !r.ResolvedContext().Empty() || id.RemoteModel != e.info.RemoteModel || id.Template != e.info.Template || id.Prompt != e.info.Prompt || p.Schema != inference.PolicySchemaV1 || p.SamplingMode != "provider-default" {
 		return Request{}, ErrAPI
 	}
 	var input []Message

@@ -3,6 +3,7 @@ package inference
 import (
 	"slices"
 
+	"github.com/sh4869221b/yakuori/internal/contextselection"
 	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/prompt"
 )
@@ -28,21 +29,25 @@ type RequestIdentity struct {
 
 // PreparedRequest is produced by a backend after rendering and encoding once.
 type PreparedRequest struct {
-	RenderedPrompt string
-	Spans          []PromptSpan
-	TokenIDs       []int
-	Identity       RequestIdentity
-	StopIDs        []int
-	Terms          glossary.Glossary
+	RenderedPrompt  string
+	Spans           []PromptSpan
+	TokenIDs        []int
+	Identity        RequestIdentity
+	StopIDs         []int
+	ProtectedSource string
+	Terms           glossary.Glossary
+	ResolvedContext contextselection.ResolvedContext
 }
 
 type GenerationRequest struct {
-	renderedPrompt string
-	spans          []PromptSpan
-	tokenIDs       []int
-	identity       RequestIdentity
-	policy         EffectivePolicy
-	terms          glossary.Glossary
+	renderedPrompt  string
+	spans           []PromptSpan
+	tokenIDs        []int
+	identity        RequestIdentity
+	policy          EffectivePolicy
+	protectedSource string
+	terms           glossary.Glossary
+	resolvedContext contextselection.ResolvedContext
 }
 
 func NewGenerationRequest(prepared PreparedRequest, policy GenerationPolicy) (GenerationRequest, error) {
@@ -51,12 +56,14 @@ func NewGenerationRequest(prepared PreparedRequest, policy GenerationPolicy) (Ge
 		return GenerationRequest{}, ErrInvalidPolicy
 	}
 	return GenerationRequest{
-		renderedPrompt: prepared.RenderedPrompt,
-		spans:          slices.Clone(prepared.Spans),
-		tokenIDs:       slices.Clone(prepared.TokenIDs),
-		identity:       prepared.Identity,
-		policy:         effectivePolicy(prepared, policy),
-		terms:          prepared.Terms,
+		renderedPrompt:  prepared.RenderedPrompt,
+		spans:           slices.Clone(prepared.Spans),
+		tokenIDs:        slices.Clone(prepared.TokenIDs),
+		identity:        prepared.Identity,
+		policy:          effectivePolicy(prepared, policy),
+		protectedSource: prepared.ProtectedSource,
+		terms:           prepared.Terms,
+		resolvedContext: prepared.ResolvedContext,
 	}, nil
 }
 
@@ -65,6 +72,10 @@ func (r GenerationRequest) Spans() []PromptSpan       { return slices.Clone(r.sp
 func (r GenerationRequest) TokenIDs() []int           { return slices.Clone(r.tokenIDs) }
 func (r GenerationRequest) Identity() RequestIdentity { return r.identity }
 func (r GenerationRequest) Terms() glossary.Glossary  { return r.terms }
+func (r GenerationRequest) ProtectedSource() string   { return r.protectedSource }
+func (r GenerationRequest) ResolvedContext() contextselection.ResolvedContext {
+	return r.resolvedContext
+}
 
 func (r GenerationRequest) Policy() EffectivePolicy {
 	p := r.policy

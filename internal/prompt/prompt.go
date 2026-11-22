@@ -4,6 +4,7 @@ package prompt
 import (
 	"fmt"
 
+	"github.com/sh4869221b/yakuori/internal/contextselection"
 	"github.com/sh4869221b/yakuori/internal/glossary"
 )
 
@@ -28,10 +29,11 @@ func PlainIdentity() Identity {
 }
 
 type Input struct {
-	SourceLanguage string
-	TargetLanguage string
-	Text           string
-	Terms          glossary.Glossary
+	SourceLanguage  string
+	TargetLanguage  string
+	Text            string
+	Terms           glossary.Glossary
+	ResolvedContext contextselection.ResolvedContext
 }
 
 type Messages struct {

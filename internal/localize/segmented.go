@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/sh4869221b/yakuori/internal/config"
-	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/protect"
 	"github.com/sh4869221b/yakuori/internal/segment"
@@ -54,16 +53,17 @@ func segmentedFailure(err error) (Generation, error) {
 }
 
 func (g *segmentedGenerator) plan(ctx context.Context, id unit.UnitID, prepared protect.Prepared, limits config.Limits) (segment.Plan, error) {
-	return g.planWithTerms(ctx, id, prepared, limits, glossary.Glossary{})
+	return g.planWithInput(ctx, id, prepared, limits, RequestInput{})
 }
 
-func (g *segmentedGenerator) planWithTerms(ctx context.Context, id unit.UnitID, prepared protect.Prepared, limits config.Limits, terms glossary.Glossary) (segment.Plan, error) {
+func (g *segmentedGenerator) planWithInput(ctx context.Context, id unit.UnitID, prepared protect.Prepared, limits config.Limits, input RequestInput) (segment.Plan, error) {
 	info, err := g.engine.Info(ctx)
 	if err != nil {
 		return segment.Plan{}, err
 	}
 	return segment.BuildWithLimits(ctx, id, prepared, info, func(ctx context.Context, text string) (inference.GenerationRequest, error) {
-		return buildTermsRequest(ctx, id, RequestInput{Text: text, Terms: terms}, g.buildTerms)
+		input.Text = text
+		return buildTermsRequest(ctx, id, input, g.buildTerms)
 	}, g.engine.CountTokens, limits)
 }
 
