@@ -68,7 +68,8 @@ Linux/amd64のAMD専用ビルドにはCコンパイラが必要です。実行�
 AMD GPU向けのVulkan driverを用意します。現在の対象は、プロセスに見えるVulkan
 adapterがAMDのdiscrete GPU 1台だけの構成です。複数のICDが有効な環境では、
 対象GPUのICD JSONを `VK_DRIVER_FILES` で指定できます。
-GPUの初期化またはモデルのresident実行が成立しない場合はエラーになります。
+AMDを指定した下記コマンドは、GPU初期化前に表示接続を無効にした環境で同じプロセスを
+起動し直します。GPUの初期化またはモデルのresident実行が成立しない場合はエラーになります。
 
 ```sh
 CGO_ENABLED=1 GOTOOLCHAIN=local go build -tags gpu -o ./yakuori-webgpu ./cmd/yakuori

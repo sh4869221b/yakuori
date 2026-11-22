@@ -4,6 +4,7 @@ package goinfer
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/oliverbestmann/webgpu/wgpu"
 	_ "github.com/townsendmerino/goinfer/backend/webgpu"
@@ -15,6 +16,9 @@ const webGPUBackendPin = "github.com/sh4869221b/goinfer/backend/webgpu@994cbf5ee
 const vulkanBackends wgpu.InstanceBackend = 1 << 0
 
 func webGPUAdapter() (name, driver string, err error) {
+	if _, changed := WebGPUProcessEnv(os.Environ()); changed {
+		return "", "", fmt.Errorf("%w: WebGPU requires its headless startup environment", ErrWebGPUResidency)
+	}
 	instance := wgpu.CreateInstance(&wgpu.InstanceDescriptor{Backends: vulkanBackends})
 	defer instance.Release()
 	adapters := instance.EnumerateAdapters(&wgpu.InstanceEnumerateAdapterOptons{Backends: vulkanBackends})

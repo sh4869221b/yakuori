@@ -111,7 +111,9 @@ of an individual request. Diagnostic reason strings are excluded.
   capability use it, including ExactPrefill and `fast=off`.** Without batched
   policy or capability, fast, floor and chunk are inactive.
 - WebGPU records its batched switch and model's reported batched capability.
-  The CUDA fast selector, floor and chunk are inactive.
+  The CLI and acceptance worker remove `GOINFER_ATTN_KEYS` at startup to fix
+  attention selection to the pinned WebGPU default. The CUDA fast selector,
+  floor and chunk are inactive.
 
 Requested backend, decline reasons, timings, driver names and configured limits
 that are not effective are excluded. Changes to these diagnostics alone retain

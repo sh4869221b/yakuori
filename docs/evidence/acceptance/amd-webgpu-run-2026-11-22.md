@@ -18,7 +18,7 @@ The AMD binaries used Go 1.27.3, `CGO_ENABLED=1`, `-tags gpu` and goinfer
 and its WebGPU module at fork revision
 `994cbf5ee38dd8dcc612aad6e6803ac79f772f3b`.
 The selected local model was Index-Translate-2B Q4_K_M, 1,312,164,352 bytes,
-from the [official fixed revision](https://huggingface.co/IndexTeam/Index-Translate-2B-GGUF/blob/0a622669d15a139787818187e6263d19e4a1ffb5/Index-Translate-2B.Q4_K_M.gguf).
+from the [official fixed revision](https://huggingface.co/IndexTeam/Index-Translate-2B-GGUF/blob/3a0eca6ce931d88d00614d427ab3ed8ff0743902/Index-Translate-2B.Q4_K_M.gguf).
 Its SHA-256 was `044b313d29342bd3b2c77cbb64023ca0d209bd9b3247763f9d162767ef2d746a`.
 All workers reported requested and effective `webgpu`,
 `webgpu:vulkan-resident (int4)`, f32 KV and 4,096 configured and effective

@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sh4869221b/yakuori/internal/inference/goinfer"
 	"github.com/sh4869221b/yakuori/internal/localize"
 )
 
@@ -378,6 +379,9 @@ func (s *Supervisor) launch(ctx context.Context, req WorkerRequest, args []strin
 	}
 	defer reader.Close()
 	cmd := exec.Command(s.executable, args...)
+	if req.Backend == "webgpu" {
+		cmd.Env, _ = goinfer.WebGPUProcessEnv(cmd.Environ())
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Stdin = bytes.NewReader(data)
 	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard

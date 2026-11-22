@@ -393,11 +393,10 @@ Build the Linux/amd64 runner with cgo and WebGPU. Use the AMD criteria and the
 Vulkan device's PCI address, including the domain. Use the same Vulkan ICD
 selection when checking the model and running acceptance. On the RX 9070 XT
 host, the PCI address is `0000:03:00.0`. The selected GPU must be the single
-visible Vulkan adapter. For strict offline observation on a graphical
-session, give the command a private empty `XDG_RUNTIME_DIR`, unset
-`DISPLAY`, `WAYLAND_DISPLAY` and `WAYLAND_SOCKET`, and set
-`EGL_PLATFORM=surfaceless`. The pinned WebGPU factory otherwise can probe
-the local display socket during adapter initialization.
+visible Vulkan adapter. The WebGPU CLI establishes a headless environment at
+startup. The runner applies the same environment when starting each WebGPU
+worker. Run the CLI directly under the strict offline observer from the
+normal desktop environment.
 
 ```sh
 CGO_ENABLED=1 GOTOOLCHAIN=local go build -tags gpu -o /tmp/yakuori-acceptance-webgpu ./tools/acceptance/cmd/run
