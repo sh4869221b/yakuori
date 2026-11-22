@@ -1,4 +1,4 @@
-// Package genericjson imports v1 JSON exchange documents into translation sessions.
+// Package genericjson reads and writes v1 JSON exchange documents.
 package genericjson
 
 import (
@@ -31,6 +31,8 @@ var errMetadataMismatch = errors.New("generic JSON language or scope mismatch")
 type Adapter struct {
 	expected Metadata
 	limits   config.Limits
+	session  unit.Session
+	source   document
 }
 
 // New requires explicit language and scope values and finite operational limits.
@@ -59,11 +61,24 @@ func (a *Adapter) Import(raw []byte, _ validate.Profile) (unit.Session, error) {
 	if doc.metadata != a.expected {
 		return unit.Session{}, errMetadataMismatch
 	}
+	units, err := doc.translationUnits()
+	if err != nil {
+		return unit.Session{}, err
+	}
+	session, err := unit.NewSession(raw, units)
+	if err != nil {
+		return unit.Session{}, err
+	}
+	a.session, a.source = session, doc
+	return session, nil
+}
+
+func (doc document) translationUnits() ([]unit.TranslationUnit, error) {
 	units := make([]unit.TranslationUnit, len(doc.units))
 	for i, entry := range doc.units {
 		id, err := unit.NewUnitID(adapterName, formatSchema, entry.id)
 		if err != nil {
-			return unit.Session{}, err
+			return nil, err
 		}
 		u, err := unit.NewTranslationUnitWithProtection(id, []byte(entry.source),
 			doc.metadata.SourceLanguage, doc.metadata.TargetLanguage, entry.context, entry.spans)
@@ -71,9 +86,9 @@ func (a *Adapter) Import(raw []byte, _ validate.Profile) (unit.Session, error) {
 			err = protect.CheckDeclaredSpans(u)
 		}
 		if err != nil {
-			return unit.Session{}, fmt.Errorf("generic JSON unit %d: %w", i+1, err)
+			return nil, fmt.Errorf("generic JSON unit %d: %w", i+1, err)
 		}
 		units[i] = u
 	}
-	return unit.NewSession(raw, units)
+	return units, nil
 }

@@ -32,9 +32,10 @@ type document struct {
 }
 
 type sourceUnit struct {
-	id, source string
-	context    map[string]string
-	spans      []unit.ProtectionSpan
+	id, source  string
+	translation *string
+	context     map[string]string
+	spans       []unit.ProtectionSpan
 }
 
 type parser struct {
@@ -114,7 +115,8 @@ func (p *parser) readUnits() ([]sourceUnit, error) {
 			"id":     {read: p.readString(&u.id, true)},
 			"source": {read: p.readString(&u.source, false)},
 			"translation": {optional: true, read: func() error {
-				_, err := p.text(false)
+				text, err := p.text(false)
+				u.translation = &text
 				return err
 			}},
 			"protection": {optional: true, read: func() (err error) {
@@ -167,7 +169,7 @@ func (p *parser) readSpans() ([]unit.ProtectionSpan, error) {
 	if err := p.delim('['); err != nil {
 		return nil, err
 	}
-	var spans []unit.ProtectionSpan
+	spans := []unit.ProtectionSpan{}
 	for p.json.More() {
 		if len(spans) == maxSpans {
 			return nil, &config.LimitError{Limit: "protection spans", Actual: len(spans) + 1, Maximum: maxSpans}
