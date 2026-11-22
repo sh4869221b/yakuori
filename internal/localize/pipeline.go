@@ -145,13 +145,26 @@ func (c Core) generateWithContext(ctx context.Context, session unit.Session, pro
 	if profile.Segmentation() != expectedSegmentation {
 		return nil, &Error{Phase: "input", Err: validate.ErrInvalidProfile}
 	}
-	canonical := profile.CanonicalIdentity()
+	units, err := c.inputUnits(session)
+	if err != nil {
+		return nil, &Error{Phase: "input", Err: err}
+	}
 	hasContext := false
-	for id, selection := range resolved {
-		if _, err := session.Unit(id); err != nil {
-			return nil, &Error{Phase: "input", UnitID: id, Err: err}
+	if memory != nil && memory.contextPack.Pack != nil {
+		resolved, err = memory.resolveContext(ctx, session, units)
+		if err != nil {
+			return nil, err
 		}
-		hasContext = hasContext || !selection.Empty()
+		hasContext = len(resolved) != 0
+	}
+	canonical := profile.CanonicalIdentity()
+	if memory == nil {
+		for id, selection := range resolved {
+			if _, err := session.Unit(id); err != nil {
+				return nil, &Error{Phase: "input", UnitID: id, Err: err}
+			}
+			hasContext = hasContext || !selection.Empty()
+		}
 	}
 	if hasContext && (canonical == (identity.ProfileIdentity{}) || c.segmented == nil && c.inference == nil) {
 		return nil, &Error{Phase: "input", Err: ErrInferenceProfile}
@@ -191,10 +204,6 @@ func (c Core) generateWithContext(ctx context.Context, session unit.Session, pro
 				return nil, &Error{Phase: "input", Err: ErrInferenceProfile}
 			}
 		}
-	}
-	units, err := c.inputUnits(session)
-	if err != nil {
-		return nil, &Error{Phase: "input", Err: err}
 	}
 	// Finish every unit's protection and plan before any generation starts.
 	preparedUnits := make([]protect.Prepared, 0, len(units))
@@ -243,6 +252,7 @@ func (c Core) generateWithContext(ctx context.Context, session unit.Session, pro
 						if err := c.checkRequestProfile(profile, info, piece.Request()); err != nil {
 							return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 						}
+						memory.recordContextRequest(id, piece.Request())
 					}
 				}
 			}
@@ -261,9 +271,11 @@ func (c Core) generateWithContext(ctx context.Context, session unit.Session, pro
 					return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 				}
 				if canonical != (identity.ProfileIdentity{}) {
-					if err := c.checkRequestProfile(profile, info, inferencePlans[len(preparedUnits)].request); err != nil {
+					request := inferencePlans[len(preparedUnits)].request
+					if err := c.checkRequestProfile(profile, info, request); err != nil {
 						return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 					}
+					memory.recordContextRequest(id, request)
 				}
 			}
 			if c.inference == nil && prepared.GenerationRequired() && !terms.Empty() {

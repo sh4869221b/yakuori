@@ -81,11 +81,14 @@ not establish model or generation equivalence.
 | `protection`, `validation` | Each includes `schema` and `fixture_set`. Current runtime fixture sets are `explicit-spans-fixtures-v1` and `restored-content-fixtures-v1`. |
 | `context` | Effective `tokens=min(Core limit, Engine context)`, and additional-context `mode` plus exact `additional` bytes. `none` requires empty bytes; `provided` requires nonempty bytes. |
 
-The low-level canonical constructor can represent explicitly provided additional
-context. The current inference constructor rejects nonempty `AdditionalContext`
-because the current prompt does not use it. It must not claim unused context
-was applied. Unit/segment source, rendered prompt, token IDs and token counts are
-request-specific and do not belong in this shared profile. Index's existing
+The inference constructor builds the import-wide base profile and rejects raw
+`AdditionalContext` supplied by a caller. `FileWithTMContext` resolves a confirmed
+pack against the imported snapshot and explicit TM scope. Each unit with a
+context-bearing generation request uses its selected canonical payload
+(including the selection version) and the actual versioned request prompt for
+its exact TM profile. The runtime template renderer remains part of the profile.
+Unused pack fields and pack-wide digests do not enter the key. Unit/segment
+source, rendered prompt, token IDs and token counts are request-specific. Index's existing
 TrimSpace rendering remains unchanged; source identity still uses raw bytes.
 
 Local generation uses fixed greedy sampling. OpenAI uses `sampling_mode=provider-default`, `seed_fixed=false`, and `thinking=provider-default`; no local sampling or deterministic seed guarantee is claimed. OpenAI does not expose model or tokenizer bytes: the digest fields are all-zero sentinels and the pinned `remote_model` identifies the remote model. OpenAI records use `prefill.path=none` and provider-managed compute. Local and remote records therefore remain distinct. An OpenAI snapshot name identifies the provider version but does not attest its underlying weights.
@@ -279,7 +282,11 @@ fresh Accepted binding without generation or another protection Restore; only
 stop the run. Only the complete accepted parent set is staged in run-local memory.
 Accepted values from another import or unit cannot be rebound. Accepted binding,
 ExpectedTranslations, Manifest and final artifact comparison retain the complete
-comparable Profile. Legacy `NewProfile`/`NewProfileWithSegmentation` remain
+comparable import Profile. Without a context-bearing request the exact key uses
+the original `context.mode=none` profile bytes. Existing rows with this profile
+are eligible only on a complete exact match and after current validation.
+Context-bearing requests miss those rows without falling back or migrating them.
+Legacy `NewProfile`/`NewProfileWithSegmentation` remain
 supported, but have no canonical content and cannot produce persistent exact
 keys. A legacy profile with the same digest is still a different full Profile.
 

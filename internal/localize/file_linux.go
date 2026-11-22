@@ -35,10 +35,16 @@ func (c Core) File(ctx context.Context, options publication.Options, adapter Ada
 }
 
 func (c Core) FileWithTM(ctx context.Context, options publication.Options, adapter Adapter, profile validate.Profile, store *tm.Store, scope tm.Scope) (Result, error) {
+	return c.FileWithTMContext(ctx, options, adapter, profile, store, scope, ContextPackOptions{})
+}
+
+// FileWithTMContext resolves the supplied pack against the same imported
+// source snapshot and scope used for exact TM lookup and publication.
+func (c Core) FileWithTMContext(ctx context.Context, options publication.Options, adapter Adapter, profile validate.Profile, store *tm.Store, scope tm.Scope, selection ContextPackOptions) (Result, error) {
 	if store == nil {
 		return Result{}, &Error{Phase: "tm_begin", Err: ErrNilTMStore}
 	}
-	return c.fileWithTM(ctx, options, adapter, profile, nil, &tmExecution{store: store, scope: scope}, func(ctx context.Context, options publication.Options) (publicationRun, error) {
+	return c.fileWithTM(ctx, options, adapter, profile, nil, &tmExecution{store: store, scope: scope, contextPack: selection}, func(ctx context.Context, options publication.Options) (publicationRun, error) {
 		return publication.PrepareWithLimits(ctx, options, c.limits)
 	})
 }
@@ -114,12 +120,11 @@ func (c Core) fileWithTM(ctx context.Context, options publication.Options, adapt
 	if c.observation != nil && memory != nil {
 		c.observation.TMVerificationStatus = "fail"
 		c.observation.TMVerifiedUnits = 0
-		verification, verifyErr := memory.store.BeginRun(session, profile, memory.scope)
-		if verifyErr != nil {
+		if verifyErr := memory.begin(session, profile); verifyErr != nil {
 			return result, &Error{Phase: "tm_verify", Err: verifyErr}
 		}
 		for _, translation := range accepted {
-			text, found, verifyErr := verification.Lookup(ctx, translation.UnitID())
+			text, found, verifyErr := memory.run.Lookup(ctx, translation.UnitID())
 			if verifyErr != nil {
 				return result, &Error{Phase: "tm_verify", Err: verifyErr}
 			}
