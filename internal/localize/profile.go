@@ -47,7 +47,7 @@ func EffectiveInferenceProfile(info inference.ModelInfo, request inference.Gener
 	return effectiveInferenceProfile(info, request, limits, segmented, info.Prompt)
 }
 
-// expectedPrompt may differ from the base prompt only during private evaluation.
+// expectedPrompt may differ from the base prompt for a context-bearing request.
 func effectiveInferenceProfile(info inference.ModelInfo, request inference.GenerationRequest, limits config.Limits, segmented bool, expectedPrompt prompt.Identity) (identity.ProfileInput, error) {
 	input, err := EffectiveModelProfile(info, limits, segmented)
 	if err != nil {
@@ -65,6 +65,14 @@ func effectiveInferenceProfile(info inference.ModelInfo, request inference.Gener
 		Seed: policy.Seed, SeedFixed: policy.SeedFixed, StopIDs: policy.StopIDs, Thinking: id.Thinking, Prefill: input.Generation.Prefill,
 	}
 	return input, nil
+}
+
+func identityPrompt(p prompt.Identity, disabledThinkingPrefix string) identity.PromptInput {
+	return identity.PromptInput{
+		Schema: p.Schema, Variant: p.Variant, SystemTemplate: []byte(p.SystemTemplate),
+		UserTemplate: []byte(p.UserTemplate + p.TermsTemplate), LanguageAliases: p.LanguageAliases,
+		DisabledThinkingPrefix: []byte(disabledThinkingPrefix),
+	}
 }
 
 func resolvedContextPrompt(info inference.ModelInfo) (prompt.Identity, bool) {
@@ -118,7 +126,7 @@ func EffectiveModelProfile(info inference.ModelInfo, limits config.Limits, segme
 		RemoteModel: info.RemoteModel, Version: identity.ProfileVersion, ModelDigest: info.ModelSHA256, Backend: info.Backend, BackendPin: info.BackendPin, CUDABackendPin: cudaPin, WebGPUBackendPin: webgpuPin,
 		ComputeQuant: info.ComputeQuant, KVPrecision: kv, Tokenizer: identity.TokenizerInput{ModelDigest: info.Tokenizer.ModelSHA256, BackendPin: info.Tokenizer.BackendPin},
 		Template:     identity.TemplateInput{Family: info.Template.Family, Source: info.Template.Source, RendererVersion: info.Template.RendererVersion},
-		Prompt:       identity.PromptInput{Schema: info.Prompt.Schema, Variant: info.Prompt.Variant, SystemTemplate: []byte(info.Prompt.SystemTemplate), UserTemplate: []byte(info.Prompt.UserTemplate + info.Prompt.TermsTemplate), LanguageAliases: info.Prompt.LanguageAliases, DisabledThinkingPrefix: []byte(info.DisabledThinkingPrefix)},
+		Prompt:       identityPrompt(info.Prompt, info.DisabledThinkingPrefix),
 		Generation:   identity.GenerationInput{SamplingMode: sampling, Schema: info.PolicySchema, Thinking: info.Thinking, Prefill: identity.PrefillInput{Exact: p.Exact, Path: p.Path, CPUFastAttention: p.CPUFastAttention, Batched: p.Batched, BatchedCapability: p.BatchedCapability, Fast: p.Fast, Floor: p.Floor, Chunk: p.Chunk}},
 		Segmentation: segmentation, Protection: identity.SchemaInput{Schema: protect.Schema, FixtureSet: ProtectionFixtures}, Validation: identity.SchemaInput{Schema: validate.Schema, FixtureSet: ValidationFixtures},
 		Context: identity.ContextInput{Tokens: min(limits.ContextTokens, info.ContextTokens), Mode: "none"},

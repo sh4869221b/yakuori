@@ -49,10 +49,17 @@ type Run struct {
 }
 
 func (s *Store) BeginRun(session unit.Session, profile validate.Profile, scope Scope) (*Run, error) {
+	return s.BeginRunWithContext(session, profile, scope, nil)
+}
+
+// BeginRunWithContext uses the context of each unit's planned requests for its
+// lookup and commit key. Accepted translations still bind to the import profile.
+func (s *Store) BeginRunWithContext(session unit.Session, profile validate.Profile, scope Scope, contexts map[unit.UnitID]identity.UnitContext) (*Run, error) {
 	if err := session.Check(); err != nil {
 		return nil, err
 	}
-	if len(profile.CanonicalBytes()) == 0 {
+	canonical := profile.CanonicalIdentity()
+	if canonical == (identity.ProfileIdentity{}) {
 		return nil, identity.ErrInvalidKey
 	}
 	if scope.GameNamespace == "" || scope.ArtifactNamespace == "" {
@@ -72,7 +79,7 @@ func (s *Store) BeginRun(session unit.Session, profile validate.Profile, scope S
 		if err != nil {
 			return nil, err
 		}
-		key, err := profile.ExactKey(source)
+		key, err := identity.NewContextExactKey(source, canonical, contexts[u.ID()])
 		if err != nil {
 			return nil, err
 		}

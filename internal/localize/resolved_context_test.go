@@ -101,6 +101,11 @@ type evaluationHarness struct {
 
 func contextEvaluationCore(t *testing.T, segmented bool, limits config.Limits, modelContext int, terms glossary.Glossary) *evaluationHarness {
 	t.Helper()
+	return contextEvaluationCoreWithConditions(t, segmented, limits, modelContext, terms, nil)
+}
+
+func contextEvaluationCoreWithConditions(t *testing.T, segmented bool, limits config.Limits, modelContext int, terms glossary.Glossary, tune func(*inference.ModelInfo, *int)) *evaluationHarness {
+	t.Helper()
 	var unused int
 	base, _ := canonicalCoreFixture(t, false, "", &unused)
 	info, err := base.inference.engine.Info(t.Context())
@@ -108,7 +113,11 @@ func contextEvaluationCore(t *testing.T, segmented bool, limits config.Limits, m
 		t.Fatal(err)
 	}
 	info.ContextTokens = modelContext
-	policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, evaluationOutputTokens, time.Second)
+	outputTokens := evaluationOutputTokens
+	if tune != nil {
+		tune(&info, &outputTokens)
+	}
+	policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, outputTokens, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
