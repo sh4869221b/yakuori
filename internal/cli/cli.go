@@ -34,7 +34,7 @@ Commands:
   help       Show this help
   doctor     Diagnose storage; --check-model loads the selected model
   models     Import, pull, select, or verify a local model
-  context    Build or validate a local Context Pack
+  context    Build, validate, or approve a local Context Pack
   translate  Translate a UTF-8 text file to stdout
   localize   Translate a UTF-8 text, Generic JSON v1, or binary W3 strings file
 
