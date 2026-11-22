@@ -37,7 +37,7 @@ func TestContextValidate(t *testing.T) {
 		out, error string
 	}{
 		{"group help", []string{"--help"}, ExitOK, contextUsage, ""},
-		{"validate help", []string{"validate", "-h"}, ExitOK, contextUsage, ""},
+		{"validate help", []string{"validate", "-h"}, ExitOK, contextValidateUsage, ""},
 		{"valid", []string{"validate", "--", valid}, ExitOK, "fingerprint: 3170144643af3dff1ba01bef0ee04a54b4969f408459bfd0bf35126f417208bb\n", ""},
 		{"missing action", nil, ExitUsage, "", "invalid context arguments"},
 		{"missing file", []string{"validate"}, ExitUsage, "", "invalid context validate arguments"},
