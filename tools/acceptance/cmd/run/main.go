@@ -53,7 +53,7 @@ func run(ctx context.Context, args []string) error {
 	flags.SetOutput(os.Stderr)
 	var opts acceptance.RunOptions
 	var measure bool
-	var gpuUUID string
+	var gpuUUID, gpuPCI string
 	var interval, queryTimeout, stopGrace, reapTimeout time.Duration
 	var measurement acceptance.MeasurementOptions
 	flags.StringVar(&opts.Manifest, "manifest", "", "fixture manifest")
@@ -65,8 +65,10 @@ func run(ctx context.Context, args []string) error {
 	flags.StringVar(&opts.ModelSHA256, "model-sha256", "", "expected model SHA-256")
 	flags.StringVar(&opts.Game, "game", "", "game namespace")
 	flags.StringVar(&opts.Artifact, "artifact", "", "artifact namespace")
+	flags.StringVar(&opts.Backend, "backend", "cuda", "GPU translation backend (cuda or webgpu)")
 	flags.BoolVar(&measure, "measure", false, "supervise and measure each translation worker")
-	flags.StringVar(&gpuUUID, "gpu-uuid", "", "adopted GPU UUID for measurement")
+	flags.StringVar(&gpuUUID, "gpu-uuid", "", "adopted CUDA GPU UUID for measurement")
+	flags.StringVar(&gpuPCI, "gpu-pci", "", "adopted AMD GPU PCI address for WebGPU measurement")
 	flags.DurationVar(&measurement.WallLimit, "wall-limit", 5*time.Minute, "per-run supervision wall limit")
 	flags.DurationVar(&measurement.PreparationLimit, "preparation-limit", 10*time.Minute, "preparation and oracle build time limit")
 	flags.DurationVar(&interval, "sample-interval", 100*time.Millisecond, "nominal GPU sampling interval")
@@ -92,7 +94,7 @@ func run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	supervisor, err := acceptance.NewSupervisor(executable, acceptance.SupervisorOptions{GPUUUID: gpuUUID, Interval: interval, QueryTimeout: queryTimeout, StopGrace: stopGrace, ReapTimeout: reapTimeout})
+	supervisor, err := acceptance.NewSupervisor(executable, acceptance.SupervisorOptions{GPUUUID: gpuUUID, GPUPCI: gpuPCI, Interval: interval, QueryTimeout: queryTimeout, StopGrace: stopGrace, ReapTimeout: reapTimeout})
 	if err != nil {
 		return err
 	}

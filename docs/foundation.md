@@ -26,6 +26,10 @@ Use the Go toolchain's `bin` directory first in `PATH`.
 
 ## Reproduce
 
+The commands below verify the standard `CGO_ENABLED=0` build. The separate
+Linux/amd64 AMD build uses `CGO_ENABLED=1 -tags gpu` and loads WebGPU through
+Vulkan. See the [AMD build and runtime requirements](../README.md#amd-gpuでの実行).
+
 ```sh
 export PATH=/path/to/go/bin:$PATH
 export CGO_ENABLED=0 GOTOOLCHAIN=local
@@ -179,26 +183,28 @@ the GPU matrix passed; report the run's actual traces and status separately.
   non-zero entry means registered. A successful pull writes `provenance.json`
   beside the managed model and never selects the acquired ID; the registry
   schema and `verify` byte identity checks are unchanged.
-- `doctor --check-model [--backend cpu|cuda]`: requires a selected model, opens
+- `doctor --check-model [--backend cpu|cuda|webgpu]`: requires a selected model, opens
   it, reports `Engine.Info`, and closes it without generation. CPU is the
   default. It uses the existing configured 4096-token context candidate and
   reports the effective Engine values. The private snapshot directory must
   already exist; this command does not create it. Explicit CUDA failure is
   reported without CPU fallback. CUDA requires a Linux/amd64 `-tags cuda` build
-  and an NVIDIA runtime driver providing `libcuda.so.1`.
+  and an NVIDIA runtime driver providing `libcuda.so.1`. WebGPU requires the
+  AMD-only build above, one visible AMD discrete Vulkan adapter and successful
+  model residency.
 - `translate --source-language LANG --target-language LANG --game GAME
-  --artifact ARTIFACT [--backend cpu|cuda] SOURCE` translates a regular UTF-8
+  --artifact ARTIFACT [--backend cpu|cuda|webgpu] SOURCE` translates a regular UTF-8
   file to stdout. `localize --format text --source-language LANG
-  --target-language LANG --game GAME --artifact ARTIFACT [--backend cpu|cuda]
+  --target-language LANG --game GAME --artifact ARTIFACT [--backend cpu|cuda|webgpu]
   --output OUT SOURCE` publishes the same supported text format to a file.
   Flags precede `SOURCE`; language, game and artifact values are required and
   non-empty. The CLI does not normalize them or infer namespaces from paths.
   `translate` is text-only and has no `--format`; `localize` requires the
   explicit `--format text`. `SOURCE` is a path, not `-`; stdin is unsupported.
   There is no command-level model override. `models use ID` selects the local
-  GGUF used by both commands. CPU is the default backend; CUDA is opt-in and
-  requires a Linux/amd64 `-tags cuda` build and NVIDIA driver. Neither command
-  downloads a model or falls back from CUDA to CPU.
+  model used by both commands. CPU is the default. CUDA and WebGPU select
+  their respective optional builds and return an error if residency fails.
+  Model registration and acquisition use the explicit `models` commands.
 - Both commands use the selected registry model's real Engine, `Info` and
   request factory, `DefaultLimits`, `PolicySchemaV1`, canonical inference
   profile, SQLite `tm.Store`, text adapter and production Core. The profile

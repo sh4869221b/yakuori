@@ -27,6 +27,7 @@ import (
 type RunOptions struct {
 	Manifest, Criteria, Root, Repository, Evidence string
 	ModelID, ModelSHA256, Game, Artifact           string
+	Backend                                        string
 	ModelPaths                                     config.Paths
 	measurement                                    *measurementSession
 }
@@ -76,6 +77,21 @@ type PairCleanup struct {
 	Seconds    float64 `json:"seconds"`
 }
 
+// The model pin carries the source path and full revision. Go build
+// metadata reports the replacement path and a pseudo-version's short revision.
+func webGPUPinMatches(build BuildInfo, pin string) bool {
+	path, revision, ok := strings.Cut(pin, "@")
+	version := build.Modules[webGPUModule]
+	n := strings.LastIndexByte(version, '-')
+	if !ok || path == "" || path != build.WebGPUModulePath || len(revision) != 40 || n < 0 {
+		return false
+	}
+	if _, err := hex.DecodeString(revision); err != nil {
+		return false
+	}
+	return version[n+1:] == revision[:12]
+}
+
 func measurementMissing(session *measurementSession, entry FixtureRun) []string {
 	var missing []string
 	env, m := session.supervisor.Environment, entry.Measurement
@@ -99,7 +115,22 @@ func measurementMissing(session *measurementSession, entry FixtureRun) []string 
 	if m == nil || m.ResultStatus != "available" || m.ReapStatus != "reaped" || m.GroupStatus != "cleared" || m.ChildOutcome != "exited" || m.ExitCode == nil || *m.ExitCode != 0 || m.StopReason != "none" {
 		missing = append(missing, "worker_protocol")
 	}
-	if entry.Details == nil || entry.Details.Info.RequestedBackend == "" || entry.Details.Info.Backend == "" || entry.Details.Info.ContextTokens <= 0 || entry.Details.Info.ConfiguredContextTokens <= 0 || entry.Details.Info.ModelContextTokens <= 0 || entry.Details.Info.ComputeQuant == "" || entry.Details.Policy.Schema <= 0 || entry.WorkerBuild.GoVersion == "" || entry.WorkerBuild.Modules["github.com/townsendmerino/goinfer"] == "" || entry.WorkerBuild.Modules["github.com/townsendmerino/goinfer/cuda"] == "" {
+	modules := entry.WorkerBuild.Modules
+	modulePin := modules["github.com/townsendmerino/goinfer/backend/cuda"]
+	if modulePin == "" {
+		modulePin = modules["github.com/townsendmerino/goinfer/cuda"]
+	}
+	if env.GPUPCI != "" {
+		modulePin = modules[webGPUModule]
+		if entry.Details == nil || !webGPUPinMatches(entry.WorkerBuild, entry.Details.Info.WebGPUBackendPin) || entry.Details.Info.GPUName == "" || entry.Details.Info.GPUDriver == "" {
+			modulePin = ""
+		}
+		if entry.Mode == "fresh" && (m == nil || m.AMDActivity == nil || m.GenerateCompleted == nil ||
+			*m.GenerateCompleted <= 0 || m.AMDActivity.Observed != *m.GenerateCompleted || m.AMDActivity.Advanced != *m.GenerateCompleted) {
+			missing = append(missing, "amd_generation_gpu_activity")
+		}
+	}
+	if entry.Details == nil || entry.Details.Info.RequestedBackend == "" || entry.Details.Info.Backend == "" || entry.Details.Info.ContextTokens <= 0 || entry.Details.Info.ConfiguredContextTokens <= 0 || entry.Details.Info.ModelContextTokens <= 0 || entry.Details.Info.ComputeQuant == "" || entry.Details.Policy.Schema <= 0 || entry.WorkerBuild.GoVersion == "" || modules["github.com/townsendmerino/goinfer"] == "" || modulePin == "" {
 		missing = append(missing, "worker_metadata")
 	}
 	return missing
@@ -506,10 +537,25 @@ func RunMeasured(ctx context.Context, opts RunOptions, supervisor *Supervisor, o
 	return RunWithLauncher(ctx, opts, supervisor.Launch)
 }
 
+func gpuBackend(backend string) string {
+	if backend == "" {
+		return "cuda"
+	}
+	return backend
+}
+
 func runWith(ctx context.Context, opts RunOptions, launch WorkerLauncher, oracleBuilder func(context.Context, string, string) (string, string, bool, error), runnerBuild BuildInfo) (record RunRecord, err error) {
 	started := time.Now()
-	record = RunRecord{Schema: "yakuori-w3-acceptance-run-v1", Status: "not_run", RunnerBuild: runnerBuild, Runs: []FixtureRun{}}
+	backend := gpuBackend(opts.Backend)
 	measurement := opts.measurement
+	var gpuPCI string
+	if measurement != nil {
+		gpuPCI = measurement.supervisor.opts.GPUPCI
+	}
+	if (backend != "cuda" && backend != "webgpu") || (backend == "webgpu") != (gpuPCI != "") {
+		return record, errors.New("backend requires matching GPU measurement options")
+	}
+	record = RunRecord{Schema: "yakuori-w3-acceptance-run-v1", Status: "not_run", RunnerBuild: runnerBuild, Runs: []FixtureRun{}}
 	var buildDuration time.Duration
 	if measurement != nil {
 		m := measurement.options
@@ -594,6 +640,10 @@ func runWith(ctx context.Context, opts RunOptions, launch WorkerLauncher, oracle
 	if err = LoadContext(prepCtx, opts.Criteria, &criteria); err != nil {
 		record.FailurePhase = "criteria"
 		return
+	}
+	if gpuBackend(criteria.GPUBackend) != backend {
+		record.FailurePhase = "criteria"
+		return record, errors.New("criteria GPU backend mismatch")
 	}
 	record.ManifestVersion, record.CriteriaVersion, record.Selected = manifest.Version, criteria.Version, criteria.FixtureIDs
 	selected := make(map[string]bool)
@@ -726,7 +776,7 @@ func runWith(ctx context.Context, opts RunOptions, launch WorkerLauncher, oracle
 					modeCtx, modeCancel = context.WithTimeout(ctx, measurement.options.WallLimit)
 				}
 			}
-			req := WorkerRequest{RunID: dirName + "-" + mode, FixtureID: fixture.ID, Mode: mode, Source: source, SourceLanguage: fixture.Language, SourceSHA256: fixture.SHA256, ModelID: opts.ModelID, ModelSHA256: opts.ModelSHA256, Backend: "cuda", Game: opts.Game, Artifact: opts.Artifact, TMData: tmDir, ModelPaths: opts.ModelPaths, Output: filepath.Join(dir, mode+".w3strings")}
+			req := WorkerRequest{RunID: dirName + "-" + mode, FixtureID: fixture.ID, Mode: mode, Source: source, SourceLanguage: fixture.Language, SourceSHA256: fixture.SHA256, ModelID: opts.ModelID, ModelSHA256: opts.ModelSHA256, Backend: backend, GPUPCI: gpuPCI, Game: opts.Game, Artifact: opts.Artifact, TMData: tmDir, ModelPaths: opts.ModelPaths, Output: filepath.Join(dir, mode+".w3strings")}
 			entry := record.Runs[position]
 			entry.Status = "fail"
 			if measurement != nil {
@@ -737,6 +787,18 @@ func runWith(ctx context.Context, opts RunOptions, launch WorkerLauncher, oracle
 				entry.Measurement = measurement.supervisor.Results[req.RunID]
 			}
 			entry.WorkerBuild = worker.Build
+			if workerErr == nil && backend == "webgpu" && worker.CheckRequest(req) == nil {
+				info := worker.Details.Info
+				if info.RequestedBackend != backend || info.Backend != backend || !info.ResidentActive || info.ResidentContextCap <= 0 ||
+					info.ResidentDecline != "" || info.DecodePath == "" {
+					workerErr = errors.New("worker did not report resident WebGPU Vulkan")
+					entry.FailurePhase = "backend"
+				} else if info.GPUName != "" && info.GPUDriver != "" {
+					measurement.supervisor.Environment.GPUName = info.GPUName
+					measurement.supervisor.Environment.Driver = info.GPUDriver
+					record.Measurement.Environment = measurement.supervisor.Environment
+				}
+			}
 			entry.FinalValidationStatus, entry.CommitStatus, entry.PublicationStatus, entry.TMVerificationStatus = "unknown", "unknown", "unknown", "unknown"
 			var generated, reused, unchanged int
 			if worker.CheckRequest(req) == nil {
@@ -774,7 +836,9 @@ func runWith(ctx context.Context, opts RunOptions, launch WorkerLauncher, oracle
 			if workerErr != nil {
 				entry.WorkerExit = "fail"
 			}
-			entry.FailurePhase = worker.FailurePhase
+			if entry.FailurePhase == "" {
+				entry.FailurePhase = worker.FailurePhase
+			}
 			if workerErr != nil && entry.FailurePhase == "" {
 				entry.FailurePhase = "worker"
 			}

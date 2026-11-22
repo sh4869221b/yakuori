@@ -1,10 +1,10 @@
 # Yakuori（訳織り）
 
-ゲームのID・tag・placeholder・binary構造を保持するPure Goローカライズ基盤を目指します。翻訳CLIは全文 `text-v1` と、[Witcher 3 `.w3strings` Adapter](docs/w3strings-adapter.md)によるversion162 en/jp入力・日本語出力のbinary形式を扱います。
+ゲームのID・tag・placeholder・binary構造を保持するローカライズ基盤です。標準ビルドはPure Goです。翻訳CLIは全文 `text-v1` と、[Witcher 3 `.w3strings` Adapter](docs/w3strings-adapter.md)によるversion162 en/jp入力・日本語出力のbinary形式を扱います。
 
 ## 状態
 
-#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDA/OpenAIを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。`localize --format w3strings` も同じ選択済みmodel・canonical profile・SQLite TM・Core・公開処理へ接続され、同一原文の再実行では検証済みTM候補を再利用します。PLaMo 3 Translate 0.8Bは実modelのCPU int4で英日・日英とTM再利用を確認済みです。実GPUと実MODの訳質は未確認です。人手による訳質確認、releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。ローカルEngineは同じmodel snapshotのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
+#2のGo基盤に加え、Linux向けの安全な公開・復旧（#9/#10）、全件生成・保護復元・最終artifact検証・一括TM commitを行うCore、明示的にCPU/CUDA/WebGPU/OpenAIを選べるinference Engineを実装しています。`translate` と `localize --format text` は選択済みローカルmodel、canonical profile、SQLite TM、既存Coreへ接続されています。text Adapterは入力全体を1 unitとして扱い、同じsource/profileの完全一致候補も現在の検証を通します。`localize --format w3strings` も同じ選択済みmodel・canonical profile・SQLite TM・Core・公開処理へ接続され、同一原文の再実行では検証済みTM候補を再利用します。PLaMo 3 Translate 0.8Bは実modelのCPU int4で英日・日英とTM再利用を確認済みです。従来のRTX 4070によるW3の実GPU記録と、現主機RX 9070 XTの受入れ基準は[受入れ資料](docs/evidence/acceptance/README.md)を参照してください。実MOD訳の人手評価はv1後の作業です。releaseはまだありません。CUDAはLinux amd64向けのoptional build tagと実行時のNVIDIA driverが必要です。ローカルEngineは同じmodel snapshotのtokenizer/templateでrequestを一度構築し、固定greedy policyと正確なtoken countを使います。取消し時は生成をdrainしてからEngineをCloseします。[CPU wrapperの再現方法と制限](docs/cpu-inference-spike.md#production-wrapper-12)と[CUDA wrapperの実測と制限](docs/cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10)を参照してください。
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 - [PLaMo 3 Translateの導入・実モデル検証](docs/plamo3.md)（Built with PLaMo）
@@ -14,20 +14,20 @@
 
 ## v1の採用方針
 
-- Linuxのみ。Go 1.27 baseline、`CGO_ENABLED=0`、通常のCPU buildに加え、明示選択するLinux amd64向けoptional CUDA（`-tags cuda`、NVIDIA driverが必要）
+- Linux、Go 1.27。標準CPUビルド・CIとoptional CUDAは `CGO_ENABLED=0`。Linux/amd64のAMD向けWebGPU専用ビルドは `CGO_ENABLED=1 -tags gpu` で明示選択
 - goinferはwrapper内へ閉じ、TMは`database/sql`とCGO-free SQLiteを使用します。採用済みの依存pin、text-v1上限とmodel fixtureは[基盤契約](docs/foundation.md)および受入れ記録を参照してください
 - 未検証candidateを確定せず、1 unitでも失敗なら成果fileを公開しない。生成の自動retryなし
 - TMはsource/profileの完全一致＋現在unitでの再検証
 - 最終staged artifact検証 → 短いTM commit → 安全なpublish。既存outputは既定拒否、明示時のみ置換
 - 同一pathでは原文backupをrenameして保持。2 rename全体は非atomicで、backup上書きや復旧先の他fileの自動置換は禁止
 - 通常I/O失敗とプロセス停止からの安全な復旧を対象とし、電源断耐性はv1の正式保証外
-- ローカルbackendでの翻訳処理はoffline。取得は明示的な `models pull`（GGUF限定、絶対HTTPS URL、期待size・SHA-256・digest出所指定）と、指定されたローカルfileまたはPLaMo 3 checkpoint directoryを読む `models import` の2経路のみ。自動取得・更新や既存IDの上書きは行わない。取得元・期待値・digest出所の意味と取得履歴・失敗・取消し・残骸の扱いは「ローカルmodelの登録」を参照。MVP完了には実MODの独立読み取りと代表訳の人手確認が必要
+- ローカルbackendでの翻訳処理はoffline。取得は明示的な `models pull`（GGUF限定、絶対HTTPS URL、期待size・SHA-256・digest出所指定）と、指定されたローカルfileまたはPLaMo 3 checkpoint directoryを読む `models import` の2経路のみ。自動取得・更新や既存IDの上書きは行わない。取得元・期待値・digest出所の意味と取得履歴・失敗・取消し・残骸の扱いは「ローカルmodelの登録」を参照。MVP完了には実GPUで翻訳したMODの独立読み取りと明示CPU回帰が必要。代表訳の人手評価はv1後の [#87](https://github.com/sh4869221b/yakuori/issues/87) で扱います
 
 CLI・XDG namespaceは`yakuori`。旧Kotobaのコード・設定・TM・registryを暗黙移行しません。single binaryはmodel本体やGPU driverの内包を意味しません。
 
 ## テキスト翻訳
 
-CPU/CUDAでは選択済みのローカルGGUFまたはPLaMo 3を使います。先にmodelを登録して選択してください。`models import` はローカルGGUFまたはPLaMo 3 checkpoint directoryを登録し、`models pull` は期待size・SHA-256・digest出所を指定してGGUFをHTTPSで取得します。どちらも取得したmodelを自動選択しません。ローカルmodelを使う翻訳commandにmodel overrideや標準入力の入口はなく、`SOURCE` はregularなUTF-8 file pathです。`--backend` は `cpu` が既定で、CUDA または OpenAI を使う場合は明示的に指定します。CUDAにはLinux amd64向け `-tags cuda` buildとNVIDIA driverが必要で、失敗時にCPUへ切り替わりません。
+ローカルbackendでは選択済みのモデルを使います。先にmodelを登録して選択してください。`models import` はローカルGGUFまたはPLaMo 3 checkpoint directoryを登録し、`models pull` は期待size・SHA-256・digest出所を指定してGGUFをHTTPSで取得します。どちらも取得したmodelを自動選択しません。ローカルmodelを使う翻訳commandにmodel overrideや標準入力の入口はなく、`SOURCE` はregularなUTF-8 file pathです。`--backend` は `cpu` が既定で、ほかのbackendは明示的に指定します。CUDAにはLinux amd64向け `-tags cuda` buildとNVIDIA driverが必要で、失敗時にCPUへ切り替わりません。
 
 ```sh
 ./yakuori translate --source-language en --target-language ja --game qa --artifact sample --backend cpu ./source.txt
@@ -61,6 +61,25 @@ OpenAI API を使う場合は `--backend openai` と日付付きモデル snapsh
 importされた原文のkey関係（LE4 byteのopaque keyをIDへ結び付ける多対多関係）は、その同一import sessionとしてTM scopeへ束縛されます。明示的なscope Keysを指定した場合はUnitIDとraw keyの対の多重度込み完全一致が要求され、一致しなければlookup・生成に進まず `tm_begin` で拒否します。同じ原入力・namespace・canonical profileでの再実行は、現在の検証を通したTM完全一致候補だけで再利用し、生成0を返せます。source・decoded ID・key表・profile・game・artifactが変われば誤hitしません。
 
 入力の既定上限はtextと同じartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76のままです。日本語文字が翻訳に必須ではなく、そのままのproper nameや数値も共通検証の下で有効です。実ゲームでの動作確認、訳質・GPU性能の評価、他言語・他version対応は含みません。[Adapter契約](docs/w3strings-adapter.md)を参照してください。
+
+## AMD GPUでの実行
+
+Linux/amd64のAMD専用ビルドにはCコンパイラが必要です。実行環境にはVulkan loaderと
+AMD GPU向けのVulkan driverを用意します。現在の対象は、プロセスに見えるVulkan
+adapterがAMDのdiscrete GPU 1台だけの構成です。複数のICDが有効な環境では、
+対象GPUのICD JSONを `VK_DRIVER_FILES` で指定できます。
+AMDを指定した下記コマンドは、GPU初期化前に表示接続を無効にした環境で同じプロセスを
+起動し直します。GPUの初期化またはモデルのresident実行が成立しない場合はエラーになります。
+
+```sh
+CGO_ENABLED=1 GOTOOLCHAIN=local go build -tags gpu -o ./yakuori-webgpu ./cmd/yakuori
+./yakuori-webgpu models use index-translate
+./yakuori-webgpu doctor --check-model --backend webgpu
+./yakuori-webgpu translate --source-language en --target-language ja --game qa --artifact sample --backend webgpu ./source.txt
+```
+
+W3翻訳でも `localize --format w3strings` に `--backend webgpu` を指定します。
+固定fixtureと計測コマンドは[AMD受入れ手順](docs/evidence/acceptance/README.md#amd-webgpu-vulkan-run)を参照してください。
 
 ## Build / test / run
 

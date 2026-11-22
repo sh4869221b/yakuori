@@ -18,18 +18,20 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sh4869221b/yakuori/internal/inference/goinfer"
 	"github.com/sh4869221b/yakuori/internal/localize"
 )
 
 // SupervisorOptions controls observation and process recovery, not acceptance limits.
 type SupervisorOptions struct {
-	GPUUUID                                        string
+	GPUUUID, GPUPCI                                string
 	Interval, QueryTimeout, StopGrace, ReapTimeout time.Duration
 	SMIBinary                                      string
 }
 
 type SupervisorEnvironment struct {
 	GPUUUID        string     `json:"gpu_uuid"`
+	GPUPCI         string     `json:"gpu_pci,omitempty"`
 	GPUName        string     `json:"gpu_name,omitempty"`
 	Driver         string     `json:"driver,omitempty"`
 	GPUMemoryBytes *int64     `json:"gpu_memory_bytes"`
@@ -82,6 +84,7 @@ type Measurement struct {
 	IntervalSeconds     float64                    `json:"interval_seconds"`
 	QueryTimeoutSeconds float64                    `json:"query_timeout_seconds"`
 	Samples             []GPUSample                `json:"samples"`
+	AMDActivity         *AMDActivity               `json:"amd_generation_activity,omitempty"`
 	LoadSeconds         *float64                   `json:"load_seconds"`
 	LoadStatus          string                     `json:"load_status"`
 	GenerationSeconds   *float64                   `json:"generation_seconds"`
@@ -105,7 +108,7 @@ type Supervisor struct {
 }
 
 func NewSupervisor(executable string, opts SupervisorOptions) (*Supervisor, error) {
-	if executable == "" || opts.GPUUUID == "" || opts.Interval <= 0 || opts.QueryTimeout <= 0 || opts.StopGrace <= 0 || opts.ReapTimeout <= 0 {
+	if executable == "" || (opts.GPUUUID == "") == (opts.GPUPCI == "") || (opts.GPUPCI != "" && !pciAddress.MatchString(opts.GPUPCI)) || opts.Interval <= 0 || opts.QueryTimeout <= 0 || opts.StopGrace <= 0 || opts.ReapTimeout <= 0 {
 		return nil, errors.New("invalid supervisor options")
 	}
 	if opts.SMIBinary == "" {
@@ -205,7 +208,7 @@ func mibBytes(value string) (*int64, error) {
 // CaptureEnvironment records host conditions and the selected device. Missing
 // information stays empty or null; it is never inferred from the model name.
 func (s *Supervisor) CaptureEnvironment(ctx context.Context) {
-	e := SupervisorEnvironment{GPUUUID: s.opts.GPUUUID, GPUStatus: "unavailable", OS: runtime.GOOS, Architecture: runtime.GOARCH, GoVersion: runtime.Version(), LogicalCPUs: runtime.NumCPU(), GoMaxProcs: runtime.GOMAXPROCS(0), GoMemLimit: os.Getenv("GOMEMLIMIT")}
+	e := SupervisorEnvironment{GPUUUID: s.opts.GPUUUID, GPUPCI: s.opts.GPUPCI, GPUStatus: "unavailable", OS: runtime.GOOS, Architecture: runtime.GOARCH, GoVersion: runtime.Version(), LogicalCPUs: runtime.NumCPU(), GoMaxProcs: runtime.GOMAXPROCS(0), GoMemLimit: os.Getenv("GOMEMLIMIT")}
 	if b, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
 		e.Kernel = strings.TrimSpace(string(b))
 	}
@@ -229,6 +232,11 @@ func (s *Supervisor) CaptureEnvironment(ctx context.Context) {
 			}
 		}
 	}
+	if s.opts.GPUPCI != "" {
+		s.captureAMD(ctx, &e)
+		s.Environment = e
+		return
+	}
 	out, err := s.query(ctx, "--query-gpu=uuid,name,driver_version,memory.total", "--format=csv,noheader,nounits")
 	if err == nil {
 		for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
@@ -250,6 +258,9 @@ func (s *Supervisor) CaptureEnvironment(ctx context.Context) {
 }
 
 func (s *Supervisor) sample(ctx context.Context, pid int, start time.Time) GPUSample {
+	if s.opts.GPUPCI != "" {
+		return s.sampleAMD(ctx, pid, start)
+	}
 	started := time.Now()
 	sample := GPUSample{AtSeconds: started.Sub(start).Seconds(), ProcessStatus: "error", DeviceStatus: "error"}
 	out, err := s.query(ctx, "--query-compute-apps=gpu_uuid,pid,used_gpu_memory", "--format=csv,noheader,nounits")
@@ -368,6 +379,9 @@ func (s *Supervisor) launch(ctx context.Context, req WorkerRequest, args []strin
 	}
 	defer reader.Close()
 	cmd := exec.Command(s.executable, args...)
+	if req.Backend == "webgpu" {
+		cmd.Env, _ = goinfer.WebGPUProcessEnv(cmd.Environ())
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Stdin = bytes.NewReader(data)
 	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
@@ -543,6 +557,7 @@ func (s *Supervisor) launch(ctx context.Context, req WorkerRequest, args []strin
 	}
 	m.ResultStatus = "available"
 	m.LoadSeconds, m.LoadStatus = result.LoadSeconds, result.LoadStatus
+	m.AMDActivity = result.AMDActivity
 	generation := result.Observation.GenerationDuration.Seconds()
 	calls, completed, failed := result.Observation.GenerateCalls, result.Observation.GenerateCompleted, result.Observation.GenerateFailed
 	m.GenerationCalls, m.GenerateCompleted, m.GenerateFailed = &calls, &completed, &failed

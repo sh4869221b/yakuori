@@ -168,7 +168,7 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 	flags.StringVar(&command.targetLanguage, "target-language", "", "required target language")
 	flags.StringVar(&command.scope.GameNamespace, "game", "", "required game namespace")
 	flags.StringVar(&command.scope.ArtifactNamespace, "artifact", "", "required artifact namespace")
-	flags.StringVar(&command.backend, "backend", "cpu", "cpu, cuda or openai")
+	flags.StringVar(&command.backend, "backend", "cpu", "cpu, cuda, webgpu or openai")
 	flags.StringVar(&command.openaiModel, "openai-model", "", "pinned OpenAI model snapshot (required for openai)")
 	if action == "localize" {
 		flags.StringVar(&command.format, "format", "", "required format: text or w3strings (binary Witcher 3 table)")
@@ -197,7 +197,7 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 	if flags.NArg() != 1 || flags.Arg(0) == "" || flags.Arg(0) == "-" ||
 		command.sourceLanguage == "" || command.targetLanguage == "" ||
 		command.scope.GameNamespace == "" || command.scope.ArtifactNamespace == "" ||
-		command.backend != "cpu" && command.backend != "cuda" && command.backend != "openai" || (command.backend == "openai") != (command.openaiModel != "") {
+		command.backend != "cpu" && command.backend != "cuda" && command.backend != "webgpu" && command.backend != "openai" || (command.backend == "openai") != (command.openaiModel != "") {
 		return command, "", errInvalidLocalizeArguments
 	}
 	if action == "localize" && command.format != "text" && command.format != "w3strings" {

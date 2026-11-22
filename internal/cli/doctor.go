@@ -114,8 +114,16 @@ func checkModel(ctx context.Context, backend string, open selectedEngineOpener) 
 	if closeErr != nil {
 		return "", fmt.Errorf("check model requested_backend=%s: close engine failed", backend)
 	}
-	return fmt.Sprintf("model_id: %s\nmodel_sha256: %x\ntokenizer_sha256: %x\nrequested_backend: %s\neffective_backend: %s\nmodel_context_tokens: %d\nconfigured_context_tokens: %d\neffective_context_tokens: %d\ncompute_quant: %s\nbackend_pin: %s\ncuda_backend_pin: %s\ntokenizer_backend_pin: %s\ncuda_resident_active: %t\ncuda_resident_context_cap: %d\nkv_precision: %s\n",
+	output := fmt.Sprintf("model_id: %s\nmodel_sha256: %x\ntokenizer_sha256: %x\nrequested_backend: %s\neffective_backend: %s\nmodel_context_tokens: %d\nconfigured_context_tokens: %d\neffective_context_tokens: %d\ncompute_quant: %s\nbackend_pin: %s\n",
 		id, info.ModelSHA256, info.Tokenizer.ModelSHA256, info.RequestedBackend, info.Backend,
 		info.ModelContextTokens, info.ConfiguredContextTokens, info.ContextTokens, info.ComputeQuant,
-		info.BackendPin, info.CUDABackendPin, info.Tokenizer.BackendPin, info.ResidentActive, info.ResidentContextCap, info.KVPrecision), nil
+		info.BackendPin)
+	if info.Backend == "webgpu" {
+		output += fmt.Sprintf("webgpu_backend_pin: %s\ntokenizer_backend_pin: %s\nwebgpu_resident_active: %t\nwebgpu_resident_context_cap: %d\nkv_precision: %s\ndecode_path: %s\ngpu_name: %s\ngpu_driver: %s\n",
+			info.WebGPUBackendPin, info.Tokenizer.BackendPin, info.ResidentActive, info.ResidentContextCap, info.KVPrecision, info.DecodePath, info.GPUName, info.GPUDriver)
+	} else {
+		output += fmt.Sprintf("cuda_backend_pin: %s\ntokenizer_backend_pin: %s\ncuda_resident_active: %t\ncuda_resident_context_cap: %d\nkv_precision: %s\n",
+			info.CUDABackendPin, info.Tokenizer.BackendPin, info.ResidentActive, info.ResidentContextCap, info.KVPrecision)
+	}
+	return output, nil
 }

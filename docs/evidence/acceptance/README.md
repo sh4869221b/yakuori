@@ -1,7 +1,13 @@
 # W3 acceptance fixtures and criteria
 
-The current selection is `fixtures.json` (`fixture-candidates-v2`) and
-`criteria.json` (`criteria-candidates-v4`). On 2026-11-05 the user directed
+The selected fixtures are in `fixtures.json` (`fixture-candidates-v2`).
+For the Radeon RX 9070 XT, use [`criteria-amd.json`](criteria-amd.json)
+(`criteria-amd-v1`). On 2026-11-22 the user approved per-fresh-fixture ceilings
+of **60 seconds, 24 GiB worker RSS and 12 GiB sampled worker VRAM**. The fixture
+selection and human quality rules carry over from v4.
+
+The RTX 4070 configuration uses `criteria.json` (`criteria-candidates-v4`).
+On 2026-11-05 the user directed
 memory ceilings to match the main PC: 32 GB RAM and an RTX 4070 with 12 GB
 VRAM. The resulting comparison ceilings are **24 GiB worker RSS and 10 GiB
 sampled worker VRAM**, with one active model/worker. The 60-second ceiling,
@@ -11,8 +17,8 @@ The original Issue #85 decision and v3 criteria are preserved in
 [`criteria-v3.json`](criteria-v3.json). Neither a criteria decision nor this
 memory revision establishes a v1 acceptance or translation-quality result.
 The checker reads local originals and reports readiness; it does not translate
-or judge quality. #86, #99 and #87 own the GPU run, performance measurement
-and human review respectively.
+or judge quality. #86 and #99 track the original CUDA run and measurements.
+#87 tracks post-v1 human review.
 
 The [2026-11-03 shared GPU run](gpu-run-2026-11-03.md) records the first
 approved fixture measurement and its remaining acceptance limits.
@@ -117,6 +123,14 @@ under applicable terms. No quality review is claimed here.
 
 ## Approved performance criteria
 
+For AMD, evaluate each fresh result using the wall and RSS boundaries below
+and the 12 GiB (12,884,901,888 bytes) ceiling on
+`measurement.process_vram_sampled_max_bytes`. The sampled maximum is worker
+DRM resident VRAM on the selected PCI device. Shared preparation, oracle build,
+pair cleanup, and reuse remain separately recorded. [See the AMD invocation](#amd-webgpu-vulkan-run).
+
+### RTX 4070 criteria v4 and v3 history
+
 For one recorded repetition (`--repeat-index 1 --repeat-total 1`), run each
 selected fixture on the same adopted CUDA device, registered model and profile
 under recorded host and workload conditions, with a fresh process and fresh TM.
@@ -167,7 +181,7 @@ The original v3 limits of 60 s / 5 GiB / 3 GiB, preserved in
 [`criteria-v3.json`](criteria-v3.json), were derived from a **different
 goinfer/cuda v0.22 workload**, not v0.23 product E2E measurements. The table
 below explains that historical decision; its 5/3 GiB margins are not the
-current v4 memory ceilings:
+v4 memory ceilings:
 
 | Historical reference | Observed value | Manual candidate margin |
 | --- | --- | --- |
@@ -181,8 +195,8 @@ reader. Historical conditions were Linux/amd64, official Go 1.27.1,
 GOMAXPROCS 16, RTX 4070 with driver 615.78.08, Index-Translate-2B Q4_K_M
 GGUF, int4 compute, context 4096, output limit 2048, KV f32 and goinfer/cuda
 v0.22. See the [CUDA evidence](../../cuda-inference-spike.md#current-52-product-wrapper-result-2026-10-10).
-The current go.mod pins v0.23 and its supported CUDA KV default is f16. The
-historical model source lacked an immutable repository revision. Record the
+The November 3 CUDA runs used v0.23. The run records at the time identified
+the original GGUF by its byte count and SHA-256. Record the
 actual adopted model identity, driver, host RAM, workload and effective engine
 conditions and check comparability. Pipeline/model/hardware differences may
 cause any criterion to fail; do not silently raise a limit after measurement.
@@ -211,7 +225,7 @@ memory budget does not establish that any new model fits or passes.
 
 For each evaluation, reference the same confirmed manifest and criteria
 versions and the relevant fixture/model/run/output. The completed #86/#99
-records remain bound to v3. New comparisons for #87 use v4.
+records remain bound to v3. AMD comparisons use `criteria-amd-v1`.
 Fixture, model, pipeline or measurement-condition changes require the affected
 generation, measurement and quality evidence to be reassessed and missing
 observations obtained. A threshold-only change can recompare complete raw
@@ -225,8 +239,8 @@ decision rather than being silently replaced with a measured value.
 To generate or summarize reviews for original v3 runs, explicitly pass
 `--criteria docs/evidence/acceptance/criteria-v3.json` (or use the original
 pinned checkout). Keep the original run records, sheets, values and decisions.
-Use the current `criteria.json` for new v4 runs and new bound review sheets;
-do not edit a v3 run or sheet's version to relabel it as v4.
+Use `criteria.json` for v4 records and review sheets, and `criteria-amd.json`
+for AMD records and review sheets.
 
 ## Check local files
 
@@ -275,20 +289,20 @@ v1 acceptance.
 ## Explicit W3 acceptance runner
 
 `tools/acceptance/cmd/run` performs the product W3/SQLite/publication path
-with CUDA and compares each published file with the separately built research
-oracle. It starts only when the checker reports `acceptance_ready: true`.
+with the selected GPU backend and compares each published file with the
+separately built research oracle. It starts only when the checker reports `acceptance_ready: true`.
 A pending or otherwise unready selection records `not_run` and does not start a
 translation. The runner does not approve
 criteria, download a model or retry a failed generation.
 
 Register and select
 the intended local GGUF with the normal `yakuori models` commands. Build the
-runner with Go 1.27.3 and CUDA support; the oracle build needs Rust/Cargo and
-its locked dependencies already available locally. The runner uses
+runner with Go 1.27.3 and the selected GPU build tag. The oracle build needs
+Rust/Cargo and its locked dependencies already available locally. The runner uses
 `cargo build --locked --offline` in a fresh private target directory; the GPL
 oracle remains a separate process. Build time is outside the fixture run.
 
-For example, from the checkout root, substitute the selected model ID, its
+For the CUDA workflow, from the checkout root, substitute the selected model ID, its
 expected SHA-256, and an empty private evidence path on a supported filesystem:
 
 ```sh
@@ -319,7 +333,7 @@ An input the independent reader cannot decode, including its known zero-key
 table limitation, fails rather than being replaced with a structural test
 result; see the existing W3 structural tests. A successful machine check is not a human
 translation-quality judgment. A missing worker result, missing build pin,
-failed oracle or unconfirmed CUDA resident path cannot be reported as success.
+failed oracle or unconfirmed GPU resident path cannot be reported as success.
 `run.json` uses `not_run`, `fail` and `pass` and leaves unobserved counters and
 stages null rather than reporting them as zero or false.
 
@@ -360,7 +374,7 @@ CGO_ENABLED=0 GOTOOLCHAIN=local go build -tags cuda -o /tmp/yakuori-acceptance .
   --game witcher3 --artifact acceptance
 ```
 
-The selected device is identified by `--gpu-uuid`. The operator supplies the
+The CUDA device is identified by `--gpu-uuid`. The operator supplies the
 GGUF storage quantization and its source; it is distinct from the effective
 compute quantization obtained from the actual worker engine. The command does
 not infer a missing value. Record external activity and cache conditions in
@@ -370,12 +384,49 @@ Repetitions use separate invocations and empty evidence directories. Fresh and
 reuse each start a process and load a model; reuse refers to TM reuse, not a
 warm resident model. Neither mode flushes the OS page cache.
 
+### AMD WebGPU Vulkan run
+
+The [2026-11-22 RX 9070 XT run](amd-webgpu-run-2026-11-22.md) records the
+results for the pinned Index model and three approved fixtures.
+
+Build the Linux/amd64 runner with cgo and WebGPU. Use the AMD criteria and the
+Vulkan device's PCI address, including the domain. Use the same Vulkan ICD
+selection when checking the model and running acceptance. On the RX 9070 XT
+host, the PCI address is `0000:03:00.0`. The selected GPU must be the single
+visible Vulkan adapter. The WebGPU CLI establishes a headless environment at
+startup. The runner applies the same environment when starting each WebGPU
+worker. Run the CLI directly under the strict offline observer from the
+normal desktop environment.
+
+```sh
+CGO_ENABLED=1 GOTOOLCHAIN=local go build -tags gpu -o /tmp/yakuori-acceptance-webgpu ./tools/acceptance/cmd/run
+/tmp/yakuori-acceptance-webgpu --measure --backend webgpu \
+  --manifest docs/evidence/acceptance/fixtures.json \
+  --criteria docs/evidence/acceptance/criteria-amd.json \
+  --root "$PWD" --repository "$PWD" \
+  --evidence /path/to/private/empty-evidence-directory \
+  --model-id MODEL_ID --model-sha256 MODEL_SHA256 \
+  --model-quant GGUF_QUANT --model-quant-source QUANT_SOURCE \
+  --gpu-pci 0000:03:00.0 --conditions 'OS page cache not flushed; external load recorded by operator' \
+  --repeat-index 1 --repeat-total 1 \
+  --game witcher3 --artifact acceptance
+```
+
+AMD sampling uses `/proc/<worker PID>/fdinfo` for the chosen AMD PCI device
+and counts each DRM client once. `drm-resident-vram` provides the process
+sample and sysfs provides the corresponding device-wide memory record. The
+worker also reads DRM graphics/compute counters immediately before and
+after fresh generation. The measurement stays incomplete if required
+samples, attribution or execution evidence are missing.
+
+### Measurement record
+
 The private `run.json` adds a top-level `measurement` object and a measurement
 object to each reached run. It binds existing run IDs, manifest and criteria
 versions, selected model and engine details to host/device conditions, input
 counts and bytes, operator conditions and timings. It records the requested and
-effective backend/context, effective policy and goinfer/CUDA pins from the
-worker. GPU baseline samples contain device usage and other compute PIDs before
+effective backend/context, effective policy and applicable goinfer module
+pins from the worker. GPU baseline samples contain device usage and other compute PIDs before
 worker startup. The per-worker samples contain timestamps, query durations,
 device and worker-PID memory, and other compute PIDs. A null value means the
 value was unavailable, not zero. Worker results containing translation text are
@@ -403,7 +454,7 @@ preparation to it.
 
 Linux worker RSS high-water comes from its direct child's `wait` resource usage
 (`ru_maxrss` KiB converted to bytes). It is not the runner's RSS, an oracle
-process value, or a sampled `/proc` maximum. GPU samples use `nvidia-smi` at a
+process value, or a sampled `/proc` maximum. CUDA samples use `nvidia-smi` at a
 nominal 100 ms interval plus query time. The adopted UUID and worker PID must
 both match; ambiguous attribution remains unavailable. A successful query with
 the PID absent is distinct from query failure/N/A and from interrupted
@@ -494,8 +545,8 @@ the parent test verifies that the TERM-ignoring query no longer exists.
 ## Human review sheets
 
 The criteria file must match the run and sheet: use `criteria-v3.json` for
-existing v3 evidence and `criteria.json` for new v4 evidence. Keep their
-results separate; the examples below use the current v4 criteria.
+v3 evidence, `criteria.json` for v4 evidence, and `criteria-amd.json` for AMD
+evidence. The examples below use v4.
 
 `tools/acceptance/cmd/review` consumes the runner's `run.json`. It does not
 perform a human evaluation. Keep the original fixtures, published outputs and

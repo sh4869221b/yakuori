@@ -66,6 +66,7 @@ type Category struct {
 
 type Criteria struct {
 	Version         string               `json:"version"`
+	GPUBackend      string               `json:"gpu_backend,omitempty"`
 	ManifestVersion string               `json:"manifest_version"`
 	FixtureIDs      []string             `json:"fixture_ids"`
 	Values          map[string]Criterion `json:"values"`
@@ -150,6 +151,9 @@ func CheckContext(ctx context.Context, root string, m Manifest, c Criteria) (Res
 	}
 	if strings.TrimSpace(root) == "" || strings.TrimSpace(m.Version) == "" || strings.TrimSpace(c.Version) == "" || c.ManifestVersion != m.Version || len(m.Fixtures) == 0 || len(c.FixtureIDs) == 0 {
 		return result, errors.New("root, versions, fixture set or matching manifest version missing")
+	}
+	if c.GPUBackend != "" && c.GPUBackend != "cuda" && c.GPUBackend != "webgpu" {
+		return result, errors.New("invalid criteria GPU backend")
 	}
 	selected := make(map[string]bool, len(c.FixtureIDs))
 	for _, id := range c.FixtureIDs {

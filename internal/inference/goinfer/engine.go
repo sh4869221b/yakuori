@@ -23,6 +23,7 @@ var (
 	ErrUnsupportedBackend = errors.New("unsupported effective backend")
 	ErrInvalidContext     = errors.New("context tokens must be positive")
 	ErrCUDAResidency      = errors.New("unsupported resident CUDA")
+	ErrWebGPUResidency    = errors.New("unsupported AMD Vulkan residency")
 	ErrUnknownContext     = errors.New("unknown model context")
 	ErrDeclinedTokenizer  = errors.New("tokenizer declined model")
 	ErrUnknownTemplate    = errors.New("unknown chat template")
@@ -101,6 +102,9 @@ func OpenWithOptions(ctx context.Context, modelPath string, options Options) (*E
 	}
 	if options.Backend == "cuda" && cudaBackendPin == "" {
 		return nil, fmt.Errorf("%w: CUDA backend not built in; build with -tags cuda on linux/amd64", ErrUnsupportedBackend)
+	}
+	if options.Backend == "webgpu" && webGPUBackendPin == "" {
+		return nil, fmt.Errorf("%w: WebGPU backend not built in; build with CGO_ENABLED=1 and -tags gpu on linux/amd64", ErrUnsupportedBackend)
 	}
 	return open(ctx, config, defaultLoaders())
 }

@@ -72,14 +72,19 @@ func EffectiveModelProfile(info inference.ModelInfo, limits config.Limits, segme
 		(info.Backend != "openai" && info.Thinking != inference.ThinkingDisabled) || (info.Backend == "openai" && info.Thinking != "provider-default") {
 		return identity.ProfileInput{}, ErrInferenceProfile
 	}
-	kv, cudaPin := info.KVPrecision, info.CUDABackendPin
+	kv := info.KVPrecision
+	var cudaPin, webgpuPin string
 	switch info.Backend {
-	case "openai":
-		kv, cudaPin = "not-applicable", ""
-	case "cpu":
-		kv, cudaPin = "not-applicable", ""
+	case "openai", "cpu":
+		kv = "not-applicable"
 	case "cuda":
+		cudaPin = info.CUDABackendPin
 		if kv == "" || kv == "not-applicable" || cudaPin == "" {
+			return identity.ProfileInput{}, ErrInferenceProfile
+		}
+	case "webgpu":
+		webgpuPin = info.WebGPUBackendPin
+		if kv == "" || kv == "not-applicable" || webgpuPin == "" || !info.ResidentActive || info.ResidentContextCap <= 0 || info.ContextTokens > info.ResidentContextCap || info.ResidentDecline != "" {
 			return identity.ProfileInput{}, ErrInferenceProfile
 		}
 	default:
@@ -95,7 +100,7 @@ func EffectiveModelProfile(info inference.ModelInfo, limits config.Limits, segme
 		sampling = "provider-default"
 	}
 	return identity.ProfileInput{
-		RemoteModel: info.RemoteModel, Version: identity.ProfileVersion, ModelDigest: info.ModelSHA256, Backend: info.Backend, BackendPin: info.BackendPin, CUDABackendPin: cudaPin,
+		RemoteModel: info.RemoteModel, Version: identity.ProfileVersion, ModelDigest: info.ModelSHA256, Backend: info.Backend, BackendPin: info.BackendPin, CUDABackendPin: cudaPin, WebGPUBackendPin: webgpuPin,
 		ComputeQuant: info.ComputeQuant, KVPrecision: kv, Tokenizer: identity.TokenizerInput{ModelDigest: info.Tokenizer.ModelSHA256, BackendPin: info.Tokenizer.BackendPin},
 		Template:     identity.TemplateInput{Family: info.Template.Family, Source: info.Template.Source, RendererVersion: info.Template.RendererVersion},
 		Prompt:       identity.PromptInput{Schema: info.Prompt.Schema, Variant: info.Prompt.Variant, SystemTemplate: []byte(info.Prompt.SystemTemplate), UserTemplate: []byte(info.Prompt.UserTemplate + info.Prompt.TermsTemplate), LanguageAliases: info.Prompt.LanguageAliases, DisabledThinkingPrefix: []byte(info.DisabledThinkingPrefix)},

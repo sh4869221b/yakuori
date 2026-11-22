@@ -1,0 +1,20 @@
+{
+  "version": "criteria-amd-v1",
+  "manifest_version": "fixture-candidates-v2",
+  "gpu_backend": "webgpu",
+  "fixture_ids": ["better-keybinds-en", "monster-of-the-week-en", "representative-authored-en"],
+  "values": {
+    "machine_validation": {"value": "All selected fixture units and the final published artifacts must pass common validation and independent-reader checks; check a separate TM-reuse run.", "rationale": "The pipeline publishes complete validated output; the independent reader checks the artifact.", "impact": "Any failing, missing or unstarted unit, artifact or run cannot establish acceptance."},
+    "mistranslation": {"value": "No reviewed translation materially changes a subject, action, negation, number or condition.", "rationale": "Human review checks meaning that structural validation cannot establish.", "impact": "A material change fails the row; insufficient context is hold."},
+    "omission": {"value": "No reviewed translation materially omits a proposition, instruction or restriction.", "rationale": "Structural validation cannot establish semantic completeness.", "impact": "A material omission fails the row; insufficient context is hold."},
+    "readability": {"value": "Each nonempty reviewed translation is understandable in context, including the sequence and conditions of long text.", "rationale": "Users need intelligible Japanese in UI labels, dialogue and passages.", "impact": "A row that cannot be understood fails; insufficient context is hold. Meaning-preserving stylistic differences are allowed."},
+    "terminology": {"value": "For units 8503 and 8504, use 信号灯 for signal lantern and 夜警 for night watch; grammatical variation and word order may vary.", "rationale": "Two repeated authored terms allow a consistent, explicit human judgment.", "impact": "Another translation or omission of either required term fails that row; terminology is not applicable to other rows."},
+    "units": {"value": "56", "rationale": "All 19 BetterKeybinds, 30 MonsterOfTheWeek and 7 authored entries are selected.", "impact": "All 56 fresh output rows are reviewed; synthetic coverage does not establish real-MOD dialogue or large-MOD coverage."},
+    "text_bytes": {"value": "927", "rationale": "The 49 MOD entries have 482 decoded UTF-8 bytes and the 7 authored entries have 445.", "impact": "The total describes the selected source text, not a supported maximum."},
+    "artifact_bytes": {"value": "3134", "rationale": "The selected original binaries contain 952, 1122 and 1060 bytes respectively.", "impact": "This is a sum of three artifacts; product limits apply to each artifact independently."},
+    "duration_seconds": {"value": "60", "rationale": "On 2026-11-22 the user approved a ceiling of 60 seconds per fresh fixture on the Radeon RX 9070 XT with the WebGPU Vulkan backend.", "impact": "Compare each fresh measurement_wall_seconds independently. Shared preparation, oracle build and pair cleanup are recorded separately."},
+    "ram_bytes": {"value": "25769803776", "rationale": "On 2026-11-22 the user approved 24 GiB worker RSS per fresh fixture with one active model and worker on the AMD host.", "impact": "Compare each worker measurement.rss_bytes independently. It is the direct child's wait4 RSS high-water, converted from KiB."},
+    "vram_bytes": {"value": "12884901888", "rationale": "On 2026-11-22 the user approved 12 GiB sampled worker VRAM per fresh fixture on the Radeon RX 9070 XT.", "impact": "Compare each measurement.process_vram_sampled_max_bytes independently for the selected PCI device and worker PID using DRM resident VRAM. Partial, missing or ambiguous attribution leaves measurement incomplete."}
+  },
+  "confirmation": {"status": "confirmed", "date": "2026-11-22T19:31:26+09:00", "reviewer": "User (AMD performance criteria, 2026-11-22)", "decision": "approved", "manifest_version": "fixture-candidates-v2", "criteria_version": "criteria-amd-v1"}
+}
