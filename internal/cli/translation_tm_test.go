@@ -72,8 +72,7 @@ type translationTMInput struct {
 	source  []byte
 }
 
-// Build the expected key from the fixture input, not from persisted row fields.
-func expectedTranslationKey(t *testing.T, input translationTMInput, engine inference.Engine) identity.ExactKey {
+func translationTestProfile(t *testing.T, engine inference.Engine, modelID, sourceLanguage, targetLanguage string) validate.Profile {
 	t.Helper()
 	ctx := context.Background()
 	info, err := engine.Info(ctx)
@@ -86,17 +85,24 @@ func expectedTranslationKey(t *testing.T, input translationTMInput, engine infer
 		t.Fatal(err)
 	}
 	request, err := engine.(requestFactory).NewRequest(ctx, prompt.Input{
-		SourceLanguage: input.command.sourceLanguage, TargetLanguage: input.command.targetLanguage,
+		SourceLanguage: sourceLanguage, TargetLanguage: targetLanguage,
 	}, policy)
 	if err != nil {
 		t.Fatal(err)
 	}
 	profile, err := localize.NewCanonicalInferenceProfile(info, request, localize.InferenceProfileInput{
-		ModelID: input.modelID, Glossary: identity.GlossaryInput{Mode: "none"}, Limits: limits,
+		ModelID: modelID, Glossary: identity.GlossaryInput{Mode: "none"}, Limits: limits,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	return profile
+}
+
+// Build the expected key from the fixture input, not from persisted row fields.
+func expectedTranslationKey(t *testing.T, input translationTMInput, engine inference.Engine) identity.ExactKey {
+	t.Helper()
+	profile := translationTestProfile(t, engine, input.modelID, input.command.sourceLanguage, input.command.targetLanguage)
 	session, err := textadapter.New(input.command.sourceLanguage, input.command.targetLanguage).Import(input.source, profile)
 	if err != nil {
 		t.Fatal(err)

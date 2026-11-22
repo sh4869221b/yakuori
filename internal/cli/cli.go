@@ -36,7 +36,7 @@ Commands:
   models     Import, pull, select, or verify a local model
   context    Validate a local Context Pack and print its fingerprint
   translate  Translate a UTF-8 text file to stdout
-  localize   Translate a UTF-8 text or binary W3 strings file to a published file
+  localize   Translate a UTF-8 text, Generic JSON v1, or binary W3 strings file
 
 Options:
   -h, --help Show this help
@@ -175,7 +175,7 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 	flags.StringVar(&command.backend, "backend", "cpu", "cpu, cuda, webgpu or openai")
 	flags.StringVar(&command.openaiModel, "openai-model", "", "pinned OpenAI model snapshot (required for openai)")
 	if action == "localize" {
-		flags.StringVar(&command.format, "format", "", "required format: text or w3strings (binary Witcher 3 table)")
+		flags.StringVar(&command.format, "format", "", "required format: text, generic-json, or w3strings (binary Witcher 3 table)")
 		flags.StringVar(&output, "output", "", "write the result to OUT")
 		flags.BoolVar(&replaceOutput, "replace-output", false, "replace OUT atomically when it exists")
 		flags.BoolVar(&inPlace, "in-place", false, "replace SOURCE while retaining an original backup")
@@ -185,6 +185,9 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 		if action == "localize" {
 			fmt.Fprintln(flags.Output(), "Flags precede SOURCE; stdin is unsupported.")
 			fmt.Fprintln(flags.Output(), "--format text: SOURCE must be a regular UTF-8 text file.")
+			fmt.Fprintln(flags.Output(), "--format generic-json: SOURCE must be Generic JSON v1 matching the declared languages and scope.")
+			fmt.Fprintln(flags.Output(), "Yakuori verifies and publishes the translated JSON with translations matched by ID.")
+			fmt.Fprintln(flags.Output(), "The external tool rebuilds and validates the game files. Failures in those steps leave committed TM entries in place.")
 			fmt.Fprintln(flags.Output(), "--format w3strings: SOURCE must be a binary Witcher 3 w3strings table with --source-language en|ja and --target-language ja.")
 		} else {
 			fmt.Fprintln(flags.Output(), "Flags precede SOURCE. SOURCE must be a regular UTF-8 text file; stdin is unsupported.")
@@ -204,7 +207,7 @@ func parseTranslation(action string, args []string) (translationCommand, string,
 		command.backend != "cpu" && command.backend != "cuda" && command.backend != "webgpu" && command.backend != "openai" || (command.backend == "openai") != (command.openaiModel != "") {
 		return command, "", errInvalidLocalizeArguments
 	}
-	if action == "localize" && command.format != "text" && command.format != "w3strings" {
+	if action == "localize" && command.format != "text" && command.format != "generic-json" && command.format != "w3strings" {
 		return command, "", errInvalidLocalizeArguments
 	}
 	if command.format == "w3strings" && (command.sourceLanguage != "en" && command.sourceLanguage != "ja" || command.targetLanguage != "ja") {

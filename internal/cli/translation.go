@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"unicode/utf8"
 
+	"github.com/sh4869221b/yakuori/internal/adapter/genericjson"
 	textadapter "github.com/sh4869221b/yakuori/internal/adapter/text"
 	"github.com/sh4869221b/yakuori/internal/adapter/w3strings"
 	"github.com/sh4869221b/yakuori/internal/config"
@@ -39,13 +40,24 @@ func (command translationCommand) executeObserved(ctx context.Context, stdout io
 }
 
 func (command translationCommand) executeWithStoreClose(ctx context.Context, stdout io.Writer, paths config.Paths, open selectedEngineOpener, observation *localize.AcceptanceObservation, details *AcceptanceDetails, closeStore func(*tm.Store) error) (result localize.Result, err error) {
+	limits := config.DefaultLimits()
 	var adapter localize.Adapter = textadapter.New(command.sourceLanguage, command.targetLanguage)
-	if command.format == "w3strings" {
-		table, err := w3strings.NewForSource(command.sourceLanguage, config.DefaultLimits())
+	switch command.format {
+	case "w3strings":
+		table, err := w3strings.NewForSource(command.sourceLanguage, limits)
 		if err != nil {
 			return result, &localize.Error{Phase: "import", Err: err}
 		}
 		adapter = table
+	case "generic-json":
+		exchange, err := genericjson.New(genericjson.Metadata{
+			SourceLanguage: command.sourceLanguage, TargetLanguage: command.targetLanguage,
+			GameNamespace: command.scope.GameNamespace, ArtifactNamespace: command.scope.ArtifactNamespace,
+		}, limits)
+		if err != nil {
+			return result, &localize.Error{Phase: "import", Err: err}
+		}
+		adapter = exchange
 	}
 	id, engine, err := open(ctx, command.backend)
 	if err != nil {
@@ -71,7 +83,6 @@ func (command translationCommand) executeWithStoreClose(ctx context.Context, std
 			return result, &localize.Error{Phase: "profile", Err: errors.New("acceptance model or backend mismatch")}
 		}
 	}
-	limits := config.DefaultLimits()
 	policy, err := inference.NewGenerationPolicy(inference.PolicySchemaV1, limits.MaxOutputTokens, limits.RequestTimeout)
 	if err != nil {
 		return result, &localize.Error{Phase: "profile", Err: err}

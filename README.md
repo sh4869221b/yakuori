@@ -1,6 +1,6 @@
 # Yakuori（訳織り）
 
-ゲームのID・tag・placeholder・binary構造を保持するローカライズ基盤です。標準ビルドはPure Goです。翻訳CLIは全文 `text-v1` と、[Witcher 3 `.w3strings` Adapter](docs/w3strings-adapter.md)によるversion162 en/jp入力・日本語出力のbinary形式を扱います。
+ゲームのID・tag・placeholder・binary構造を保持するローカライズ基盤です。標準ビルドはPure Goです。翻訳CLIは全文 `text-v1`、[Generic JSON v1](docs/generic-json-v1.md)、[Witcher 3 `.w3strings` Adapter](docs/w3strings-adapter.md)によるversion162 en/jp入力・日本語出力のbinary形式を扱います。
 
 ## 状態
 
@@ -42,9 +42,19 @@ OpenAI API を使う場合は `--backend openai` と日付付きモデル snapsh
 ./yakuori translate --source-language en --target-language ja --game qa --artifact sample --backend openai --openai-model gpt-4o-2024-08-06 ./source.txt
 ```
 
-言語、game namespace、artifact namespaceは空でない値を明示します。CLIは値を正規化したり、file pathからnamespaceを推定したりしません。`translate` は全文をstdoutへ返します。`localize` は形式 `text` を必須とし、`--output OUT` で新規公開、`--output OUT --replace-output` で既存出力の置換、または `--in-place` で原文をbackupとして残す置換をします。`--replace-output` には `--output` が必要で、公開モードは同時指定できません。
+言語、game namespace、artifact namespaceは空でない値を明示します。CLIは値を正規化したり、file pathからnamespaceを推定したりしません。`translate` は全文をstdoutへ返します。`localize` では `--format` で形式を明示し、`--output OUT` で新規公開、`--output OUT --replace-output` で既存出力の置換、または `--in-place` で原文をbackupとして残す置換をします。`--replace-output` には `--output` が必要で、公開モードは同時指定できません。
 
-対応形式は全文を一つのunitとして扱う `text-v1` です。tagやplaceholderらしい箇所を自動検出して保護する機能はありません。現在の `DefaultLimits` はartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76、context候補4096 tokens、最大出力2048 tokensです。text-v1は一つのunitなのでsource textは最大980 UTF-8 bytesです。人手による翻訳品質の受入れは未実施です。
+`--format text` は全文を一つのunitとして扱う `text-v1` です。tagやplaceholderらしい箇所を自動検出して保護する機能はありません。現在の `DefaultLimits` はartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76、context候補4096 tokens、最大出力2048 tokensです。text-v1は一つのunitなのでsource textは最大980 UTF-8 bytesです。人手による翻訳品質の受入れは未実施です。
+
+## Generic JSON翻訳
+
+`localize --format generic-json` は外部ツールが抽出した [Generic JSON v1](docs/generic-json-v1.md) を翻訳します。CLIで指定する原文言語、訳文言語、game・artifact namespaceは入力JSONと完全に一致させます。
+
+```sh
+./yakuori localize --format generic-json --source-language en --target-language ja --game sample-game --artifact dialogue --backend cpu --output ./translated.json ./source.json
+```
+
+Yakuoriは、IDの順序と原文・保護範囲・context参照の対応を保持し、検証済みの訳文をIDごとに対応させたJSONを公開します。各unitとstaged JSONの検証がすべて成功した後にTMへ一括commitします。ゲーム形式の再構築と最終検証は外部ツールが担当します。外部ツールによる再構築や最終検証が失敗しても、commit済みのTM行は保持されます。
 
 ## Witcher 3 w3strings翻訳
 
