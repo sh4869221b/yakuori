@@ -1,0 +1,66 @@
+{
+  "schema": "yakuori.context/v1",
+  "scope": {
+    "game_namespace": "example-game",
+    "artifacts": [
+      {"artifact_namespace": "mod-a", "original_artifact_digest": "1111111111111111111111111111111111111111111111111111111111111111"},
+      {"artifact_namespace": "mod-c", "original_artifact_digest": "5555555555555555555555555555555555555555555555555555555555555555"}
+    ]
+  },
+  "source_language": "en",
+  "target_language": "ja",
+  "world": [
+    {
+      "id": "mod-c-note", "text": "The relief crew keeps a separate watch.", "artifacts": ["mod-c"],
+      "provenance": {
+        "method": "extraction", "version": "context-build-v1", "status": "candidate", "user_edited": true,
+        "sources": [{"kind": "unit", "unit_id": "mod-c-greeting"}]
+      }
+    },
+    {
+      "id": "unverified-rumor", "text": "The relief crew may depart tomorrow.",
+      "provenance": {"method": "llm", "version": "example-1", "status": "candidate", "user_edited": false}
+    }
+  ],
+  "characters": [
+    {
+      "id": "relief-captain", "name": "Captain", "description": "Leads the relief crew.", "artifacts": ["mod-c"],
+      "provenance": {
+        "method": "extraction", "version": "context-build-v1", "status": "candidate", "user_edited": true,
+        "sources": [
+          {"kind": "unit", "unit_id": "mod-c-greeting"},
+          {"kind": "metadata", "artifact_namespace": "mod-c", "metadata_key": "units/witcher3-w3strings/w3strings-v162-en-jp-v1/101/origin/speaker"}
+        ]
+      }
+    }
+  ],
+  "scenes": [
+    {
+      "id": "mod-c-port", "artifacts": ["mod-c"], "speaker_ids": ["relief-captain"],
+      "provenance": {
+        "method": "extraction", "version": "context-build-v1", "status": "candidate", "user_edited": false,
+        "sources": [{"kind": "artifact", "artifact_namespace": "mod-c"}]
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "mod-c-greeting", "artifact_namespace": "mod-c", "adapter": "witcher3-w3strings", "format_schema": "w3strings-v162-en-jp-v1", "stable_id": "101",
+      "raw_source_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+      "scene_id": "mod-c-port", "speaker_id": "relief-captain",
+      "provenance": {
+        "method": "extraction", "version": "context-build-v1", "status": "confirmed", "user_edited": false,
+        "sources": [{"kind": "artifact", "artifact_namespace": "mod-c"}]
+      }
+    }
+  ],
+  "glossary_refs": [
+    {
+      "id": "mod-c-terms", "schema": "glossary-v1", "reference": "relief-crew-terms.json",
+      "provenance": {
+        "method": "manual", "version": "1", "status": "confirmed", "user_edited": false,
+        "sources": [{"kind": "manual", "reference": "design-notes#relief-crew-terms"}]
+      }
+    }
+  ]
+}
