@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/sh4869221b/yakuori/internal/inference"
+	"github.com/sh4869221b/yakuori/internal/modelbundle"
 	"github.com/sh4869221b/yakuori/internal/prompt"
 )
 
@@ -39,10 +40,14 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 		return nil, fmt.Errorf("read model identity: %w", err)
 	}
 	var model modelBackend
+	modelPath, bundleDir := path, ""
 	defer func() {
 		// Linux mappings remain valid after unlink; neither loader can reopen the
 		// caller's mutable path once the private snapshot has been created.
 		err = errors.Join(err, os.Remove(path))
+		if bundleDir != "" {
+			err = errors.Join(err, os.RemoveAll(bundleDir))
+		}
 		if err != nil {
 			if model != nil {
 				err = errors.Join(err, model.Close())
@@ -53,14 +58,25 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	if config.checkSHA256 && digest != config.expectedSHA256 {
 		return nil, fmt.Errorf("model SHA-256 mismatch: expected %x, got %x", config.expectedSHA256, digest)
 	}
+	bundled, err := modelbundle.Is(path)
+	if err != nil {
+		return nil, fmt.Errorf("read model format: %w", err)
+	}
+	if bundled {
+		bundleDir, err = modelbundle.Unpack(ctx, path, config.snapshotDir)
+		if err != nil {
+			return nil, fmt.Errorf("read PLaMo model snapshot: %w", err)
+		}
+		modelPath = bundleDir
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	options := decoder.Options{Backend: config.backend, Quant: config.quant}
+	options := decoder.Options{Backend: config.backend, Quant: config.quant, DirectLoad: true}
 	if config.backend == "cuda" {
 		options.ResidentContext = config.contextTokens
 	}
-	model, err = load.model(path, options)
+	model, err = load.model(modelPath, options)
 	if err != nil {
 		return nil, fmt.Errorf("load %s model: %w", config.backend, err)
 	}
@@ -89,7 +105,7 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	if backend == "cuda" {
 		contextTokens = min(contextTokens, residentCap)
 	}
-	tok, err := load.tokenizer(path)
+	tok, err := load.tokenizer(modelPath)
 	if err != nil {
 		return nil, fmt.Errorf("load model tokenizer: %w", err)
 	}
@@ -97,11 +113,15 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 		return nil, ErrDeclinedTokenizer
 	}
 	source := tok.ChatTemplate()
-	if source != qwenChatTemplate && source != indexChatTemplate {
+	plamo := bundled && model.Config().ModelType == "plamo3" && fmt.Sprintf("%x", sha256.Sum256([]byte(source))) == plamo3TemplateSHA256
+	if !plamo && (bundled || (source != qwenChatTemplate && source != indexChatTemplate)) {
 		return nil, ErrUnknownTemplate
 	}
 	template := chat.ChatML()
 	stops := template.Stops().Strings
+	if plamo {
+		stops = []string{"<|plamo:bos|>", "<|plamo:tag|>"}
+	}
 	if len(stops) == 0 {
 		return nil, ErrUnknownStop
 	}
@@ -120,6 +140,16 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	if source == indexChatTemplate {
 		promptIdentity, prefix = prompt.IndexIdentity(), disabledThinkingPrefix
 	}
+	family := template.Name()
+	if plamo {
+		promptIdentity = prompt.Plamo3Identity()
+		family = plamo3Family
+		for _, piece := range []string{"<|plamo:bos|>", "<|plamo:tag|>", "<|plamo:key|>", "<|plamo:val|>", "<|plamo:msg|>", "<|plamo:index|>", "<|plamo:item|>"} {
+			if _, ok := tok.TokenID(piece); !ok {
+				return nil, ErrUnknownTemplate
+			}
+		}
+	}
 	kvPrecision := model.ResidentKVPrecision()
 	if backend == "cpu" {
 		kvPrecision = "not-applicable"
@@ -131,7 +161,7 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 			ModelSHA256: digest, ContextTokens: contextTokens, PolicySchema: inference.PolicySchemaV1,
 			ModelContextTokens: modelContext, ConfiguredContextTokens: config.contextTokens,
 			ResidentActive: residentActive, ResidentContextCap: residentCap, ResidentDecline: residentDecline, KVPrecision: kvPrecision,
-			Template:  inference.TemplateIdentity{Family: template.Name(), Source: source, RendererVersion: backendPin},
+			Template:  inference.TemplateIdentity{Family: family, Source: source, RendererVersion: backendPin},
 			Tokenizer: inference.TokenizerIdentity{ModelSHA256: digest, BackendPin: backendPin},
 			Prefill:   prefillPolicy(model, backend),
 			Prompt:    promptIdentity, Thinking: inference.ThinkingDisabled, DisabledThinkingPrefix: prefix,

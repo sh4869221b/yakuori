@@ -121,6 +121,18 @@ func TestCanonicalInferenceProfileEffectiveConditions(t *testing.T) {
 	}
 }
 
+func TestPlamoCanonicalProfile(t *testing.T) {
+	info, prepared, input := inferenceProfileFixture()
+	info.Prompt = prompt.Plamo3Identity()
+	info.Template.Family = "pfml3-translation-v1"
+	prepared.Identity.Prompt, prepared.Identity.Template = info.Prompt, info.Template
+	prepared.StopIDs = []int{1, 16}
+	request := profileRequest(t, prepared, 128, time.Second)
+	if _, err := localize.NewCanonicalInferenceProfile(info, request, input); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCanonicalInferenceProfileUnusedConditions(t *testing.T) {
 	info, prepared, input := inferenceProfileFixture()
 	base, err := localize.NewCanonicalInferenceProfile(info, profileRequest(t, prepared, 128, time.Second), input)

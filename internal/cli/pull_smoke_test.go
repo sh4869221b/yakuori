@@ -106,7 +106,7 @@ func TestPullCLIFailure(t *testing.T) {
 		{"short_body", "/short.gguf", pullSmokeDigestOf(short), int64(len(short) + 1), "received size does not match the expected size"},
 		{"long_body", "/long.gguf", pullSmokeDigestOf(long), int64(len(long) - 1), "source sent more bytes than the expected size"},
 		{"http_status", "/status.gguf", pullSmokeDigest, 1024, "source did not answer with HTTP 200"},
-		{"invalid_gguf", "/invalid.gguf", pullSmokeDigestOf(invalid), int64(len(invalid)), ""},
+		{"invalid_gguf", "/invalid.gguf", pullSmokeDigestOf(invalid), int64(len(invalid)), "source model must be a GGUF file"},
 	} {
 		source := server.url + tt.path
 		args := []string{"models", "pull", "--id", "fetched", "--sha256", tt.digest,
@@ -116,13 +116,8 @@ func TestPullCLIFailure(t *testing.T) {
 		commands = append(commands, run)
 		states["after_"+tt.name] = state
 
-		// The loader-rejection reason is not part of the pinned classification;
-		// every other failure must be reported as its known reason.
 		diagnostic := strings.TrimPrefix(run.Stderr, pullSmokeNotice("fetched", source, tt.digest, tt.size, pullSmokeDigestSource))
-		classified := strings.HasPrefix(diagnostic, "yakuori: pull model: ") && len(diagnostic) > len("yakuori: pull model: ")
-		if tt.wantReason != "" {
-			classified = diagnostic == "yakuori: pull model: "+tt.wantReason+"\n"
-		}
+		classified := diagnostic == "yakuori: pull model: "+tt.wantReason+"\n"
 		checks = append(checks,
 			pullSmokeCheck{Name: tt.name + "_exit_failure", Pass: run.ExitCode == ExitFailure && run.Signal == "", Detail: fmt.Sprintf("exit=%d signal=%s", run.ExitCode, run.Signal)},
 			pullSmokeCheck{Name: tt.name + "_stdout_empty", Pass: run.Stdout == "", Detail: run.Stdout},

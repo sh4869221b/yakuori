@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/townsendmerino/goinfer/chat"
@@ -13,7 +14,7 @@ import (
 	"github.com/sh4869221b/yakuori/internal/inference"
 )
 
-const backendPin = "github.com/townsendmerino/goinfer@v0.23.0"
+const backendPin = "github.com/sh4869221b/goinfer@994cbf5ee38dd8dcc612aad6e6803ac79f772f3b"
 
 var (
 	ErrClosed             = errors.New("inference engine is closed")
@@ -113,7 +114,16 @@ func defaultLoaders() loaders {
 			}
 			return &decoderModel{Model: model}, nil
 		},
-		tokenizer: func(path string) (requestTokenizer, error) { return tokenizer.LoadGGUF(path) },
+		tokenizer: func(path string) (requestTokenizer, error) {
+			info, err := os.Stat(path)
+			if err != nil {
+				return nil, err
+			}
+			if info.IsDir() {
+				return tokenizer.Load(path)
+			}
+			return tokenizer.LoadGGUF(path)
+		},
 	}
 }
 

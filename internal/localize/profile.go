@@ -65,8 +65,11 @@ func EffectiveModelProfile(info inference.ModelInfo, limits config.Limits, segme
 	if err := limits.Check(); err != nil {
 		return identity.ProfileInput{}, err
 	}
-	if (info.Backend != "openai" && (info.ModelSHA256 == ([32]byte{}) || info.Tokenizer.ModelSHA256 != info.ModelSHA256 || info.Prefill.Path != info.Backend)) || (info.Backend == "openai" && (info.RemoteModel == "" || info.ModelSHA256 != ([32]byte{}) || info.Tokenizer.ModelSHA256 != ([32]byte{}) || info.Prefill.Path != "none")) || info.PolicySchema != inference.PolicySchemaV1 || info.ContextTokens <= 0 ||
-		info.Prompt.Schema != prompt.SchemaV1 || (info.Prompt != prompt.PlainIdentity() && info.Prompt != prompt.IndexIdentity()) || (info.Backend != "openai" && info.Thinking != inference.ThinkingDisabled) || (info.Backend == "openai" && info.Thinking != "provider-default") {
+	if (info.Backend != "openai" && (info.ModelSHA256 == ([32]byte{}) || info.Tokenizer.ModelSHA256 != info.ModelSHA256 || info.Prefill.Path != info.Backend)) ||
+		(info.Backend == "openai" && (info.RemoteModel == "" || info.ModelSHA256 != ([32]byte{}) || info.Tokenizer.ModelSHA256 != ([32]byte{}) || info.Prefill.Path != "none")) || info.PolicySchema != inference.PolicySchemaV1 || info.ContextTokens <= 0 ||
+		info.Prompt.Schema != prompt.SchemaV1 ||
+		(info.Prompt != prompt.PlainIdentity() && info.Prompt != prompt.IndexIdentity() && (info.Backend == "openai" || info.Prompt != prompt.Plamo3Identity())) ||
+		(info.Backend != "openai" && info.Thinking != inference.ThinkingDisabled) || (info.Backend == "openai" && info.Thinking != "provider-default") {
 		return identity.ProfileInput{}, ErrInferenceProfile
 	}
 	kv, cudaPin := info.KVPrecision, info.CUDABackendPin

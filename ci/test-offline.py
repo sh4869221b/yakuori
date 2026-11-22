@@ -712,7 +712,14 @@ class ObserverTests(unittest.TestCase):
         # supervises children (the systemd user manager does). Both are legitimate
         # adoptions, so the escape is proven by the adopted parent sitting on this test's
         # own ancestry instead of by pid 1 exactly.
-        self.assertIn(self.process_field(daemon, 1), self.ancestors(),
+        # The daemon may signal readiness before its intermediate parent exits.
+        ancestors = self.ancestors()
+        deadline = time.monotonic() + 2
+        parent = self.process_field(daemon, 1)
+        while parent is not None and parent not in ancestors and time.monotonic() < deadline:
+            time.sleep(0.01)
+            parent = self.process_field(daemon, 1)
+        self.assertIn(parent, ancestors,
                       "the daemon must be reparented to init or a subreaper ancestor")
         self.assertNotIn(self.process_state(daemon), (None, "Z"), "the daemon must be alive before the timeout")
         self.assertEqual(observer.wait(timeout=20), 4)

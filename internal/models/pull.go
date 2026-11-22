@@ -27,6 +27,10 @@ const pullTimeout = 30 * time.Minute
 // maxPullRedirects is how many redirects a pull follows before it fails.
 const maxPullRedirects = 10
 
+const ggufMagic = "GGUF"
+
+var ErrPullFormat = errors.New("source model must be a GGUF file")
+
 // PullRequest is the minimal explicit acquisition input: where to fetch, the ID
 // to register, and the identity the caller expects. DigestSource is the
 // caller's own statement of where that digest came from; it is recorded as
@@ -50,7 +54,7 @@ type provenance struct {
 	DigestSource      string `json:"digest_source"`
 }
 
-// Pull explicitly fetches req.URL once and registers the received bytes under
+// Pull explicitly fetches req.URL once and registers the received GGUF under
 // req.ID, but only when the body matches the expected size and SHA-256 and the
 // local CPU loader accepts that same stage. Any failure before the registry
 // commit leaves the registry untouched and removes this call's stage. A
@@ -188,12 +192,17 @@ func fetchModel(ctx context.Context, client *http.Client, req PullRequest, path 
 	if response.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("pull %s: unexpected status %s", req.ID, response.Status)
 	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return "", err
 	}
 	hash := sha256.New()
 	size, copyErr := io.Copy(io.MultiWriter(file, hash), io.LimitReader(response.Body, req.SizeBytes+1))
+	var magic [len(ggufMagic)]byte
+	var magicErr error
+	if copyErr == nil && size == req.SizeBytes && size >= int64(len(magic)) {
+		_, magicErr = file.ReadAt(magic[:], 0)
+	}
 	closeErr := file.Close()
 	if copyErr != nil || closeErr != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -224,6 +233,12 @@ func fetchModel(ctx context.Context, client *http.Client, req PullRequest, path 
 	}
 	if actual := hex.EncodeToString(hash.Sum(nil)); actual != req.SHA256 {
 		return "", fmt.Errorf("pull %s: expected SHA-256 %s, got %s", req.ID, req.SHA256, actual)
+	}
+	if magicErr != nil {
+		return "", magicErr
+	}
+	if string(magic[:]) != ggufMagic {
+		return "", ErrPullFormat
 	}
 	return response.Request.URL.String(), nil
 }

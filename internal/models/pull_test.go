@@ -21,6 +21,7 @@ import (
 	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/inference/goinfer"
+	"github.com/sh4869221b/yakuori/internal/modelbundle"
 )
 
 type cancelOnCloseEngine struct {
@@ -279,7 +280,7 @@ func TestPull(t *testing.T) {
 	}, {
 		name: "invalid gguf accepted identity",
 		prepare: func(t *testing.T, f *pullFixture) {
-			f.payload = []byte("this is not a gguf model")
+			f.payload = []byte("GGUF fixture with invalid contents")
 			sum := sha256.Sum256(f.payload)
 			f.digest = hex.EncodeToString(sum[:])
 			real := New(f.registry.paths).open
@@ -294,6 +295,21 @@ func TestPull(t *testing.T) {
 		check: func(t *testing.T, f *pullFixture, err error) {
 			if len(f.loaded) != 1 {
 				t.Fatalf("real loader reached %d times, want 1", len(f.loaded))
+			}
+		},
+	}, {
+		name: "PLaMo bundle with matching identity",
+		prepare: func(t *testing.T, f *pullFixture) {
+			f.payload = []byte(modelbundle.Magic + "fixture")
+			sum := sha256.Sum256(f.payload)
+			f.digest = hex.EncodeToString(sum[:])
+		},
+		run: func(t *testing.T, f *pullFixture) error {
+			return f.pull(t, tlsServer(t, f.payload))
+		},
+		check: func(t *testing.T, f *pullFixture, err error) {
+			if !errors.Is(err, ErrPullFormat) || len(f.loaded) != 0 {
+				t.Fatalf("bundle pull reached the loader %d times and returned %v", len(f.loaded), err)
 			}
 		},
 	}, {

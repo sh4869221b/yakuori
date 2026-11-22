@@ -1,0 +1,12 @@
+=== RUN   TestPlamoCPUCLI
+=== RUN   TestPlamoCPUCLI/en-ja
+    plamo3_cpu_smoke_test.go:91: attempt=0 backend=cpu quant=int4 generation_calls=1 accepted_kind=generated tm_committed=true
+    plamo3_cpu_smoke_test.go:91: attempt=1 backend=cpu quant=int4 generation_calls=0 accepted_kind=tm tm_committed=true
+=== RUN   TestPlamoCPUCLI/ja-en
+    plamo3_cpu_smoke_test.go:91: attempt=0 backend=cpu quant=int4 generation_calls=1 accepted_kind=generated tm_committed=true
+    plamo3_cpu_smoke_test.go:91: attempt=1 backend=cpu quant=int4 generation_calls=0 accepted_kind=tm tm_committed=true
+--- PASS: TestPlamoCPUCLI (32.02s)
+    --- PASS: TestPlamoCPUCLI/en-ja (11.27s)
+    --- PASS: TestPlamoCPUCLI/ja-en (11.64s)
+PASS
+ok  	github.com/sh4869221b/yakuori/internal/cli	32.087s

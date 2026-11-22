@@ -1,0 +1,107 @@
+{# Public translation request -> PFML3. Preserve all text whitespace. #}
+{%- macro check_text(value, name, allow_empty=false) -%}
+    {%- if value is not string -%}
+        {{- raise_exception(name + ' must be a string.') -}}
+    {%- endif -%}
+    {%- if not allow_empty and not (value | trim) -%}
+        {{- raise_exception(name + ' must not be empty.') -}}
+    {%- endif -%}
+    {%- if '<|plamo:' in value -%}
+        {{- raise_exception(name + ' must not contain reserved PFML tokens (<|plamo:...).') -}}
+    {%- endif -%}
+{%- endmacro -%}
+{%- macro check_lang(value, name) -%}
+    {{- check_text(value, name) -}}
+    {%- if value != 'ja(easy)' -%}
+        {%- set parts = value.split('-') -%}
+        {%- if parts | length > 2 or parts[0] | length not in [2, 3] or (parts | length == 2 and parts[1] | length != 4) -%}
+            {{- raise_exception(name + ' must be a lowercase language code, e.g. en, ja, zh-hans, or ja(easy).') -}}
+        {%- endif -%}
+        {%- for char in value -%}
+            {%- if char not in 'abcdefghijklmnopqrstuvwxyz-' -%}
+                {{- raise_exception(name + ' must use lowercase language codes without region subtags.') -}}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- endif -%}
+{%- endmacro -%}
+{%- if messages | length == 0 or messages | length % 2 != 1 -%}
+    {{- raise_exception('Provide source/translation pairs followed by one user message.') -}}
+{%- endif -%}
+{%- for message in messages -%}
+    {%- if message is not mapping -%}
+        {{- raise_exception('Each message must contain a role and text content.') -}}
+    {%- endif -%}
+    {%- if message['role'] == 'system' -%}
+        {{- raise_exception('System messages are not supported; use context for reference text.') -}}
+    {%- endif -%}
+    {%- if (loop.index0 % 2 == 0 and message['role'] != 'user') or (loop.index0 % 2 == 1 and message['role'] != 'assistant') -%}
+        {{- raise_exception('Alternate user source text and assistant translation; end with user.') -}}
+    {%- endif -%}
+    {%- if message['tool_calls'] or message['tool_call_id'] or message['function_call'] -%}
+        {{- raise_exception('Tool calls are not supported.') -}}
+    {%- endif -%}
+    {{- check_text(message['content'], 'message content') -}}
+{%- endfor -%}
+{%- if tools or documents -%}
+    {{- raise_exception('Tool calls and documents are not supported; use context for reference text.') -}}
+{%- endif -%}
+{%- if not add_generation_prompt -%}
+    {{- raise_exception('Use add_generation_prompt=True for translation inference.') -}}
+{%- endif -%}
+{%- if target_lang is not defined -%}
+    {{- raise_exception('target_lang is required, e.g. target_lang="ja".') -}}
+{%- endif -%}
+{{- check_lang(target_lang, 'target_lang') -}}
+{%- if source_lang is defined and source_lang is not none -%}
+    {{- check_lang(source_lang, 'source_lang') -}}
+{%- endif -%}
+{%- if context is defined and context is not none -%}
+    {{- check_text(context, 'context', allow_empty=true) -}}
+{%- endif -%}
+{%- if form is defined and form is not none -%}
+    {%- if form not in ['polite', 'plain'] or target_lang != 'ja' -%}
+        {{- raise_exception('form must be polite or plain and requires target_lang="ja".') -}}
+    {%- endif -%}
+{%- endif -%}
+{%- if glossary is defined and glossary is not none -%}
+    {%- if glossary is not sequence or glossary is string or glossary is mapping -%}
+        {{- raise_exception('glossary must be a list of objects with source and target strings.') -}}
+    {%- endif -%}
+    {%- for term in glossary -%}
+        {%- if term is not mapping or term | length != 2 or 'source' not in term or 'target' not in term -%}
+            {{- raise_exception('Each glossary entry must contain exactly source and target.') -}}
+        {%- endif -%}
+        {{- check_text(term['source'], 'glossary source') -}}
+        {{- check_text(term['target'], 'glossary target') -}}
+    {%- endfor -%}
+{%- endif -%}
+{{- bos_token + '<|plamo:tag|>dataset<|plamo:msg|>translation' -}}
+{%- if context is defined and context -%}
+    {{- '<|plamo:tag|>context<|plamo:msg|>' + context -}}
+{%- endif -%}
+{%- for message in messages[:-1] -%}
+    {%- if message['role'] == 'user' -%}
+        {{- '<|plamo:tag|>input' -}}
+        {%- if source_lang is defined and source_lang is not none -%}
+            {{- '<|plamo:key|>lang<|plamo:val|>' + source_lang -}}
+        {%- endif -%}
+    {%- else -%}
+        {{- '<|plamo:tag|>output<|plamo:key|>lang<|plamo:val|>' + target_lang -}}
+    {%- endif -%}
+    {{- '<|plamo:msg|>' + message['content'] -}}
+{%- endfor -%}
+{%- if glossary is defined and glossary -%}
+    {{- '<|plamo:tag|>glossary' -}}
+    {%- for term in glossary -%}
+        {{- '<|plamo:index|>' + term['source'] + '<|plamo:item|>' + term['target'] -}}
+    {%- endfor -%}
+{%- endif -%}
+{{- '<|plamo:tag|>input' -}}
+{%- if source_lang is defined and source_lang is not none -%}
+    {{- '<|plamo:key|>lang<|plamo:val|>' + source_lang -}}
+{%- endif -%}
+{{- '<|plamo:msg|>' + messages[-1]['content'] + '<|plamo:tag|>output<|plamo:key|>lang<|plamo:val|>' + target_lang -}}
+{%- if form is defined and form is not none -%}
+    {{- '<|plamo:key|>form<|plamo:val|>' + form -}}
+{%- endif -%}
+{{- '<|plamo:msg|>' -}}

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 
 	"github.com/sh4869221b/yakuori/internal/config"
+	"github.com/sh4869221b/yakuori/internal/modelbundle"
 	"golang.org/x/sys/unix"
 )
 
@@ -125,8 +126,8 @@ func (r *Registry) Import(ctx context.Context, id, source string) (entry Entry, 
 	if err != nil {
 		return Entry{}, err
 	}
-	if !info.Mode().IsRegular() {
-		return Entry{}, errors.New("source model must be a regular file")
+	if !info.Mode().IsRegular() && !info.IsDir() {
+		return Entry{}, errors.New("source model must be a regular file or checkpoint directory")
 	}
 	stage, err := os.MkdirTemp(r.storage.ModelsDir, ".import-*")
 	if err != nil {
@@ -143,9 +144,24 @@ func (r *Registry) Import(ctx context.Context, id, source string) (entry Entry, 
 	if err != nil {
 		return Entry{}, err
 	}
-	entry, copyErr := copyIdentity(ctx, dst, src)
+	var copyErr error
+	if info.IsDir() {
+		copyErr = modelbundle.Pack(ctx, dst, source)
+	} else {
+		entry, copyErr = copyIdentity(ctx, dst, src)
+	}
 	if err := errors.Join(copyErr, dst.Close()); err != nil {
 		return Entry{}, err
+	}
+	if info.IsDir() {
+		sealed, err := os.Open(path)
+		if err != nil {
+			return Entry{}, err
+		}
+		entry, copyErr = copyIdentity(ctx, io.Discard, sealed)
+		if err := errors.Join(copyErr, sealed.Close()); err != nil {
+			return Entry{}, err
+		}
 	}
 	engine, err := r.open(ctx, path, r.options(entry, "cpu"))
 	if err != nil {

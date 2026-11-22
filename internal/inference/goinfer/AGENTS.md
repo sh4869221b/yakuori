@@ -6,9 +6,9 @@
 ## WHERE TO LOOK
 | 変更対象 | 場所 | 契約 |
 |---|---|---|
-| loadとsnapshot | `load.go` | 同じsnapshotをmodelとtokenizerへ渡す |
+| loadとsnapshot | `load.go` | 同じsnapshotをmodelとtokenizerへ渡す。PLaMo bundleは同じprivate directoryへ展開 |
 | 公開optionと状態 | `engine.go` | Open / OpenWithOptions / Info |
-| request構築 | `request.go`, `template.go`, `index_template.go` | template allowlist |
+| request構築 | `request.go`, `template.go`, `index_template.go`, `plamo3.go` | template allowlist |
 | 生成と終了分類 | `generate.go`, `finish.go` | drain後にactive状態を解除 |
 | Close連携 | `close.go` | active生成の取消しと完了待ち |
 | backend分岐 | `cuda.go`, `nocuda.go` | CUDAはlinux/amd64かつtag指定 |
@@ -17,9 +17,11 @@
 ## CONVENTIONS
 - 対応quantは `int4`、backendは明示的な `cpu` / `cuda`。
 - loaderは元の可変pathではなくprivate snapshotを使う。
-- snapshotは0400にし、load処理終了時にunlinkする。
+- snapshotは0400にし、load処理終了時にunlinkする。PLaMo bundle展開先も0700/0400でload後に削除する。
+- DirectLoadを明示し、snapshot外へのGIW cache作成を防ぐ。
+- PLaMo requestはPFML専用rendererを使い、本文とglossaryの予約markerを拒否する。
 - 登録modelの期待SHA-256は実際のload snapshotと比較する。
-- 埋込みtemplateは既知Qwen/Index文字列との完全一致のみ受理する。
+- 埋込みtemplateは既知Qwen/Index文字列との完全一致、PLaMoは封入configのmodel_type=plamo3と公式templateの固定SHA-256のみ受理する。
 - 実効contextはmodel上限・設定上限・CUDA resident上限から決まる。
 - 同じEngineで同時生成はせず、active中は `ErrBusy`。
 - 異なるrequest identityは `ErrForeignRequest`。
