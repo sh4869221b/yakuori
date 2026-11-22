@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/townsendmerino/goinfer/chat"
 	"github.com/townsendmerino/goinfer/decoder"
@@ -32,8 +33,8 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	if config.quant != "int4" {
 		return nil, ErrUnsupportedQuant
 	}
-	if config.backend != "cpu" && config.backend != "cuda" {
-		return nil, fmt.Errorf("%w: requested %q; choose cpu or cuda", ErrUnsupportedBackend, config.backend)
+	if config.backend != "cpu" && config.backend != "cuda" && config.backend != "webgpu" {
+		return nil, fmt.Errorf("%w: requested %q; choose cpu, cuda or webgpu", ErrUnsupportedBackend, config.backend)
 	}
 	path, digest, err := snapshotModel(config.path, config.snapshotDir, config.checkSHA256)
 	if err != nil {
@@ -73,7 +74,16 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 		return nil, err
 	}
 	options := decoder.Options{Backend: config.backend, Quant: config.quant, DirectLoad: true}
-	if config.backend == "cuda" {
+	var gpuName, gpuDriver, decodePath, gpuPin string
+	if config.backend == "webgpu" {
+		gpuName, gpuDriver, err = webGPUAdapter()
+		if err != nil {
+			return nil, err
+		}
+		options.KVPrecision = "f32"
+		gpuPin = webGPUBackendPin
+	}
+	if config.backend == "cuda" || config.backend == "webgpu" {
 		options.ResidentContext = config.contextTokens
 	}
 	model, err = load.model(modelPath, options)
@@ -94,6 +104,20 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	if backend == "cuda" && (!residentActive || residentCap <= 0 || residentDecline != "") {
 		return nil, fmt.Errorf("%w: active=%t cap=%d decline=%s", ErrCUDAResidency, residentActive, residentCap, residentDecline)
 	}
+	if backend == "webgpu" {
+		if !residentActive || residentCap <= 0 || residentDecline != "" || model.ResidentKVPrecision() != "f32" {
+			return nil, fmt.Errorf("%w: active=%t cap=%d KV=%s decline=%s", ErrWebGPUResidency, residentActive, residentCap, model.ResidentKVPrecision(), residentDecline)
+		}
+		// DecodePath names the backend of this loaded model at the pinned decoder revision.
+		reporter, ok := model.(interface{ DecodePath() string })
+		if !ok {
+			return nil, fmt.Errorf("%w: model did not report its decode path", ErrWebGPUResidency)
+		}
+		decodePath = reporter.DecodePath()
+		if !strings.HasPrefix(decodePath, "webgpu:vulkan-resident (") {
+			return nil, fmt.Errorf("%w: decode path %q", ErrWebGPUResidency, decodePath)
+		}
+	}
 	modelContext := model.Config().MaxPositions
 	if modelContext <= 0 {
 		return nil, ErrUnknownContext
@@ -102,7 +126,7 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	if config.contextTokens > 0 {
 		contextTokens = min(contextTokens, config.contextTokens)
 	}
-	if backend == "cuda" {
+	if backend == "cuda" || backend == "webgpu" {
 		contextTokens = min(contextTokens, residentCap)
 	}
 	tok, err := load.tokenizer(modelPath)
@@ -157,6 +181,7 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	return &Engine{
 		model: model, tokenizer: tok, template: template, stopIDs: stopIDs,
 		info: inference.ModelInfo{
+			WebGPUBackendPin: gpuPin, DecodePath: decodePath, GPUName: gpuName, GPUDriver: gpuDriver,
 			BackendPin: backendPin, CUDABackendPin: cudaBackendPin, RequestedBackend: config.backend, Backend: backend, ComputeQuant: quant,
 			ModelSHA256: digest, ContextTokens: contextTokens, PolicySchema: inference.PolicySchemaV1,
 			ModelContextTokens: modelContext, ConfiguredContextTokens: config.contextTokens,

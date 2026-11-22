@@ -32,6 +32,8 @@ type ProfileInput struct {
 	Protection     SchemaInput
 	Validation     SchemaInput
 	Context        ContextInput
+
+	WebGPUBackendPin string
 }
 
 type TokenizerInput struct {
@@ -63,7 +65,7 @@ type GenerationInput struct {
 	Prefill          PrefillInput `json:"prefill"`
 }
 
-// PrefillInput is a model-load policy snapshot. Path is the static cpu/cuda/none
+// PrefillInput is a model-load policy snapshot. Path is the static cpu/cuda/webgpu/none
 // policy ID; it is neither a diagnostic reason nor a per-request execution path.
 type PrefillInput struct {
 	Exact             bool   `json:"exact"`
@@ -121,6 +123,8 @@ type profileRecord struct {
 	Protection     SchemaInput       `json:"protection"`
 	Validation     SchemaInput       `json:"validation"`
 	Context        ContextInput      `json:"context"`
+
+	WebGPUBackendPin string `json:"webgpu_backend_pin,omitempty"`
 }
 
 // ProfileIdentity is immutable and comparable, including its canonical bytes.
@@ -144,6 +148,9 @@ func NewProfileIdentity(input ProfileInput) (ProfileIdentity, error) {
 	}
 	// Inactive backend settings cannot change the effective identity.
 	prefill := &input.Generation.Prefill
+	if input.Backend != "webgpu" {
+		input.WebGPUBackendPin = ""
+	}
 	if input.Backend == "cpu" {
 		input.CUDABackendPin = ""
 		prefill.Batched, prefill.BatchedCapability = false, false
@@ -171,6 +178,7 @@ func NewProfileIdentity(input ProfileInput) (ProfileIdentity, error) {
 		input.RemoteModel, input.Version, input.ModelID, digestHex(input.ModelDigest), input.Backend, input.BackendPin, input.CUDABackendPin, input.ComputeQuant, input.KVPrecision,
 		tokenizerRecord{digestHex(input.Tokenizer.ModelDigest), input.Tokenizer.BackendPin}, input.Template, input.Prompt, input.Generation,
 		input.Segmentation, input.Glossary, input.Protection, input.Validation, input.Context,
+		input.WebGPUBackendPin,
 	}
 	canonical, err := json.Marshal(record)
 	if err != nil {
@@ -235,7 +243,7 @@ func checkProfile(i ProfileInput) error {
 			return fmt.Errorf("%w: missing effective identity field", ErrInvalidProfile)
 		}
 	}
-	strings := append(required, i.Backend, i.RemoteModel, i.Generation.SamplingMode, i.CUDABackendPin, i.Generation.Prefill.Fast, i.Segmentation.Mode, i.Segmentation.Schema, i.Segmentation.BoundaryFixtures, i.Glossary.Mode, i.Glossary.Schema, i.Context.Mode)
+	strings := append(required, i.Backend, i.RemoteModel, i.Generation.SamplingMode, i.CUDABackendPin, i.WebGPUBackendPin, i.Generation.Prefill.Fast, i.Segmentation.Mode, i.Segmentation.Schema, i.Segmentation.BoundaryFixtures, i.Glossary.Mode, i.Glossary.Schema, i.Context.Mode)
 	for _, field := range strings {
 		if !utf8.ValidString(field) {
 			return fmt.Errorf("%w: invalid UTF-8 identity field", ErrInvalidProfile)
@@ -249,6 +257,10 @@ func checkProfile(i ProfileInput) error {
 	}
 	switch i.Generation.Prefill.Path {
 	case "cpu", "cuda", "none":
+	case "webgpu":
+		if i.Backend != "webgpu" {
+			return fmt.Errorf("%w: inactive WebGPU prefill policy", ErrInvalidProfile)
+		}
 	default:
 		return fmt.Errorf("%w: invalid prefill policy ID", ErrInvalidProfile)
 	}
@@ -257,6 +269,10 @@ func checkProfile(i ProfileInput) error {
 	case "openai":
 		if i.Generation.Prefill.Path != "none" || i.CUDABackendPin != "" {
 			return fmt.Errorf("%w: invalid remote settings", ErrInvalidProfile)
+		}
+	case "webgpu":
+		if i.WebGPUBackendPin == "" || i.CUDABackendPin != "" || i.Generation.Prefill.Path != "webgpu" {
+			return fmt.Errorf("%w: invalid WebGPU settings", ErrInvalidProfile)
 		}
 	case "cuda":
 		if i.CUDABackendPin == "" {

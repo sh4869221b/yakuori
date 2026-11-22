@@ -13,6 +13,9 @@ func prefillPolicy(model modelBackend, backend string) inference.PrefillPolicy {
 	switch backend {
 	case "cpu":
 		p.CPUFastAttention = !p.Exact && knob("GOINFER_CPU_FAST_ATTENTION") != "0"
+	case "webgpu":
+		p.Batched = knob("GOINFER_BATCHED_PREFILL") != "0"
+		p.BatchedCapability, _ = model.PrefillPath()
 	case "cuda":
 		p.Batched = knob("GOINFER_BATCHED_PREFILL") != "0"
 		p.BatchedCapability, _ = model.PrefillPath()

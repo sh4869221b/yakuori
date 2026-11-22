@@ -52,9 +52,38 @@ var requirements = []requirement{
 	{"R10.pull-driver-logs", "component"},
 }
 
-var cpuOfflineChecks = []string{
-	"internal/cli/TestOfflineCLIMatrix/real-model",
-	"internal/localize/TestOfflineCoreMatrix",
+// These rows combine distinct observations. Each check must be covered by
+// a passing source cited by the row.
+var requiredSourceChecks = map[string][]string{
+	"R6.atomic-parent": {
+		"internal/localize/TestSegmentedCoreFailure",
+		"internal/localize/TestTMSegmentedParent",
+		"TestPipelinePrecommitSegmented",
+	},
+	"R9.parser-limits-fuzz": {
+		"internal/adapter/w3strings/TestParseRejectMalformed",
+		"internal/adapter/w3strings/TestParseLimits",
+		"internal/adapter/w3strings/TestCountBoundaries",
+		"internal/localize/TestCoreInputBoundaries",
+		"internal/adapter/w3strings/FuzzParse (active fuzzing)",
+	},
+	"R10.cpu-offline-controls": {
+		"TestOfflineCLIMatrix/model-free",
+		"TestOfflinePipelineMatrix",
+		"TestOfflinePipelineCanaryDetection",
+	},
+	"R10.cpu-offline-real": {
+		"internal/cli/TestOfflineCLIMatrix/real-model",
+		"internal/localize/TestOfflineCoreMatrix",
+	},
+	"R10.pull-driver-logs": {
+		"TestPullCLIFailure",
+		"TestPull",
+		"TestPullLeftovers",
+		"TestOfflinePipelineMatrix/cuda-unsupported",
+		"TestPipelineCLIStdoutExit",
+		"TestPipelineDiagnostics",
+	},
 }
 
 type index struct {
@@ -104,6 +133,8 @@ type decision struct {
 var revisionPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 var sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var replacement = regexp.MustCompile(`(?m)^replace[ \t]+github\.com/townsendmerino/goinfer[ \t]+=>[ \t]+(\S+)[ \t]+(\S+)[ \t]*$`)
+var webGPUReplacement = regexp.MustCompile(`(?m)^replace[ \t]+github\.com/townsendmerino/goinfer/backend/webgpu[ \t]+=>[ \t]+(\S+)[ \t]+(\S+)[ \t]*$`)
+var webGPUReportedPin = regexp.MustCompile(`(?m)^const webGPUBackendPin = "([^"@]+)@([0-9a-f]{40})"$`)
 var modelChecksum = regexp.MustCompile(`(?m)'([0-9a-f]{64})  /model\.gguf'`)
 
 func main() {
@@ -137,13 +168,15 @@ func run(path, root string, output io.Writer) error {
 	if record.GPULimits.WallSeconds <= 0 || record.GPULimits.WorkerRSSBytes <= 0 || record.GPULimits.SampledVRAMBytes <= 0 {
 		return errors.New("gpu_limits must contain three positive ceilings")
 	}
-	pins, err := targetPins(root, record.TargetRevision)
+	pins, err := targetPins(root, record)
 	if err != nil {
 		return err
 	}
+	if record.GPUBackendPin != "" && record.GPUBackendPin != pins["gpu_backend"] {
+		return fmt.Errorf("gpu_backend_pin %q does not match target WebGPU pin %q", record.GPUBackendPin, pins["gpu_backend"])
+	}
 	pins["gpu_model_sha256"] = record.GPUModelSHA256
 	pins["gpu_device"] = record.GPUDevice
-	pins["gpu_backend"] = record.GPUBackendPin
 	result, err := evaluate(root, record, pins)
 	if err != nil {
 		return err
@@ -157,7 +190,8 @@ func run(path, root string, output io.Writer) error {
 	return nil
 }
 
-func targetPins(root, revision string) (map[string]string, error) {
+func targetPins(root string, record index) (map[string]string, error) {
+	revision := record.TargetRevision
 	read := func(path string) ([]byte, error) {
 		data, err := exec.Command("git", "-C", root, "show", revision+":"+path).Output()
 		if err != nil {
@@ -191,8 +225,25 @@ func targetPins(root, revision string) (map[string]string, error) {
 	pins["w3_cpu_fixture_sha256"] = fmt.Sprintf("%x", sha256.Sum256(cpuFixture))
 
 	dir := "docs/evidence/acceptance/"
+	criteriaFile := "criteria.json"
+	pins["gpu_backend"] = ""
+	if backend := webGPUReplacement.FindStringSubmatch(string(module)); backend != nil {
+		source, err := read("internal/inference/goinfer/webgpu.go")
+		if err != nil {
+			return nil, err
+		}
+		pin, err := effectiveWebGPUPin(backend[1], backend[2], source)
+		if err != nil {
+			return nil, err
+		}
+		pins["gpu_backend"] = pin
+		criteriaFile = "criteria-amd.json"
+	}
 	var manifest acceptance.Manifest
-	var criteria acceptance.Criteria
+	var criteria struct {
+		acceptance.Criteria
+		Backend string `json:"gpu_backend"`
+	}
 	data, err := read(dir + "fixtures.json")
 	if err != nil {
 		return nil, err
@@ -200,7 +251,7 @@ func targetPins(root, revision string) (map[string]string, error) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return nil, fmt.Errorf("target fixtures: %w", err)
 	}
-	data, err = read(dir + "criteria.json")
+	data, err = read(dir + criteriaFile)
 	if err != nil {
 		return nil, err
 	}
@@ -212,6 +263,14 @@ func targetPins(root, revision string) (map[string]string, error) {
 		criteria.Confirmation.ManifestVersion != manifest.Version ||
 		criteria.Confirmation.CriteriaVersion != criteria.Version || len(criteria.FixtureIDs) == 0 {
 		return nil, errors.New("target manifest and criteria lack matching approval")
+	}
+	if criteriaFile == "criteria-amd.json" {
+		if criteria.Backend != "webgpu" {
+			return nil, errors.New("target AMD criteria must select webgpu")
+		}
+		if err := checkAMDLimits(criteria.Values, record.GPULimits); err != nil {
+			return nil, err
+		}
 	}
 	pins["manifest"], pins["criteria"] = manifest.Version, criteria.Version
 	fixturePins := make(map[string]string)
@@ -226,6 +285,32 @@ func targetPins(root, revision string) (map[string]string, error) {
 		pins["fixture/"+id] = hash
 	}
 	return pins, nil
+}
+
+func effectiveWebGPUPin(path, version string, source []byte) (string, error) {
+	// The worker reports the full commit, while go.mod pins a pseudo-version.
+	pin := webGPUReportedPin.FindStringSubmatch(string(source))
+	revision := version[strings.LastIndexByte(version, '-')+1:]
+	if pin == nil || pin[1] != path || len(revision) != 12 || !strings.HasPrefix(pin[2], revision) {
+		return "", errors.New("target WebGPU backend pin does not match the go.mod replacement")
+	}
+	return pin[1] + "@" + pin[2], nil
+}
+
+func checkAMDLimits(values map[string]acceptance.Criterion, limits gpuLimits) error {
+	for _, ceiling := range []struct {
+		key   string
+		value int64
+	}{
+		{"duration_seconds", int64(limits.WallSeconds)},
+		{"ram_bytes", limits.WorkerRSSBytes},
+		{"vram_bytes", limits.SampledVRAMBytes},
+	} {
+		if got := values[ceiling.key].Value; got != fmt.Sprint(ceiling.value) {
+			return fmt.Errorf("target AMD criteria %s is %q, index ceiling is %d", ceiling.key, got, ceiling.value)
+		}
+	}
+	return nil
 }
 
 func evaluate(root string, record index, pins map[string]string) (decision, error) {
@@ -284,13 +369,11 @@ func evaluate(root string, record index, pins map[string]string) (decision, erro
 				return result, fmt.Errorf("%s (%s): %w", row.ID, ref, err)
 			}
 		}
-		if required.id == "R10.cpu-offline-real" {
-			for _, check := range cpuOfflineChecks {
-				if !slices.ContainsFunc(row.Sources, func(ref string) bool {
-					return slices.Contains(record.Sources[ref].Checks, check)
-				}) {
-					return result, fmt.Errorf("%s: missing observed check %s", row.ID, check)
-				}
+		for _, check := range requiredSourceChecks[required.id] {
+			if !slices.ContainsFunc(row.Sources, func(ref string) bool {
+				return slices.Contains(record.Sources[ref].Checks, check)
+			}) {
+				return result, fmt.Errorf("%s: missing observed check %s", row.ID, check)
 			}
 		}
 	}
@@ -343,13 +426,13 @@ func checkSource(root string, s source, required requirement, record index, pins
 			relevant = pin == "goinfer" || pin == "cpu_model_sha256" ||
 				(required.id == "R7.w3-cpu" && pin == "w3_cpu_fixture_sha256")
 		case "gpu-offline":
-			relevant = pin == "gpu_device" || pin == "gpu_backend" || pin == "gpu_model_sha256"
+			relevant = pin == "goinfer" || pin == "gpu_device" || pin == "gpu_backend" || pin == "gpu_model_sha256"
 		case "gpu-approval":
-			relevant = pin == "gpu_device" || pin == "manifest"
+			relevant = pin == "gpu_device" || pin == "manifest" || (pin == "criteria" && pins["gpu_backend"] != "")
 		case "fixtures":
 			relevant = pin == "manifest" || pin == "criteria" || strings.HasPrefix(pin, "fixture/")
 		case "gpu":
-			relevant = pin == "goinfer" || pin == "manifest" || strings.HasPrefix(pin, "fixture/") ||
+			relevant = pin == "goinfer" || pin == "manifest" || pin == "criteria" || strings.HasPrefix(pin, "fixture/") ||
 				pin == "gpu_device" || pin == "gpu_backend" || pin == "gpu_model_sha256"
 		}
 		expected := pins[pin]

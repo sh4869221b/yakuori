@@ -6,7 +6,7 @@
 
 ## OVERVIEW
 
-Pure GoのローカルLLM翻訳基盤。ID・tag・placeholder・binaryを保持し、最初の対象形式はWitcher 3の `.w3strings`。
+標準ビルドがPure GoのローカルLLM翻訳基盤。ID・tag・placeholder・binaryを保持し、最初の対象形式はWitcher 3の `.w3strings`。
 Linux向けの基盤です。CLIの `translate` と `localize --format text` は既存Core・Engine・SQLite TMへ接続済みです。最初の実ゲーム形式であるWitcher 3 `.w3strings` のproduction adapterは未実装です。
 
 ## STRUCTURE
@@ -68,6 +68,7 @@ LSPで確認済みの主要シンボル。シンボル単位の参照数はダ�
 
 - Coreは全unitの保護・planを先に完成させ、unitごとに生成・復元・Validate（TM候補は再検証）を行う。全件成功後にartifact検証 → TM commit → 出力へ進む。
 - CUDA経路は `cuda` tag、`linux/amd64`、NVIDIA driverを前提とする。
+- AMD WebGPU経路は `gpu` tag、`CGO_ENABLED=1`、`linux/amd64`、単一のAMD discrete Vulkan adapterを前提とする。
 - arm64の確認はcross-buildのみ。unit testの成功は実推論の成功を意味しない。
 - `tools/cpuspike`、`tools/w3spike`、`research/publication` は研究用として分離されている。
 

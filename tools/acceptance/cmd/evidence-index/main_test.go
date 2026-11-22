@@ -4,24 +4,55 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/sh4869221b/yakuori/tools/acceptance"
 )
+
+func TestEffectiveWebGPUPin(t *testing.T) {
+	const module = "github.com/sh4869221b/goinfer/backend/webgpu"
+	const revision = "994cbf5ee38dd8dcc612aad6e6803ac79f772f3b"
+	source := []byte("const webGPUBackendPin = \"" + module + "@" + revision + "\"\n")
+	pin, err := effectiveWebGPUPin(module, "v0.0.0-20261106011512-994cbf5ee38d", source)
+	if err != nil || pin != module+"@"+revision {
+		t.Fatalf("pin = %q, error = %v", pin, err)
+	}
+	if _, err := effectiveWebGPUPin(module, "v0.0.0-20261106011512-000000000000", source); err == nil {
+		t.Fatal("a stale worker pin matched a new WebGPU module replacement")
+	}
+}
+
+func TestCheckAMDLimits(t *testing.T) {
+	limits := gpuLimits{WallSeconds: 60, WorkerRSSBytes: 24 << 30, SampledVRAMBytes: 12 << 30}
+	values := map[string]acceptance.Criterion{
+		"duration_seconds": {Value: "60"},
+		"ram_bytes":        {Value: "25769803776"},
+		"vram_bytes":       {Value: "12884901888"},
+	}
+	if err := checkAMDLimits(values, limits); err != nil {
+		t.Fatal(err)
+	}
+	values["vram_bytes"] = acceptance.Criterion{Value: "10737418240"}
+	if err := checkAMDLimits(values, limits); err == nil || !strings.Contains(err.Error(), "vram_bytes") {
+		t.Fatalf("error = %v, want AMD VRAM ceiling mismatch", err)
+	}
+}
 
 func TestEvaluateEvidence(t *testing.T) {
 	const revision = "current"
 	pins := map[string]string{
 		"goinfer": "current-module", "cpu_model_sha256": "cpu-model",
 		"gpu_model_sha256": "gpu-model", "gpu_device": "AMD Radeon RX 9070 XT", "gpu_backend": "test-backend",
-		"manifest": "fixtures-v2", "criteria": "criteria-v4", "fixture/example": "example-pin",
+		"manifest": "fixtures-v2", "criteria": "criteria-amd-v1", "fixture/example": "example-pin",
 		"w3_cpu_fixture_sha256": "w3-cpu-fixture",
 	}
 	limits := gpuLimits{WallSeconds: 60, WorkerRSSBytes: 24 << 30, SampledVRAMBytes: 12 << 30}
 	newIndex := func() index {
 		record := index{TargetRevision: revision, GPULimits: limits, Sources: make(map[string]source)}
 		for _, required := range requirements {
-			record.Requirements = append(record.Requirements, observation{
+			row := observation{
 				ID: required.id, Status: "pass", Checks: []string{"executed test"},
 				Sources: []string{required.id}, Notes: "Observed pass.",
-			})
+			}
 			sourcePins := make(map[string]string)
 			for k, v := range pins {
 				sourcePins[k] = v
@@ -33,15 +64,18 @@ func TestEvaluateEvidence(t *testing.T) {
 			if required.kind == "gpu-approval" {
 				evidence.Revision, evidence.Command, evidence.Environment = "", "", ""
 				evidence.GPULimits = limits
-				delete(sourcePins, "criteria")
 			}
 			if required.id == "R9.gpu-performance" {
 				evidence.GPULimits = limits
 			}
-			if required.id == "R10.cpu-offline-real" {
-				evidence.Checks = slices.Clone(cpuOfflineChecks)
+			for _, check := range requiredSourceChecks[required.id] {
+				observed := evidence
+				observed.Checks = []string{check}
+				record.Sources[check] = observed
+				row.Sources = append(row.Sources, check)
 			}
 			record.Sources[required.id] = evidence
+			record.Requirements = append(record.Requirements, row)
 		}
 		record.History = []observation{
 			{ID: "issue-87-scope", Status: "deferred", Notes: "After v1."},
@@ -53,10 +87,11 @@ func TestEvaluateEvidence(t *testing.T) {
 	const gpu = "R7.gpu-resident-pipeline"
 	const cpu = "R7.w3-cpu"
 	for _, tc := range []struct {
-		name    string
-		edit    func(*index)
-		blocker string
-		wantErr string
+		name      string
+		edit      func(*index)
+		omitCheck string
+		blocker   string
+		wantErr   string
 	}{
 		{name: "complete with deferred human review"},
 		{name: "missing GPU despite CPU pass", edit: func(i *index) {
@@ -79,6 +114,12 @@ func TestEvaluateEvidence(t *testing.T) {
 		{name: "fixture selection criteria mismatch", edit: func(i *index) {
 			i.Sources["R8.confirmation"].Pins["criteria"] = "criteria-v3"
 		}, wantErr: "pin mismatch for criteria"},
+		{name: "GPU execution used legacy criteria", edit: func(i *index) {
+			i.Sources[gpu].Pins["criteria"] = "criteria-v4"
+		}, wantErr: "pin mismatch for criteria"},
+		{name: "GPU offline observer used a different WebGPU build", edit: func(i *index) {
+			i.Sources["R10.gpu-offline"].Pins["gpu_backend"] = "old-backend"
+		}, wantErr: "pin mismatch for gpu_backend"},
 		{name: "old GPU performance ceiling", edit: func(i *index) {
 			s := i.Sources["R9.gpu-performance"]
 			s.GPULimits.SampledVRAMBytes = 10 << 30
@@ -99,11 +140,13 @@ func TestEvaluateEvidence(t *testing.T) {
 		{name: "W3 CPU regression cannot prove offline tracing", edit: func(i *index) {
 			i.Sources["R10.cpu-offline-real"] = i.Sources[cpu]
 		}, wantErr: "source does not cover this requirement"},
-		{name: "CPU offline requires both CLI and Core observations", edit: func(i *index) {
-			s := i.Sources["R10.cpu-offline-real"]
-			s.Checks = []string{"internal/cli/TestOfflineCLIMatrix/real-model"}
-			i.Sources["R10.cpu-offline-real"] = s
-		}, wantErr: "missing observed check internal/localize/TestOfflineCoreMatrix"},
+		{name: "CPU offline requires both CLI and Core observations", omitCheck: "internal/localize/TestOfflineCoreMatrix"},
+		{name: "segmented Core tests cannot prove pipeline cancellation", omitCheck: "TestPipelinePrecommitSegmented"},
+		{name: "parser tests cannot prove active fuzzing", omitCheck: "internal/adapter/w3strings/FuzzParse (active fuzzing)"},
+		{name: "CI observers cannot prove model-free CLI observation", omitCheck: "TestOfflineCLIMatrix/model-free"},
+		{name: "pull unit tests cannot prove CLI pull failure", omitCheck: "TestPullCLIFailure"},
+		{name: "CLI pull test cannot prove pull cleanup", omitCheck: "TestPullLeftovers"},
+		{name: "filesystem CI cannot prove diagnostics checks", omitCheck: "TestPipelineDiagnostics"},
 		{name: "different executed revision", edit: func(i *index) {
 			s := i.Sources[gpu]
 			s.Revision = "historical"
@@ -123,10 +166,18 @@ func TestEvaluateEvidence(t *testing.T) {
 			if tc.edit != nil {
 				tc.edit(&record)
 			}
+			wantErr := tc.wantErr
+			if tc.omitCheck != "" {
+				for i := range record.Requirements {
+					row := &record.Requirements[i]
+					row.Sources = slices.DeleteFunc(row.Sources, func(ref string) bool { return ref == tc.omitCheck })
+				}
+				wantErr = "missing observed check " + tc.omitCheck
+			}
 			result, err := evaluate(".", record, pins)
-			if tc.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-					t.Fatalf("error = %v, want %q", err, tc.wantErr)
+			if wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), wantErr) {
+					t.Fatalf("error = %v, want %q", err, wantErr)
 				}
 				return
 			}

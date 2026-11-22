@@ -11,18 +11,18 @@
 | request構築 | `request.go`, `template.go`, `index_template.go`, `plamo3.go` | template allowlist |
 | 生成と終了分類 | `generate.go`, `finish.go` | drain後にactive状態を解除 |
 | Close連携 | `close.go` | active生成の取消しと完了待ち |
-| backend分岐 | `cuda.go`, `nocuda.go` | CUDAはlinux/amd64かつtag指定 |
+| backend分岐 | `cuda.go`, `nocuda.go` とWebGPU用tagファイル | CUDA、WebGPUともLinux/amd64の明示ビルド |
 | 実model検査 | `cpu*_smoke_test.go`, `cuda*_test.go` | 専用tagとmodel環境変数 |
 
 ## CONVENTIONS
-- 対応quantは `int4`、backendは明示的な `cpu` / `cuda`。
+- 対応quantは `int4`、backendは明示的な `cpu` / `cuda` / `webgpu`。WebGPUはAMD discrete Vulkan adapter 1台とresident実行を要求する。
 - loaderは元の可変pathではなくprivate snapshotを使う。
 - snapshotは0400にし、load処理終了時にunlinkする。PLaMo bundle展開先も0700/0400でload後に削除する。
 - DirectLoadを明示し、snapshot外へのGIW cache作成を防ぐ。
 - PLaMo requestはPFML専用rendererを使い、本文とglossaryの予約markerを拒否する。
 - 登録modelの期待SHA-256は実際のload snapshotと比較する。
 - 埋込みtemplateは既知Qwen/Index文字列との完全一致、PLaMoは封入configのmodel_type=plamo3と公式templateの固定SHA-256のみ受理する。
-- 実効contextはmodel上限・設定上限・CUDA resident上限から決まる。
+- 実効contextはmodel上限・設定上限・GPU resident上限から決まる。
 - 同じEngineで同時生成はせず、active中は `ErrBusy`。
 - 異なるrequest identityは `ErrForeignRequest`。
 - token streamをdrainしてから `activeDone` をcloseする。
@@ -30,7 +30,7 @@
 - 並行状態の試験は `testing/synctest` を使う既存テストを参照する。
 
 ## ANTI-PATTERNS
-- CUDA失敗をCPUへ暗黙に切り替えない。resident不成立も拒否する。
+- 明示GPU指定ではbackendまたはresident実行の不成立をエラーにする。
 - clampされた要求を成功として扱わない。
 - tokenizerやmodelが元pathを再openする経路を作らない。
 - smoke testの通常unit testへの置換を実model検証と報告しない。

@@ -32,12 +32,13 @@ they match the expected size and SHA-256. It selects nothing, never retries
 and leaves leftovers of an interrupted run alone. Flags precede URL.
 `
 
-const doctorUsage = `Usage: yakuori doctor [--check-model [--backend cpu|cuda]]
+const doctorUsage = `Usage: yakuori doctor [--check-model [--backend cpu|cuda|webgpu]]
 
 Without --check-model, inspect storage without creating files or loading models.
 --check-model loads the selected model, reports Engine.Info, and closes it without generation.
 The private cache/model-snapshots directory must already exist.
 CPU is the default. CUDA requires -tags cuda on linux/amd64 and an NVIDIA driver (libcuda.so.1).
+WebGPU requires a Linux/amd64 build with CGO_ENABLED=1 and -tags gpu, and an AMD discrete GPU visible through Vulkan.
 `
 
 type storageCommand struct {
@@ -77,7 +78,7 @@ func parseStorage(args []string) (storageCommand, error) {
 	}
 	if command.action == "doctor" {
 		flags.BoolVar(&command.checkModel, "check-model", false, "load selected model")
-		flags.StringVar(&command.backend, "backend", "cpu", "cpu or cuda")
+		flags.StringVar(&command.backend, "backend", "cpu", "cpu, cuda or webgpu")
 	}
 	if err := flags.Parse(rest); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -99,7 +100,7 @@ func parseStorage(args []string) (storageCommand, error) {
 				backendSpecified = true
 			}
 		})
-		if flags.NArg() != 0 || backendSpecified && !command.checkModel || command.backend != "cpu" && command.backend != "cuda" {
+		if flags.NArg() != 0 || backendSpecified && !command.checkModel || command.backend != "cpu" && command.backend != "cuda" && command.backend != "webgpu" {
 			return command, flag.ErrHelp
 		}
 		return command, nil
@@ -297,7 +298,7 @@ func modelDiagnostic(err error) string {
 // modelReason names a known storage or loader failure, and returns "" when the
 // reason is unknown so the caller can add its own fallback.
 func modelReason(err error) string {
-	for _, reason := range []error{models.ErrBusy, models.ErrCollision, goinfer.ErrUnknownTemplate, goinfer.ErrDeclinedTokenizer, goinfer.ErrUnknownStop, goinfer.ErrUnknownContext, goinfer.ErrUnsupportedQuant} {
+	for _, reason := range []error{models.ErrBusy, models.ErrCollision, goinfer.ErrUnknownTemplate, goinfer.ErrDeclinedTokenizer, goinfer.ErrUnknownStop, goinfer.ErrUnknownContext, goinfer.ErrUnsupportedQuant, goinfer.ErrWebGPUResidency} {
 		if errors.Is(err, reason) {
 			return reason.Error()
 		}

@@ -146,7 +146,8 @@ func TestProfileIdentityInactiveConditions(t *testing.T) {
 			i.Generation.Prefill.Floor = 9
 			i.Generation.Prefill.Chunk = 7
 		}},
-		"CUDA ignores CPU": {func(i *identity.ProfileInput) {}, func(i *identity.ProfileInput) { i.Generation.Prefill.CPUFastAttention = true }},
+		"CUDA ignores WebGPU pin": {func(i *identity.ProfileInput) {}, func(i *identity.ProfileInput) { i.WebGPUBackendPin = "unused" }},
+		"CUDA ignores CPU":        {func(i *identity.ProfileInput) {}, func(i *identity.ProfileInput) { i.Generation.Prefill.CPUFastAttention = true }},
 		"exact disables fast": {func(i *identity.ProfileInput) { i.Generation.Prefill.Exact = true }, func(i *identity.ProfileInput) {
 			i.Generation.Prefill.Fast = "attn"
 			i.Generation.Prefill.Floor = 9
