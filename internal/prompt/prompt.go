@@ -1,4 +1,4 @@
-// Package prompt defines the translation messages before backend templating.
+// Package prompt defines messages before backend templating.
 package prompt
 
 import (

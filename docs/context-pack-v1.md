@@ -16,7 +16,8 @@ Context Pack は、翻訳データとは別に、作品の設定・登場人物�
 | `scenes[]` | `id`、`summary`（optional 文字列）、`artifacts` / `speaker_ids` / `tags`（optional 文字列配列）、`provenance` |
 | `units[]` | `id`、`artifact_namespace`、`adapter`、`format_schema`、`stable_id`、`raw_source_digest`、`scene_id` / `speaker_id` / `previous_unit_id`（optional 文字列）、`tags`（optional 文字列配列）、`provenance` |
 | `glossary_refs[]` | `id`、`schema`（`glossary-v1`）、`reference`（利用側が解釈する文字列）、`provenance` |
-| `provenance` | `method`、`version`、`status`、`user_edited`（boolean）、`sources`（optional 配列） |
+| `provenance` | `method`、`version`、`status`、`user_edited`（boolean）、`sources`（optional 配列）、`generation`（optional オブジェクト） |
+| `generation` | `model_id`、`model_sha256`、`prompt_version`、`template_family`、`template_source`、`template_renderer_version`、`policy_version` |
 | `sources[]` | `kind` に続いて、下表で `kind` に指定された文字列フィールド |
 
 言語は登録済み言語に任意の script と region を足した BCP 47 の範囲を受理します（例 `en`、`zh-Hant-TW`、`es-419`）。`golang.org/x/text/language.Parse` の結果と大小文字を除いて一致することを要求します。variant、extension、private-use は v1 の範囲外です。大小文字も含め元の綴りを保存し、同一言語の指定を許可します。構造 metadata だけで人物・場面を参照する場合は、分かっている情報だけを記録し、`name`・`description`・`summary` の未取得項目を省略できます。用語集の `reference` は外部参照として保存します。検証時のアクセスや用語集ルールの解釈は発生しません。
@@ -41,6 +42,8 @@ Context Pack は、翻訳データとは別に、作品の設定・登場人物�
 | `manual` | `reference` | 手作業で記録した根拠の参照文字列 |
 
 各出典は該当種別に列挙したフィールドだけを持ちます。`metadata_key` や手動参照先の実在は編集者が確認します。pack の検証で確認するのは構造と pack 内の参照整合性です。`confirmed` と `user_edited` は pack の申告として保持します。読込みや正規化による状態の昇格はありません。将来の自動更新では `confirmed` または `user_edited: true` のレコードを保持し、新しい提案は別の `candidate` として扱います。人が確認・編集した内容の変更には明示的な編集が必要です。
+
+`generation` を付ける場合は `method: llm`、全識別フィールド、同じ pack 内の unit 出典を 1 件以上指定します。`model_id` はローカルモデル登録の ID、`model_sha256` は実際にロードしたモデル snapshot の digest です。確認・編集に伴う状態変更後も、生成元の識別情報を保持できます。既存の `generation` がない v1 pack の canonical bytes は従来と同じです。`generation` の追加前の strict validator は、このフィールドがある pack を未知のメンバーとして拒否します。
 
 ## 正規化と上限
 
@@ -90,7 +93,7 @@ CGO_ENABLED=0 GOTOOLCHAIN=local go test ./internal/contextpack ./internal/cli
 
 ## 下書きの生成
 
-`context build` はローカルの [Generic JSON v1](generic-json-v1.md) を取り込み、Context Pack v1 の検証を通した下書きを生成します。指定した言語と名前空間は入力と一致させます。入力は通常ファイルに限り、最終パス成分のシンボリックリンクを拒否します。既定の上限は入力 JSON 全体で 1,495 バイト、unit 数などは [Generic JSON v1 の入力上限](generic-json-v1.md#入力上限) に従います。モデル、ネットワーク接続、XDG 設定は不要です。
+`context build` はローカルの [Generic JSON v1](generic-json-v1.md) を取り込み、Context Pack v1 の検証を通した下書きを生成します。指定した言語と名前空間は入力と一致させます。入力は通常ファイルに限り、最終パス成分のシンボリックリンクを拒否します。既定の上限は入力 JSON 全体で 1,495 バイト、unit 数などは [Generic JSON v1 の入力上限](generic-json-v1.md#入力上限) に従います。構造抽出にはモデル、ネットワーク接続、XDG 設定は不要です。
 
 ```sh
 mkdir -p context-candidates
@@ -102,7 +105,7 @@ candidate=$(printf '%s\n' "$result" | sed -n 's/^candidate: //p')
 ./yakuori context validate "$candidate"
 ```
 
-成功時は `candidate: <パス>` と `fingerprint: <小文字16進>` を出力します。検証コマンドで同じ fingerprint が得られます。出力先には既存のディレクトリを指定します。候補は同じディレクトリ内の非公開の一時ファイルに書き、書き込み完了とキャンセル確認の後で `context-candidate-*.json` に上書きなしで移動します。確定済み・編集済みの pack を含む既存ファイルは保持します。移動前の失敗やキャンセルでは一時ファイルを削除します。再実行では別ファイルが作られ、同じ入力・バージョン・設定なら内容と fingerprint は一致します。各レコードは `method: extraction`、`version: context-build-v1`、`status: candidate`、`user_edited: false` で生成されます。内容の確認と採否は利用者が行います。
+成功時は `candidate: <パス>` と `fingerprint: <小文字16進>` を出力します。検証コマンドで同じ fingerprint が得られます。出力先には既存のディレクトリを指定します。候補は同じディレクトリ内の非公開の一時ファイルに書き、書き込み完了とキャンセル確認の後で `context-candidate-*.json` に上書きなしで移動します。確定済み・編集済みの pack を含む既存ファイルは保持します。移動前の失敗やキャンセルでは一時ファイルを削除します。再実行では別ファイルが作られます。構造抽出では、同じ入力・バージョン・設定なら内容と fingerprint は一致します。構造抽出の各レコードは `method: extraction`、`version: context-build-v1`、`status: candidate`、`user_edited: false` で生成されます。内容の確認と採否は利用者が行います。
 
 ### 関連付けと出典
 
@@ -113,3 +116,29 @@ Builder が翻訳 unit の `Origin()` から使うキーは `speaker`、`scene`�
 生成 ID は `種類/名前空間/adapter/format schema/識別子` で、各可変部分をパス成分としてパーセントエンコードします。識別子には unit・world では stable ID、人物・場面では参照 ID を使います。metadata 出典は対象 artifact と、`units/<adapter>/<format schema>/<stable ID>/origin/<キー>` 形式の論理位置を持ちます。元データを確認するときは、`scope.artifacts` の digest に対応する artifact を選び、パス成分を個別にデコードし、stable ID でレコードを探します。例えば fixture の `units/generic-json/generic-json-v1/inn-1/origin/speaker` は、`units[]` で `id` が `inn-1` のレコードの `context.speaker` を指します。人物・場面には寄与した全 unit の根拠を残します。
 
 [生成用 fixture](../internal/contextpack/testdata/build-dialogue-v1.json) はリポジトリの [MIT ライセンス](../LICENSE) 下の合成データです。実データから生成した pack を共有・再配布する場合は、原 artifact と外部ツールが追加したメタデータの出典・ライセンス・利用条件を確認してください。pack には識別子や明示された設定本文が含まれる場合があります。
+
+### ローカルモデルによる候補生成
+
+明示的に `--infer` を指定すると、構造抽出に加え、選択済みのローカル ChatML GGUF モデルで人物・場面・世界設定・用語の候補を作成します。先に登録済みモデルを `yakuori models use MODEL_ID` で選択します。`--backend` の既定値は `cpu` です。`cuda`・`webgpu` は対応するビルドと実行環境で明示的に指定します。
+
+```sh
+mkdir -p context-candidates
+result=$(./yakuori context build --infer --backend cpu \
+  --source-language en --target-language ja --game sample-game --artifact dialogue \
+  --output-dir context-candidates internal/contextpack/testdata/infer-dialogue-v1.json)
+printf '%s\n' "$result"
+candidate=$(printf '%s\n' "$result" | sed -n 's/^candidate: //p')
+./yakuori context validate "$candidate"
+```
+
+同じ import と構造抽出結果から、canonical unit 順に空白だけの原文を除いて素材を選びます。モデルに渡す原文と話者・場面の metadata はデータ区間内の JSON 文字列です。人物と場面は既存の構造 ID を個別の番号で参照します。prompt は、根拠が弱い場合や矛盾する場合は候補を省略し、同名の別人物を区別するよう要求します。[推論用 fixture](../internal/contextpack/testdata/infer-dialogue-v1.json) には同名の人物、弱い根拠と矛盾する噂、原文と metadata に混入した指示を含めています。
+
+モデル出力は単一の `{"candidates":[...]}` オブジェクトとして検証します。候補には選択済みの unit 番号を 1 件以上求めます。人物と場面の根拠は該当する構造 ID に属する unit に限り、用語の原語は根拠原文に出現する必要があります。候補の生成元・状態・ID は CLI 側で設定し、pack 全体を v1 validator に通します。各 LLM 候補は `method: llm`、`status: candidate`、`user_edited: false` です。根拠に基づく記述の正確さは利用者が確認します。
+
+人物と場面の候補は既存 ID と構造上の出典を保持します。世界設定の ID は、根拠のうち canonical 順の最初の unit を使った `world-inferred/<unit ID の種類部分を除いたパス>` です。同じ最初の根拠 unit を共有する世界設定は 1 件にまとめるようモデルに求め、同じ ID に複数の候補がある場合は検証エラーになります。用語候補の ID は `glossary-candidate/<artifact namespace>/<原語>` です。用語の `reference` は `urn:yakuori:glossary-candidate:v1:<原語>/<訳語候補>` として保存します。各成分は個別にパーセントエンコードし、確認時は接頭辞を除き、`/` で分割してから各成分をデコードします。参照は候補のまま保存され、自動確認・必須用語化・翻訳メモリへの反映は発生しません。
+
+同じ作品・言語の既存 pack を `--against PACK` で指定すると、検証のうえ読み取り専用で比較します。確認済み・手動編集済みレコードとの ID 衝突、同じ artifact・adapter・format schema・stable ID の unit 衝突、共有 artifact namespace の digest 不一致を、成功時に両 pack の canonical 位置で報告します。候補は毎回別ファイルに保存します。
+
+素材 JSON とモデル応答はそれぞれ最大 16 KiB です。テンプレート適用後に token を数え、実効 context と 4096 token の小さい方から出力枠 2048 token を引いた値を入力の上限とします。要求は 30 秒、モデルの open から保存直前までは 300 秒の協調的な制限です。上限到達、キャンセル、生成停止理由の異常、応答の破損や候補 1 件でも不正な場合は新しい pack の保存に失敗します。空の候補配列は構造抽出の結果を保存します。
+
+`prompt_version` は `context-infer-v1`、`policy_version` は `context-infer-policy-v1` です。`template_source` の `gguf:tokenizer.chat_template` は、モデル digest が固定する GGUF 内のテンプレート位置です。再現を試す場合は入力 bytes、モデル snapshot、prompt、template renderer、policy、backend・実行環境を揃えます。greedy 生成を使用し、backend や実行環境をまたいだ候補の一致は保証しません。

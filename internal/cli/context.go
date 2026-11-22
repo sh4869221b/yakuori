@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/contextpack"
 	"golang.org/x/sys/unix"
 )
@@ -24,7 +25,7 @@ Use context <command> --help for options.
 
 const contextValidateUsage = "Usage: yakuori context validate [--] FILE\n\nValidate a local Context Pack v1 JSON file and print its fingerprint.\n"
 
-func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+func runContext(ctx context.Context, args []string, stdout, stderr io.Writer, resolve func() (config.Paths, error), open selectedEngineOpener) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		return writeOutput(stdout, stderr, contextUsage, nil)
 	}
@@ -33,7 +34,7 @@ func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		case "approve":
 			return runContextApprove(ctx, args[1:], stdout, stderr)
 		case "build":
-			return runContextBuild(ctx, args[1:], stdout, stderr)
+			return runContextBuild(ctx, args[1:], stdout, stderr, resolve, open)
 		case "validate":
 			return runContextValidate(args[1:], stdout, stderr)
 		}
