@@ -16,6 +16,7 @@ import (
 const contextUsage = `Usage: yakuori context <command>
 
 Commands:
+  approve   Merge reviewed records and confirm explicitly selected IDs
   build     Generate a Context Pack candidate from a local Generic JSON v1 file
   validate  Validate a Context Pack v1 JSON file and print its fingerprint
 
@@ -30,6 +31,8 @@ func runContext(ctx context.Context, args []string, stdout, stderr io.Writer, re
 	}
 	if len(args) > 0 {
 		switch args[0] {
+		case "approve":
+			return runContextApprove(ctx, args[1:], stdout, stderr)
 		case "build":
 			return runContextBuild(ctx, args[1:], stdout, stderr, resolve, open)
 		case "validate":

@@ -67,6 +67,30 @@ CGO_ENABLED=0 GOTOOLCHAIN=local go test ./internal/contextpack ./internal/cli
 
 [最小 fixture](../internal/contextpack/testdata/minimal-v1.json) は scope と言語だけの pack です。[会話 fixture](../internal/contextpack/testdata/dialogue-v1.json) は複数の場面・話者・artifact、同一原文の独立した unit、手動確認と未確認候補、外部用語集参照を含みます。
 
+## 下書きのレビューと承認
+
+`context approve` は、信頼済みの `--base` とレビュー後の v1 pack を結合し、レビュー後の pack から `--accept` で列挙した ID を `confirmed` にします。初回の `--base` には、作品の名前空間と言語を設定した空の pack を使えます。候補の生成手段を問わず、通常ファイルの Context Pack v1 を入力にできます。
+
+1. 候補をテキストエディターで開き、出典の原 artifact や unit と照らして内容を確認します。必要に応じて本文や参照を修正し、編集したレコードの `user_edited` を `true` にします。元の生成手段 `method`、`version`、出典 `sources` を確認できるよう保持します。
+2. `context validate` でレビュー後の pack を検証します。検証は形式、参照整合性、確定に必要な出典を確認します。出典が内容を裏付けるか、同名の人物が同一人物かといった意味の判断は、レビューする人が行います。判断がつかない内容は `--accept` の指定から外して保留します。
+3. 採用する ID ごとに `--accept` を 1 回指定し、新しいパスへ出力します。新規レコードのうち指定しなかったものは `candidate` として残ります。参照先のレコードも個別に判断し、必要な ID を明示します。レビュー後の pack に書かれた `confirmed` は、採用の指定として扱いません。`--base` の確定状態は維持します。
+
+```sh
+./yakuori context validate internal/contextpack/testdata/approval-reviewed-v1.json
+./yakuori context approve --base internal/contextpack/testdata/dialogue-v1.json \
+  --output approved.json --accept relief-captain --accept mod-c-note \
+  internal/contextpack/testdata/approval-reviewed-v1.json
+./yakuori context validate approved.json
+```
+
+この手順は手書きの [レビュー fixture](../internal/contextpack/testdata/approval-reviewed-v1.json) で実行できます。元の会話 pack にいた `captain` と同名の `relief-captain` は、ID と出典が異なる別人物として保持されます。`mod-c-note` の出典が指す `mod-c-greeting` は、個別に採用するまで保留されます。
+
+両方の pack で作品の名前空間と言語の綴りが一致し、同じ artifact 名前空間が同じ原 artifact の digest を指す必要があります。各レコード種別にまたがって同じ ID を照合し、状態以外の内容が同じものを 1 件にまとめます。種類、内容、出典、生成識別情報、または `user_edited` が異なる場合は衝突として出力を拒否します。片方を採用する場合はレビュー後の pack で内容を揃え、既存項目を修正する意思が明確な場合は `--base` のコピーを手動で修正して `context validate` を実行し、そのコピーを使って新しい出力先へ再実行します。同じレビュー済み pack と採用 ID を、承認後の pack を `--base` にして再結合すると、出力の canonical JSON は一致します。
+
+成功時は stdout に `fingerprint: <小文字16進>` を 1 行出力します。結合結果全体を検証し、出力と同じディレクトリの一時ファイルへ書き終えてから上書きなしで公開します。使用法のエラーは exit 2、読込み・検証・取消し・公開の失敗は exit 1 です。公開前に失敗した場合は一時ファイルを削除します。既存の pack は保持し、stderr にパス、ID、本文は出力しません。
+
+後続工程で利用する際は、承認後に検証した snapshot を正本とし、その中の `confirmed` を確定情報として扱います。レビューと承認は明示的な CLI 操作です。
+
 ## 下書きの生成
 
 `context build` はローカルの [Generic JSON v1](generic-json-v1.md) を取り込み、Context Pack v1 の検証を通した下書きを生成します。指定した言語と名前空間は入力と一致させます。入力は通常ファイルに限り、最終パス成分のシンボリックリンクを拒否します。既定の上限は入力 JSON 全体で 1,495 バイト、unit 数などは [Generic JSON v1 の入力上限](generic-json-v1.md#入力上限) に従います。構造抽出にはモデル、ネットワーク接続、XDG 設定は不要です。
