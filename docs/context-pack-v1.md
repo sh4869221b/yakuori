@@ -63,3 +63,29 @@ CGO_ENABLED=0 GOTOOLCHAIN=local go test ./internal/contextpack ./internal/cli
 ```
 
 [最小 fixture](../internal/contextpack/testdata/minimal-v1.json) は scope と言語だけの pack です。[会話 fixture](../internal/contextpack/testdata/dialogue-v1.json) は複数の場面・話者・artifact、同一原文の独立した unit、手動確認と未確認候補、外部用語集参照を含みます。
+
+## 下書きの生成
+
+`context build` はローカルの [Generic JSON v1](generic-json-v1.md) を取り込み、Context Pack v1 の検証を通した下書きを生成します。指定した言語と名前空間は入力と一致させます。入力は通常ファイルに限り、最終パス成分のシンボリックリンクを拒否します。既定の上限は入力 JSON 全体で 1,495 バイト、unit 数などは [Generic JSON v1 の入力上限](generic-json-v1.md#入力上限) に従います。モデル、ネットワーク接続、XDG 設定は不要です。
+
+```sh
+mkdir -p context-candidates
+result=$(./yakuori context build --source-language en --target-language ja \
+  --game sample-game --artifact dialogue --output-dir context-candidates \
+  internal/contextpack/testdata/build-dialogue-v1.json)
+printf '%s\n' "$result"
+candidate=$(printf '%s\n' "$result" | sed -n 's/^candidate: //p')
+./yakuori context validate "$candidate"
+```
+
+成功時は `candidate: <パス>` と `fingerprint: <小文字16進>` を出力します。検証コマンドで同じ fingerprint が得られます。出力先には既存のディレクトリを指定します。候補は同じディレクトリ内の非公開の一時ファイルに書き、書き込み完了とキャンセル確認の後で `context-candidate-*.json` に上書きなしで移動します。確定済み・編集済みの pack を含む既存ファイルは保持します。移動前の失敗やキャンセルでは一時ファイルを削除します。再実行では別ファイルが作られ、同じ入力・バージョン・設定なら内容と fingerprint は一致します。各レコードは `method: extraction`、`version: context-build-v1`、`status: candidate`、`user_edited: false` で生成されます。内容の確認と採否は利用者が行います。
+
+### 関連付けと出典
+
+unit は、入力の adapter・format schema・stable ID・原文 digest と、artifact の名前空間・digest を保持します。人物と場面は、同じ artifact・adapter・format schema の中で、明示された `speaker` と `scene` の値がそれぞれ一致した場合に共有します。場面の話者集合には、同じ unit が場面と話者の両方を指定した関係を記録します。どちらかが不明な unit は、欠けた参照を省略します。表示名や概要も、取得できる情報がなければ省略します。
+
+Builder が翻訳 unit の `Origin()` から使うキーは `speaker`、`scene`、`quest`、`previous_unit`、`world` です。`quest` は unit の `quest:<値>` タグ、`previous_unit` は同じ artifact・adapter・format schema の stable ID、`world` は明記された本文として扱います。前の unit の参照が未解決、別場面への参照、循環の場合は検証エラーになります。Generic JSON v1 が供給するのは `speaker` と `scene` です。原文の一致や入力配列の順番から関連を補間することはありません。原文やメタデータを更新すると、新しい artifact snapshot の候補を生成します。原文が変わらない unit では原文 digest を維持しますが、候補の artifact digest は更新後の入力全体に対応します。
+
+生成 ID は `種類/名前空間/adapter/format schema/識別子` で、各可変部分をパス成分としてパーセントエンコードします。識別子には unit・world では stable ID、人物・場面では参照 ID を使います。metadata 出典は対象 artifact と、`units/<adapter>/<format schema>/<stable ID>/origin/<キー>` 形式の論理位置を持ちます。元データを確認するときは、`scope.artifacts` の digest に対応する artifact を選び、パス成分を個別にデコードし、stable ID でレコードを探します。例えば fixture の `units/generic-json/generic-json-v1/inn-1/origin/speaker` は、`units[]` で `id` が `inn-1` のレコードの `context.speaker` を指します。人物・場面には寄与した全 unit の根拠を残します。
+
+[生成用 fixture](../internal/contextpack/testdata/build-dialogue-v1.json) はリポジトリの [MIT ライセンス](../LICENSE) 下の合成データです。実データから生成した pack を共有・再配布する場合は、原 artifact と外部ツールが追加したメタデータの出典・ライセンス・利用条件を確認してください。pack には識別子や明示された設定本文が含まれる場合があります。

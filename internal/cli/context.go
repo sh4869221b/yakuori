@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -10,18 +11,35 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const contextUsage = "Usage: yakuori context validate [--] FILE\n\nValidate a local Context Pack v1 JSON file and print its fingerprint.\n"
+const contextUsage = `Usage: yakuori context <command>
 
-func runContext(args []string, stdout, stderr io.Writer) int {
+Commands:
+  build     Generate a Context Pack candidate from a local Generic JSON v1 file
+  validate  Validate a Context Pack v1 JSON file and print its fingerprint
+
+Use context <command> --help for options.
+`
+
+const contextValidateUsage = "Usage: yakuori context validate [--] FILE\n\nValidate a local Context Pack v1 JSON file and print its fingerprint.\n"
+
+func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		return writeOutput(stdout, stderr, contextUsage, nil)
 	}
-	if len(args) == 0 || args[0] != "validate" {
-		return reportFailure(stderr, ExitUsage, "invalid context arguments; use context --help")
+	if len(args) > 0 {
+		switch args[0] {
+		case "build":
+			return runContextBuild(ctx, args[1:], stdout, stderr)
+		case "validate":
+			return runContextValidate(args[1:], stdout, stderr)
+		}
 	}
-	args = args[1:]
+	return reportFailure(stderr, ExitUsage, "invalid context arguments; use context --help")
+}
+
+func runContextValidate(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		return writeOutput(stdout, stderr, contextUsage, nil)
+		return writeOutput(stdout, stderr, contextValidateUsage, nil)
 	}
 	if len(args) > 0 && args[0] == "--" {
 		args = args[1:]

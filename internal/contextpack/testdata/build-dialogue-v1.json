@@ -1,0 +1,13 @@
+{
+  "schema": "yakuori.generic-json",
+  "version": 1,
+  "source_language": "en",
+  "target_language": "ja",
+  "scope": {"game_namespace": "sample-game", "artifact_namespace": "dialogue"},
+  "units": [
+    {"id": "inn-1", "source": "Welcome.", "context": {"speaker": "keeper", "scene": "inn"}},
+    {"id": "gate-1", "source": "Welcome.", "context": {"speaker": "guard", "scene": "gate"}},
+    {"id": "inn-2", "source": "Follow me.", "context": {"scene": "inn"}},
+    {"id": "unrelated", "source": "Welcome."}
+  ]
+}
