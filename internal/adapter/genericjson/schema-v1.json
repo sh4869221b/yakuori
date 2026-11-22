@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Yakuori Generic JSON v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "source_language", "target_language", "scope", "units"],
+  "properties": {
+    "schema": { "const": "yakuori.generic-json" },
+    "version": { "type": "integer", "const": 1 },
+    "source_language": { "$ref": "#/$defs/nonempty" },
+    "target_language": { "$ref": "#/$defs/nonempty" },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["game_namespace", "artifact_namespace"],
+      "properties": {
+        "game_namespace": { "$ref": "#/$defs/nonempty" },
+        "artifact_namespace": { "$ref": "#/$defs/nonempty" }
+      }
+    },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/unit" }
+    }
+  },
+  "$defs": {
+    "text": {
+      "type": "string",
+      "not": { "pattern": "\\u0000" }
+    },
+    "nonempty": {
+      "$ref": "#/$defs/text",
+      "minLength": 1
+    },
+    "unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonempty" },
+        "source": { "$ref": "#/$defs/text" },
+        "translation": { "$ref": "#/$defs/text" },
+        "protection": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/span" }
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "speaker": { "$ref": "#/$defs/nonempty" },
+            "scene": { "$ref": "#/$defs/nonempty" }
+          }
+        }
+      }
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "kind", "ordered"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 1 },
+        "kind": { "enum": ["placeholder", "open_tag", "close_tag"] },
+        "ordered": { "type": "boolean" },
+        "pair": { "$ref": "#/$defs/nonempty" }
+      },
+      "if": { "properties": { "kind": { "const": "placeholder" } } },
+      "then": { "not": { "required": ["pair"] } },
+      "else": {
+        "required": ["pair"],
+        "properties": { "ordered": { "const": true } }
+      }
+    }
+  }
+}

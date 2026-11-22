@@ -1,0 +1,21 @@
+{
+  "schema": "yakuori.generic-json",
+  "version": 1,
+  "source_language": "en",
+  "target_language": "ja",
+  "scope": { "game_namespace": "sample-game", "artifact_namespace": "dialogue" },
+  "units": [
+    {
+      "id": "001",
+      "source": "  Cafe\u0301 {name}\r\n",
+      "protection": [{ "start": 9, "end": 15, "kind": "placeholder", "ordered": false }],
+      "context": { "speaker": "keeper", "scene": "inn" }
+    },
+    {
+      "id": "002",
+      "source": "  Cafe\u0301 {name}\r\n",
+      "protection": [{ "start": 9, "end": 15, "kind": "placeholder", "ordered": false }],
+      "context": { "speaker": "guard", "scene": "gate" }
+    }
+  ]
+}
