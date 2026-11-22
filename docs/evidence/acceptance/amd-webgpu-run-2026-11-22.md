@@ -70,12 +70,15 @@ the AMD-tag unit tests and vet passed on this revision.
 The private `run.json` and observer traces retain the full execution record.
 The initial measured run stopped after the first fixture's fresh mode because
 the worker reported a full fork commit and the runner expected the identical
-text in Go's pseudo-version field. At `9feb720` the measured W3 rerun passed,
-and the strict Wayland desktop check recorded 14 connection attempts. Four
-strict checks at that revision passed with a manually prepared display-free
-environment. Its explicit CPU smoke passed with the pinned Qwen2.5-Coder-0.5B
+text in Go's pseudo-version field. All six runs of the earlier measured W3
+rerun passed at clean revision `9feb720`. The earlier Wayland desktop check
+recorded 14 connection attempts with a CLI built from `f4494a7` with
+`vcs.modified=true`. Four strict checks in a manually prepared display-free
+environment passed with a CLI built from `9feb720` with `vcs.modified=true`.
+
+Earlier explicit CPU smoke passed with the pinned Qwen2.5-Coder-0.5B
 fixture, two generations, three validated units, SQLite TM commit and
-publication. Its first standard gate run stopped at a SQLite writer
+publication. The first standard gate run at that stage stopped at a SQLite writer
 deadline test while other verification was running. The rerun passed.
 The historical
 [CUDA run](gpu-db-run-2026-11-03.md) remains bound to its own host, pins and
