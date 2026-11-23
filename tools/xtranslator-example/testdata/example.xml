@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SSTXMLRessources>
+  <Params>
+    <Addon>Example.esp</Addon>
+    <Source>en</Source>
+    <Dest>ja</Dest>
+    <Version>2</Version>
+  </Params>
+  <Content>
+    <String List="0">
+      <EDID>EX_Notice</EDID>
+      <REC>MESG:DESC</REC>
+      <Source>  Lamps &amp; {count}&#10;&lt;lit&gt;  </Source>
+      <Dest>  ランプと {count}&#10;&lt;lit&gt;  </Dest>
+    </String>
+    <String List="0" Partial="2">
+      <EDID>EX_Notice</EDID>
+      <REC id="0">MESG:DESC</REC>
+      <Source>  Lamps &amp; {count}&#10;&lt;lit&gt;  </Source>
+      <Dest>  明かりと {count}&#10;&lt;lit&gt;  </Dest>
+    </String>
+    <String List="1" Partial="1">
+      <EDID>EX_Question</EDID>
+      <REC>MESG:DESC</REC>
+      <Source>Who keeps the lantern?</Source>
+      <Dest/>
+    </String>
+  </Content>
+</SSTXMLRessources>
