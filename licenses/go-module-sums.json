@@ -36,6 +36,42 @@
     "GoModSum": "h1:yVaq7iwCN09vHRrKBrrflXT0M9tTMG2KmZ9Fj7xeG/g="
   },
   {
+    "Path": "github.com/oliverbestmann/webgpu",
+    "Version": "v1.38.0",
+    "Sum": "h1:jSr61G3mo+YwLiLmwTLZPnTxyc9ygC9VxdQcjJerqv4=",
+    "GoModSum": "h1:vVBK0uUMqI4wSjY5BBzMcsKrK308uDZCRAmLhxOOCi0="
+  },
+  {
+    "Path": "github.com/oliverbestmann/webgpu/libs-android",
+    "Version": "v0.0.0-20261112101134-9fc0777bdf01",
+    "Sum": "h1:McC4wlsrkgdHk9zU+SDWKvAGlvzw25WgLOe24TMeHSM=",
+    "GoModSum": "h1:tczQXCdsoFy+FTJVsZSve/vF8cmWEkxhvjcyY2Rujp8="
+  },
+  {
+    "Path": "github.com/oliverbestmann/webgpu/libs-darwin",
+    "Version": "v0.0.0-20261112101121-f12e930cb707",
+    "Sum": "h1:VYEVufYo0s2tWptL2fImAXSpSI1GTbJZ9C3qGLUmUoM=",
+    "GoModSum": "h1:XoHM/ZcjQqJQyEfQjU0ScDkxvQRWfZLxKP8IrEz4xyo="
+  },
+  {
+    "Path": "github.com/oliverbestmann/webgpu/libs-ios",
+    "Version": "v0.0.0-20261112101124-0a18a0d4d894",
+    "Sum": "h1:8F6ysOl1OdNzZ6xDacy7LZZSJm3t2q4w4TcHCEN1Jqs=",
+    "GoModSum": "h1:IV+TkwmPA0yMzZZoz0Aj4X+22WLEQq2TOyN4/0k8lgs="
+  },
+  {
+    "Path": "github.com/oliverbestmann/webgpu/libs-linux",
+    "Version": "v0.0.0-20261112101129-823eab7d2391",
+    "Sum": "h1:xXj+a5WeTGB0vAA8oGvVy3pU4VmbQLj41KaysO/hRb8=",
+    "GoModSum": "h1:SOeo2YWe2UxWxOeAHyZtwaSXkBbP78cGnm7I+6lIWV0="
+  },
+  {
+    "Path": "github.com/oliverbestmann/webgpu/libs-windows",
+    "Version": "v0.0.0-20261112110423-e4fd7225cf83",
+    "Sum": "h1:tsUpbTqMTrQMWy0GkK3QBhwna6NAabKLyKd+dDyWu6Y=",
+    "GoModSum": "h1:58qRJHG2+mjEu/AKJFh026bz3xE1zEHYt41i4TBM8NE="
+  },
+  {
     "Path": "github.com/remyoudompheng/bigfft",
     "Version": "v0.0.0-20230129092748-24d4a6f8daec",
     "Sum": "h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=",
@@ -43,29 +79,39 @@
   },
   {
     "Path": "github.com/townsendmerino/aikit",
-    "Version": "v1.76.0",
-    "Sum": "h1:bQ0KZqOZTGMAFZG/FR+LNjzu0VwxOvQZM1ZRbQ4QVnQ=",
-    "GoModSum": "h1:XXSOKAI6jX/miQdMpMYrcXOBWEdjds2mbUolO3RPerU="
+    "Version": "v1.78.0",
+    "Sum": "h1:AlQlBSdZcqXXdMjpn9FCFKj396nS0yH0ZoaPv8Iq3kk=",
+    "GoModSum": "h1:Pv+U5no9SEkFz0DC+whRtFkgVSZHaklf4XYpInTkM9I="
   },
   {
     "Path": "github.com/townsendmerino/goinfer",
-    "Version": "v0.24.1",
+    "Version": "v0.25.0",
     "Replace": {
       "Path": "github.com/sh4869221b/goinfer",
-      "Version": "v0.0.0-20261106011512-994cbf5ee38d"
+      "Version": "v0.0.0-20261123013027-bb3ca6430d39"
     },
-    "Sum": "h1:HTJe6LmPe/a/vkc7FTGtocQZP3grPmHdG/wbQqkDDEU=",
-    "GoModSum": "h1:CuDcun/tFvvacbdtf7ZjKQBP9SOQvpDEb+oWE8cyRo8="
+    "Sum": "h1:FGvs8l4AjQzEg4M+BD1ALl5XUlrU+aXTbIQadVnsPpw=",
+    "GoModSum": "h1:WP9sM4Ne5yJKFDM8bxbW9SUtpP+4lyZi6fpqymk8GsY="
   },
   {
     "Path": "github.com/townsendmerino/goinfer/backend/cuda",
-    "Version": "v0.0.0-20261106011512-994cbf5ee38d",
+    "Version": "v0.25.0",
     "Replace": {
       "Path": "github.com/sh4869221b/goinfer/backend/cuda",
-      "Version": "v0.0.0-20261106011512-994cbf5ee38d"
+      "Version": "v0.0.0-20261123013027-bb3ca6430d39"
     },
-    "Sum": "h1:yVBuBC0iqZ/AO2s0LpagTpbUnxDDYf+Gtja9Xo06EuY=",
-    "GoModSum": "h1:zWlobZQ2mFmttCIwkpSZwWKjURhrNPna5vvYKgamaWU="
+    "Sum": "h1:61ixe8eeEjXk/FEv4sOaIP6RwYDdQoajoUh6j2PnkEg=",
+    "GoModSum": "h1:sMUNyvhqRH0Mxrb2duT5LYcuJ/rEYQnLtbLrm9OuBbQ="
+  },
+  {
+    "Path": "github.com/townsendmerino/goinfer/backend/webgpu",
+    "Version": "v0.25.0",
+    "Replace": {
+      "Path": "github.com/sh4869221b/goinfer/backend/webgpu",
+      "Version": "v0.0.0-20261123013027-bb3ca6430d39"
+    },
+    "Sum": "h1:6u8ymSYBlsWXsuJZd9p3TezPZkmRG6IWWy6lwDv8YJY=",
+    "GoModSum": "h1:YZv1IMdJhx2sqidzrDMtyPmoh02laCeP6b79RQLW2Xk="
   },
   {
     "Path": "golang.org/x/sys",

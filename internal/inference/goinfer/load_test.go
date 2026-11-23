@@ -159,7 +159,8 @@ func TestOpenExplicitBackend(t *testing.T) {
 				if backend == "cuda" {
 					wantResident = 4096
 				}
-				if options.Backend != backend || options.Quant != "int4" || options.ResidentContext != wantResident {
+				if options.Backend != backend || options.Quant != "int4" || options.ResidentContext != wantResident ||
+					options.RequireBackend != (backend == "cuda") {
 					t.Fatalf("options=%+v", options)
 				}
 				return model, nil
@@ -176,6 +177,17 @@ func TestOpenExplicitBackend(t *testing.T) {
 }
 
 func TestOpenCUDARejectsFallbackAndResidency(t *testing.T) {
+	t.Run("decoder refuses fallback", func(t *testing.T) {
+		config, load, _, _ := loadFixture(t)
+		config.backend = "cuda"
+		load.model = func(string, decoder.Options) (modelBackend, error) {
+			return nil, decoder.ErrBackendDeclined
+		}
+		engine, err := open(context.Background(), config, load)
+		if engine != nil || !errors.Is(err, ErrCUDAResidency) || !errors.Is(err, decoder.ErrBackendDeclined) {
+			t.Fatalf("engine=%v error=%v", engine, err)
+		}
+	})
 	for _, tc := range []struct {
 		name    string
 		backend string

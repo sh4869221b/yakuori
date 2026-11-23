@@ -75,7 +75,12 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 	}
 	options := decoder.Options{Backend: config.backend, Quant: config.quant, DirectLoad: true}
 	var gpuName, gpuDriver, decodePath, gpuPin string
-	if config.backend == "webgpu" {
+	var residencyErr error
+	switch config.backend {
+	case "cuda":
+		residencyErr = ErrCUDAResidency
+	case "webgpu":
+		residencyErr = ErrWebGPUResidency
 		gpuName, gpuDriver, err = webGPUAdapter()
 		if err != nil {
 			return nil, err
@@ -83,11 +88,15 @@ func open(ctx context.Context, config modelConfig, load loaders) (engine *Engine
 		options.KVPrecision = "f32"
 		gpuPin = webGPUBackendPin
 	}
-	if config.backend == "cuda" || config.backend == "webgpu" {
+	if residencyErr != nil {
+		options.RequireBackend = true
 		options.ResidentContext = config.contextTokens
 	}
 	model, err = load.model(modelPath, options)
 	if err != nil {
+		if residencyErr != nil && errors.Is(err, decoder.ErrBackendDeclined) {
+			err = fmt.Errorf("%w: %w", residencyErr, err)
+		}
 		return nil, fmt.Errorf("load %s model: %w", config.backend, err)
 	}
 	if err := ctx.Err(); err != nil {

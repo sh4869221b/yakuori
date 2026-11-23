@@ -89,5 +89,5 @@ docker build --progress=plain -f ci/Dockerfile .
 - CLIで実装済みなのはhelp・doctor・models・whole-file textの`translate`と`localize`。CLIに接続した形式をWitcher 3 production adapterや実MOD対応と混同しない。
 - `ci/verify.sh` はcgo負例・依存監査、gofmt・build・test・vet、arm64 cross-buildを検証する。
 - `ci/Dockerfile` はclean gate用。CPU・CUDA・長文脈の調査資料と、`docs/evidence/` の結果を区別する。
-- 主要依存はgoinferとbackend/cudaをfork `994cbf5ee38d`へreplace、x/sys `0.49.0`、modernc SQLite `1.61.1`。
+- goinfer本体・CUDA・WebGPUの v0.25.0 を同じfork `bb3ca6430d39`へreplace、x/sys `0.49.0`、modernc SQLite `1.61.1`。
 - 第三者通知は `THIRD_PARTY_NOTICES.md` と `licenses/` を参照する。
