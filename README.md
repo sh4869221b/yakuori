@@ -8,13 +8,14 @@
 
 - [実装計画とissue index](https://github.com/sh4869221b/yakuori/issues/1)
 - [PLaMo 3 Translateの導入・実モデル検証](docs/plamo3.md)（Built with PLaMo）
-- [翻訳モデルの選定と比較条件](docs/research/translation-model-selection.md)（2026年11月5日：現行Indexの基準とCAT-Translate等の評価候補）
+- [翻訳モデルの実行方針と比較調査の記録](docs/research/translation-model-selection.md)
 
 このrepoはコードと再現用技術資料を扱います。非公開の設計資料の全文は含みません。実装済みの契約・再現手順・制限は、このREADMEとリンク先のrepo内ドキュメントを参照してください。
 
 ## v1の採用方針
 
 - Linux、Go 1.27。標準CPUビルド・CIとoptional CUDAは `CGO_ENABLED=0`。Linux/amd64のAMD向けWebGPU専用ビルドは `CGO_ENABLED=1 -tags gpu` で明示選択
+- 新規の実モデル翻訳・検証には PLaMo 3 Translate 0.8B（登録例のIDは `plamo3-08b`）を使います。実推論の確認済み環境はLinux/amd64のCPU int4です。モデル、機能、実行環境の条件がそろわない項目は理由付きで未実施とし、実行して失敗した項目は失敗と記録します。[導入手順・適用範囲](docs/plamo3.md#real-model-runs)
 - goinferはwrapper内へ閉じ、TMは`database/sql`とCGO-free SQLiteを使用します。採用済みの依存pin、text-v1上限とmodel fixtureは[基盤契約](docs/foundation.md)および受入れ記録を参照してください
 - 未検証candidateを確定せず、1 unitでも失敗なら成果fileを公開しない。生成の自動retryなし
 - TMはsource/profileの完全一致＋現在unitでの再検証
@@ -27,7 +28,7 @@ CLI・XDG namespaceは`yakuori`。旧Kotobaのコード・設定・TM・registry
 
 ## テキスト翻訳
 
-ローカルbackendでは選択済みのモデルを使います。先にmodelを登録して選択してください。`models import` はローカルGGUFまたはPLaMo 3 checkpoint directoryを登録し、`models pull` は期待size・SHA-256・digest出所を指定してGGUFをHTTPSで取得します。どちらも取得したmodelを自動選択しません。ローカルmodelを使う翻訳commandにmodel overrideや標準入力の入口はなく、`SOURCE` はregularなUTF-8 file pathです。`--backend` は `cpu` が既定で、ほかのbackendは明示的に指定します。CUDAにはLinux amd64向け `-tags cuda` buildとNVIDIA driverが必要で、失敗時にCPUへ切り替わりません。
+以下のCPU実行例では、PLaMo 3 Translate 0.8Bを登録し、`./yakuori models use plamo3-08b` で選択します。ローカルbackendは選択済みのモデルを使います。翻訳commandにmodel overrideや標準入力の入口はなく、`SOURCE` はregularなUTF-8 file pathです。`--backend` は `cpu` が既定で、ほかのbackendは明示的に指定します。CUDAにはLinux amd64向け `-tags cuda` buildとNVIDIA driverが必要で、失敗時にCPUへ切り替わりません。[PLaMoの取得・登録手順](docs/plamo3.md#get-and-select-the-model)
 
 ```sh
 ./yakuori translate --source-language en --target-language ja --game qa --artifact sample --backend cpu ./source.txt
@@ -36,15 +37,17 @@ CLI・XDG namespaceは`yakuori`。旧Kotobaのコード・設定・TM・registry
 ./yakuori localize --format text --source-language en --target-language ja --game qa --artifact sample --backend cpu --in-place ./source.txt
 ```
 
+言語、game namespace、artifact namespaceは空でない値を明示します。CLIは値を正規化したり、file pathからnamespaceを推定したりしません。`translate` は全文をstdoutへ返します。`localize` では `--format` で形式を明示し、`--output OUT` で新規公開、`--output OUT --replace-output` で既存出力の置換、または `--in-place` で原文をbackupとして残す置換をします。`--replace-output` には `--output` が必要で、公開モードは同時指定できません。
+
+`--format text` は全文を一つのunitとして扱う `text-v1` です。tagやplaceholderらしい箇所を自動検出して保護する機能はありません。現在の `DefaultLimits` はartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76、context候補4096 tokens、最大出力2048 tokensです。text-v1は一つのunitなのでsource textは最大980 UTF-8 bytesです。人手による翻訳品質の受入れは未実施です。
+
+### 任意のOpenAI API backendの指定方法
+
 OpenAI API を使う場合は `--backend openai` と日付付きモデル snapshot を `--openai-model` で明示し、環境変数 `OPENAI_API_KEY` を設定します。実行時には原文を含むリクエストが OpenAI に送信され、API 利用料金が発生し得ます。入力トークン数は Responses API の計数 endpoint で確認し、生成結果の usage と一致しない場合は失敗します。レスポンスの保存は無効にし、モデルの sampling は provider 既定値です。snapshot 名は翻訳メモリの識別に含まれます。実 API との通信は未検証です。
 
 ```sh
 ./yakuori translate --source-language en --target-language ja --game qa --artifact sample --backend openai --openai-model gpt-4o-2024-08-06 ./source.txt
 ```
-
-言語、game namespace、artifact namespaceは空でない値を明示します。CLIは値を正規化したり、file pathからnamespaceを推定したりしません。`translate` は全文をstdoutへ返します。`localize` では `--format` で形式を明示し、`--output OUT` で新規公開、`--output OUT --replace-output` で既存出力の置換、または `--in-place` で原文をbackupとして残す置換をします。`--replace-output` には `--output` が必要で、公開モードは同時指定できません。
-
-`--format text` は全文を一つのunitとして扱う `text-v1` です。tagやplaceholderらしい箇所を自動検出して保護する機能はありません。現在の `DefaultLimits` はartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76、context候補4096 tokens、最大出力2048 tokensです。text-v1は一つのunitなのでsource textは最大980 UTF-8 bytesです。人手による翻訳品質の受入れは未実施です。
 
 ## Generic JSON翻訳
 
@@ -73,6 +76,8 @@ importされた原文のkey関係（LE4 byteのopaque keyをIDへ結び付ける
 入力の既定上限はtextと同じartifact 1495 bytes、unit 76、unit text 980 bytes、total text 1036 bytes、segments 76のままです。日本語文字が翻訳に必須ではなく、そのままのproper nameや数値も共通検証の下で有効です。実ゲームでの動作確認、訳質・GPU性能の評価、他言語・他version対応は含みません。[Adapter契約](docs/w3strings-adapter.md)を参照してください。
 
 ## AMD GPUでの実行
+
+以下はIndex-Translate-2B Q4_K_Mを `index-translate` として登録した環境で、2026年11月22日のAMD経路を再現する例です。PLaMoのWebGPU実推論は未検証です。[RX 9070 XTの実測記録](docs/evidence/acceptance/amd-webgpu-run-2026-11-22.md)
 
 Linux/amd64のAMD専用ビルドにはCコンパイラが必要です。実行環境にはVulkan loaderと
 AMD GPU向けのVulkan driverを用意します。現在の対象は、プロセスに見えるVulkan
@@ -110,7 +115,7 @@ sh ci/verify.sh
 
 CLIのexit code、stdout/stderr、設定のfallback、fake試験の入口、clean CIの再現方法・制限は[基盤契約](docs/foundation.md)を参照してください。Linux arm64はcross-buildのみで、実行対応は未検証です。詳細な非目標・依存関係・受入れ試験はissue indexを参照してください。
 
-通常CIのclean gateはmodel不要です。`ci/verify.sh` は観測器自己試験、実binaryを使う取得失敗matrix、CLI/error matrixをmodelなしで走らせ、外部のmodel配布元には接続しません。実modelと実GPUのmatrix（`modelsmoke` / `offlinesmoke`、CUDA・driver不成立）は、事前配置したGGUFを明示したlocal実行として別に行われ、通常CIの成功はその代わりになりません。
+通常CIのclean gateはmodel不要です。`ci/verify.sh` は観測器自己試験、実binaryを使う取得失敗matrix、CLI/error matrixをmodelなしで走らせ、外部のmodel配布元には接続しません。PLaMoの実モデルsmokeは `cpusmoke` の `TestPlamoCPUCLI` で再現できます。GGUF固有の互換試験（`modelsmoke` / `offlinesmoke`、CUDA・driver不成立）は事前配置した固定fixtureで別に実行します。[PLaMoの実モデルsmoke](docs/plamo3.md#validation-record)
 
 offline観測器 `ci/offline.py` は既定でstrictです。`--allow-nvidia-mps` を明示した場合だけ、完全にdecodeされた `connect(AF_UNIX)` のうち `/run/nvidia-mps/control` と `/tmp/nvidia-mps/control` への接続を許可IPCとして記録します。許可記録はJSONの `allowed_local` に入り、`attempts` は禁止試行だけを示し、raw `.trace` は変更されません。この例外はresolver/proxy、INET/INET6、宛先付きsend、その他のUNIX socket、未知または不完全なtraceを許可しません。
 
@@ -136,14 +141,20 @@ GGUFとPLaMo 3 checkpointはsourceから個人用の管理copyへ登録します
 
 取得履歴はmodelと同じ `<Data>/models/<ID>/provenance.json` に `schema:1` で書かれます（`source_url`, `final_url`, `expected_sha256`, `expected_size_bytes`, `digest_source`、mode 0600）。初期URLと実際に200を返した `final_url` を区別するので、redirect後の実際の配布元まで追跡できます。ローカル `import` にはこのsidecarはなく、registry schemaと `models verify` のbyte identity照合は変わりません。
 
+取得済みのPLaMo checkpoint directoryを登録・選択する例です。
+
 ```sh
-./yakuori models pull --id fetched --sha256 <64桁小文字hex> --size <byte数> --digest-source <出所の申告> https://host.example/path/model.gguf
-./yakuori models import --id index-translate /path/to/model.gguf
-./yakuori models use index-translate
-./yakuori models verify index-translate
+./yakuori models import --id plamo3-08b ./models/plamo-3-translate-0.8b
+./yakuori models use plamo3-08b
+./yakuori models verify plamo3-08b
 ./yakuori doctor
 ./yakuori doctor --check-model --backend cpu
-./yakuori doctor --check-model --backend cuda
+```
+
+GGUF取得用の `models pull` は次の構文です。
+
+```sh
+./yakuori models pull --id fetched --sha256 <64桁小文字hex> --size <byte数> --digest-source <出所の申告> https://host.example/path/model.gguf
 ```
 
 `import` はローカルFILEまたはPLaMo 3 checkpoint DIRECTORYを指定する構文で、`--id` は位置引数より前に置きます。CUDA確認にはLinux/amd64向け `-tags cuda` buildと実行時のNVIDIA driver (`libcuda.so.1`) が必要です。CUDAが利用できない場合は失敗し、CPUへ暗黙に切り替えません。通常の `doctor` は保存先と登録状態を確認します。`--check-model` は選択済みmodelをCPU（既定）または明示backendで開いて `Engine.Info` を出し、生成せず閉じます。設定contextは既存の4096 token候補で、実効値はEngineから報告します。registryに登録されたmodelの管理fileが欠落している場合、通常doctorは `[missing]` を表示します。管理copyのhash照合は `models verify ID` または `--check-model` で行います。
@@ -152,8 +163,8 @@ GGUFとPLaMo 3 checkpointはsourceから個人用の管理copyへ登録します
 
 | 保存物 | Path | 用途 |
 | --- | --- | --- |
-| Config | `<Config>/config.json` | `{"schema":1,"selected_model":"index-translate"}` |
-| Registry | `<Data>/registry.json` | `{"schema":1,"models":{"index-translate":{"sha256":"<64 lowercase hex>","size_bytes":123}}}` |
+| Config | `<Config>/config.json` | `{"schema":1,"selected_model":"plamo3-08b"}` |
+| Registry | `<Data>/registry.json` | `{"schema":1,"models":{"plamo3-08b":{"sha256":"<64 lowercase hex>","size_bytes":1784258568}}}` |
 | Managed models | `<Data>/models/<ID>/model.gguf` | IDごとのprivate managed copy |
 | Provenance | `<Data>/models/<ID>/provenance.json` | `models pull` で取得したIDの取得履歴（schema 1 sidecar） |
 | Registry lock | `<Data>/registry.lock` | import/use中の協調lock |

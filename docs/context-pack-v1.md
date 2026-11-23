@@ -121,6 +121,8 @@ Builder が翻訳 unit の `Origin()` から使うキーは `speaker`、`scene`�
 
 明示的に `--infer` を指定すると、構造抽出に加え、選択済みのローカル ChatML GGUF モデルで人物・場面・世界設定・用語の候補を作成します。先に登録済みモデルを `yakuori models use MODEL_ID` で選択します。`--backend` の既定値は `cpu` です。`cuda`・`webgpu` は対応するビルドと実行環境で明示的に指定します。
 
+PLaMo 3 Translate の PFML 形式は `--infer` と、空でない解決済み Context を使う翻訳には未対応です。該当する PLaMo 実モデル検証は未実施として理由を記録します。上記の構造抽出はモデルなしで実行できます。[実モデル実行方針](plamo3.md#real-model-runs)
+
 ```sh
 mkdir -p context-candidates
 result=$(./yakuori context build --infer --backend cpu \
