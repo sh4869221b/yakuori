@@ -3,6 +3,7 @@ package validate
 import (
 	"bytes"
 	"fmt"
+	"slices"
 
 	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/identity"
@@ -48,3 +49,47 @@ func (p Profile) Glossary() (glossary.Glossary, error) {
 	}
 	return g, nil
 }
+
+// UnitValidation extends a profile's glossary for one unit while binding
+// accepted translations to the original run profile.
+type UnitValidation struct {
+	profile    Profile
+	terms      glossary.Glossary
+	additional glossary.Glossary
+}
+
+func (p Profile) WithAdditionalTerms(additions []glossary.Entry) (UnitValidation, error) {
+	base, err := p.Glossary()
+	if err != nil {
+		return UnitValidation{}, err
+	}
+	validation := UnitValidation{profile: p, terms: base}
+	if len(additions) == 0 {
+		return validation, nil
+	}
+	entries, err := base.Entries()
+	if err != nil {
+		return UnitValidation{}, err
+	}
+	var unique []glossary.Entry
+	for _, entry := range additions {
+		if !slices.Contains(entries, entry) {
+			unique = append(unique, entry)
+		}
+	}
+	if len(unique) == 0 {
+		return validation, nil
+	}
+	validation.additional, err = glossary.New(glossary.Schema, unique)
+	if err != nil {
+		return UnitValidation{}, err
+	}
+	validation.terms, err = glossary.New(glossary.Schema, append(entries, unique...))
+	if err != nil {
+		return UnitValidation{}, err
+	}
+	return validation, nil
+}
+
+func (v UnitValidation) Glossary() glossary.Glossary        { return v.terms }
+func (v UnitValidation) AdditionalTerms() glossary.Glossary { return v.additional }

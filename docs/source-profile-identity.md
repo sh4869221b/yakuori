@@ -87,6 +87,10 @@ pack against the imported snapshot and explicit TM scope. Each unit with a
 context-bearing generation request uses its selected canonical payload
 (including the selection version) and the actual versioned request prompt for
 its exact TM profile. The runtime template renderer remains part of the profile.
+When a caller supplies a reviewed neutral dictionary, the unit's exact profile
+also includes the selected translation and applicable dictionary terms. Editing
+an accepted translation selects a different key. Removing the dictionary makes
+the unit eligible for reuse under its original Context/TM conditions.
 Unused pack fields and pack-wide digests do not enter the key. Unit/segment
 source, rendered prompt, token IDs and token counts are request-specific. Index's existing
 TrimSpace rendering remains unchanged; source identity still uses raw bytes.
@@ -282,7 +286,8 @@ fresh Accepted binding without generation or another protection Restore; only
 stop the run. Only the complete accepted parent set is staged in run-local memory.
 Accepted values from another import or unit cannot be rebound. Accepted binding,
 ExpectedTranslations, Manifest and final artifact comparison retain the complete
-comparable import Profile. Without a context-bearing request the exact key uses
+comparable import Profile. Without a context-bearing request or an applicable
+dictionary translation or term, the exact key uses
 the original `context.mode=none` profile bytes. Existing rows with this profile
 are eligible only on a complete exact match and after current validation.
 Context-bearing requests miss those rows without falling back or migrating them.

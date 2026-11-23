@@ -24,16 +24,32 @@ func Validate(session unit.Session, id unit.UnitID, profile Profile, candidate s
 	if profile.digest == ([32]byte{}) {
 		return AcceptedTranslation{}, ErrInvalidProfile
 	}
-	g, err := profile.Glossary()
+	v, err := profile.WithAdditionalTerms(nil)
 	if err != nil {
 		return AcceptedTranslation{}, fmt.Errorf("%w: %w", ErrInvalidProfile, err)
 	}
+	return v.validate(session, u, candidate)
+}
+
+func (v UnitValidation) Validate(session unit.Session, id unit.UnitID, candidate string) (AcceptedTranslation, error) {
+	u, err := session.Unit(id)
+	if err != nil {
+		return AcceptedTranslation{}, err
+	}
+	if v.profile.digest == ([32]byte{}) {
+		return AcceptedTranslation{}, ErrInvalidProfile
+	}
+	return v.validate(session, u, candidate)
+}
+
+func (v UnitValidation) validate(session unit.Session, u unit.TranslationUnit, candidate string) (AcceptedTranslation, error) {
+	id := u.ID()
 	source := string(u.Source())
-	matches, err := g.Match(source)
+	matches, err := v.terms.Match(source)
 	if err != nil {
 		return AcceptedTranslation{}, fmt.Errorf("%w: %w", ErrInvalidSource, err)
 	}
-	prepared, err := protect.PrepareWithGlossary(session, id, g)
+	prepared, err := protect.PrepareWithGlossary(session, id, v.terms)
 	if err != nil {
 		return AcceptedTranslation{}, fmt.Errorf("%w: %w", ErrInvalidSource, err)
 	}
@@ -55,7 +71,7 @@ func Validate(session unit.Session, id unit.UnitID, profile Profile, candidate s
 			session: session,
 			unitID:  id,
 			source:  u.SourceDigest(),
-			profile: profile,
+			profile: v.profile,
 		},
 		validated: true,
 		review:    reviewContent(u.TargetLanguage(), source, candidate, sourcePayload, candidatePayload),

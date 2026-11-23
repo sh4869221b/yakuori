@@ -23,27 +23,44 @@ func NewExactKey(source SourceIdentity, profile ProfileIdentity) (ExactKey, erro
 	return ExactKey{KeySchema, source.canonical, profile.canonical}, nil
 }
 
-// UnitContext holds the prompt and selected context used by a unit's requests.
+// UnitContext holds the selected context and dictionary effects for a unit.
 type UnitContext struct {
-	Prompt    PromptInput
-	Selection []byte
+	Prompt     PromptInput
+	Selection  []byte
+	Dictionary UnitDictionary
 }
 
-// NewContextExactKey overrides only the selected context and its prompt in the
-// import-wide canonical profile. An empty selection uses the base key.
+// UnitDictionary holds the exact approved target and canonical added terms.
+type UnitDictionary struct {
+	Translation string          `json:"translation,omitempty"`
+	Terms       json.RawMessage `json:"terms,omitempty"`
+}
+
+// NewContextExactKey adds per-unit inputs to the canonical run profile. A unit
+// without selected context or dictionary effects uses the original key.
 func NewContextExactKey(source SourceIdentity, profile ProfileIdentity, context UnitContext) (ExactKey, error) {
 	key, err := NewExactKey(source, profile)
-	if err != nil || len(context.Selection) == 0 {
+	hasDictionary := context.Dictionary.Translation != "" || len(context.Dictionary.Terms) != 0
+	if err != nil || (len(context.Selection) == 0 && !hasDictionary) {
 		return key, err
 	}
 	var record profileRecord
 	if err := json.Unmarshal([]byte(key.profile), &record); err != nil {
 		return ExactKey{}, err
 	}
-	record.Prompt = context.Prompt
-	record.Context.Mode = "provided"
-	record.Context.Additional = context.Selection
-	profileBytes, err := json.Marshal(record)
+	if len(context.Selection) != 0 {
+		record.Prompt = context.Prompt
+		record.Context.Mode = "provided"
+		record.Context.Additional = context.Selection
+	}
+	unitProfile := struct {
+		profileRecord
+		Dictionary *UnitDictionary `json:"dictionary,omitempty"`
+	}{profileRecord: record}
+	if hasDictionary {
+		unitProfile.Dictionary = &context.Dictionary
+	}
+	profileBytes, err := json.Marshal(unitProfile)
 	if err != nil {
 		return ExactKey{}, err
 	}
