@@ -158,14 +158,15 @@ the GPU matrix passed; report the run's actual traces and status separately.
   normal. A registered model whose file is missing is reported as `[missing]`;
   explicit verification is required to check its bytes. Invalid schema or
   insecure existing permissions or a selected ID absent from the registry return 1.
-- `models import --id ID FILE`, `models use ID`, and `models verify ID` manage
-  local GGUF files. Standard flags precede positional arguments, so `--id`
-  comes before `FILE`. Import makes a private copy and does not select it. IDs
+- `models import --id ID PATH`, `models use ID`, and `models verify ID` manage
+  local GGUF files and PLaMo 3 checkpoint directories. `--id` comes before
+  `PATH`. Import makes a private copy and does not select it. IDs
   are immutable; duplicate IDs or destinations are rejected. `verify` compares
   the managed file's SHA-256 and size with the registry. Loading also passes
-  the expected SHA-256 to Engine, which checks the actual snapshot bytes.
+  the expected SHA-256 to Engine, which checks the actual snapshot bytes. See
+  the [PLaMo import instructions](plamo3.md#get-and-select-the-model).
 - `models pull --id ID --sha256 SHA --size BYTES --digest-source SOURCE URL`
-  acquires one model over HTTPS. The four flags precede the positional URL,
+  acquires one GGUF file over HTTPS. The four flags precede the positional URL,
   which must be absolute HTTPS with a host and no userinfo or fragment.
   Redirects may only point at HTTPS URLs and are followed at most ten times;
   only HTTP 200 is accepted; one pull is bounded by 30 minutes; there is no
