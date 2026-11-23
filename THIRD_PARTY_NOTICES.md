@@ -25,9 +25,9 @@ listed below.
 |---|---|---|---|
 | Go runtime / standard library | 1.27.3 | BSD-3-Clause, retained | Built executables |
 | golang.org/x/sys | v0.49.0 | BSD-3-Clause, retained | Linux publisher in CLI |
-| github.com/townsendmerino/goinfer → sh4869221b/goinfer | 8ab7d3f2ae8c1487fb0ff0af41946fb070e29199 | MIT, [retained](licenses/upstream/goinfer-plamo3-994cbf5/LICENSE) | CPU inference engine and research tools. Source-only PLaMo reference fixtures carry separate terms. |
-| github.com/townsendmerino/goinfer/backend/cuda → sh4869221b/goinfer/backend/cuda | 8ab7d3f2ae8c1487fb0ff0af41946fb070e29199 | MIT, [retained](licenses/upstream/goinfer-cuda-plamo3-994cbf5/LICENSE) | CUDA inference backend (`cuda && linux && amd64`) |
-| github.com/townsendmerino/goinfer/backend/webgpu → sh4869221b/goinfer/backend/webgpu | 8ab7d3f2ae8c1487fb0ff0af41946fb070e29199 | MIT, [retained](licenses/upstream/goinfer-plamo3-994cbf5/LICENSE) | AMD WebGPU/Vulkan inference (`gpu && cgo && linux && amd64`) |
+| github.com/townsendmerino/goinfer → sh4869221b/goinfer | bb3ca6430d39cc4850d85cb2981d1f069115ea9d | MIT, [retained](licenses/upstream/goinfer-plamo3-994cbf5/LICENSE) | CPU inference engine and research tools. Source-only PLaMo reference fixtures carry separate terms. |
+| github.com/townsendmerino/goinfer/backend/cuda → sh4869221b/goinfer/backend/cuda | bb3ca6430d39cc4850d85cb2981d1f069115ea9d | MIT, [retained](licenses/upstream/goinfer-cuda-plamo3-994cbf5/LICENSE) | CUDA inference backend (`cuda && linux && amd64`) |
+| github.com/townsendmerino/goinfer/backend/webgpu → sh4869221b/goinfer/backend/webgpu | bb3ca6430d39cc4850d85cb2981d1f069115ea9d | MIT, [retained](licenses/upstream/goinfer-plamo3-994cbf5/LICENSE) | AMD WebGPU/Vulkan inference (`gpu && cgo && linux && amd64`) |
 | github.com/oliverbestmann/webgpu | v1.38.0 | Apache-2.0, [upstream text](https://github.com/oliverbestmann/webgpu/blob/v1.38.0/LICENSE) | Go cgo bindings for the AMD build |
 | github.com/oliverbestmann/webgpu/libs-linux | v0.0.0-20261112101129-823eab7d2391 | Bundles wgpu-native ([binding build source](https://github.com/oliverbestmann/webgpu/blob/v1.38.0/update-wgpu.sh)) | Linux static library selected by the Go bindings |
 | wgpu-native | v29.0.1.1 | MIT OR Apache-2.0, [upstream package declarations](https://github.com/gfx-rs/wgpu-native/blob/v29.0.1.1/Cargo.toml) | Native WebGPU library in the AMD build |
@@ -154,8 +154,8 @@ The fork's three selected modules carry the MIT text retained in
 `licenses/upstream/goinfer-plamo3-994cbf5/LICENSE`. The source-only PLaMo
 fixtures and reference outputs carry separate terms. The fork records these
 terms and those of its other third-party materials.
-[NOTICE](https://github.com/sh4869221b/goinfer/blob/8ab7d3f2ae8c1487fb0ff0af41946fb070e29199/NOTICE)
-and [THIRD_PARTY_LICENSES.md](https://github.com/sh4869221b/goinfer/blob/8ab7d3f2ae8c1487fb0ff0af41946fb070e29199/THIRD_PARTY_LICENSES.md).
+[NOTICE](https://github.com/sh4869221b/goinfer/blob/bb3ca6430d39cc4850d85cb2981d1f069115ea9d/NOTICE)
+and [THIRD_PARTY_LICENSES.md](https://github.com/sh4869221b/goinfer/blob/bb3ca6430d39cc4850d85cb2981d1f069115ea9d/THIRD_PARTY_LICENSES.md).
 
 The nested CUDA module incorporates code formerly in aikit/gpu. The historical
 copied-code and provenance findings above remain open.

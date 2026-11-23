@@ -14,7 +14,7 @@ import (
 	"github.com/sh4869221b/yakuori/internal/inference"
 )
 
-const backendPin = "github.com/sh4869221b/goinfer@8ab7d3f2ae8c1487fb0ff0af41946fb070e29199"
+const backendPin = "github.com/sh4869221b/goinfer@bb3ca6430d39cc4850d85cb2981d1f069115ea9d"
 
 var (
 	ErrClosed             = errors.New("inference engine is closed")

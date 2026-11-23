@@ -151,11 +151,11 @@
   },
   {
     "repository": "sh4869221b/goinfer",
-    "version_or_revision": "8ab7d3f2ae8c1487fb0ff0af41946fb070e29199",
+    "version_or_revision": "bb3ca6430d39cc4850d85cb2981d1f069115ea9d",
     "license_file": "LICENSE",
     "sha256": "e6748a83fb6b323f85260b8979b0728c647a7ad6ae6772e7fcbc69301d3d1a0c",
     "classification": "MIT",
-    "source_url": "https://github.com/sh4869221b/goinfer/blob/8ab7d3f2ae8c1487fb0ff0af41946fb070e29199/LICENSE",
+    "source_url": "https://github.com/sh4869221b/goinfer/blob/bb3ca6430d39cc4850d85cb2981d1f069115ea9d/LICENSE",
     "retained_path": "licenses/upstream/goinfer-plamo3-994cbf5/LICENSE",
     "scope": "Retained root license text matches the root, backend/cuda and backend/webgpu module licenses"
   },

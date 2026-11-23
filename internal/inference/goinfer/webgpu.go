@@ -10,7 +10,7 @@ import (
 	_ "github.com/townsendmerino/goinfer/backend/webgpu"
 )
 
-const webGPUBackendPin = "github.com/sh4869221b/goinfer/backend/webgpu@8ab7d3f2ae8c1487fb0ff0af41946fb070e29199"
+const webGPUBackendPin = "github.com/sh4869221b/goinfer/backend/webgpu@bb3ca6430d39cc4850d85cb2981d1f069115ea9d"
 
 // WGPUInstanceBackend_Vulkan in the pinned wgpu-native header.
 const vulkanBackends wgpu.InstanceBackend = 1 << 0
