@@ -9,15 +9,14 @@ for future research binaries, vendor trees or model-bearing images.
 
 ## Scope and retained notices
 
-The Go dependency inventory at the 2026-11-06 update is recorded in
-`licenses/go-module-sums.json`; `go mod verify` passed after the 2026-11-06
-PLaMo integration update. Replacement module paths and immutable revisions are
-included. Original root notices for the current pins are retained under
-`licenses/upstream/` and `licenses/research-modernc/verbatim-files/`.
-The original 2026-10-16 inventory, independently verified GitHub-hosted root
-notices, and file-level source notice collections describe the versions examined
-at that time; see `licenses/upstream-index.json`, `licenses/research-inference/`,
-and `licenses/research-modernc/`. They have not been re-audited for the new pins.
+The selected Go modules for the goinfer v0.25.0 update are recorded in
+`licenses/go-module-sums.json`, including replacement module paths and
+versions. Root license texts are retained under `licenses/upstream/` and
+`licenses/research-modernc/verbatim-files/` or linked in the table below.
+The license index at `licenses/upstream-index.json` records the retained root
+texts and their sources. File-level findings in the 2026-10-16 inventory,
+`licenses/research-inference/`, and `licenses/research-modernc/` describe the
+versions examined at the time.
 Upstream notices also describe optional backends and model-bearing release assets;
 those assets are not included. The current package selections use the modules
 listed below.
@@ -26,13 +25,13 @@ listed below.
 |---|---|---|---|
 | Go runtime / standard library | 1.27.3 | BSD-3-Clause, retained | Built executables |
 | golang.org/x/sys | v0.49.0 | BSD-3-Clause, retained | Linux publisher in CLI |
-| github.com/townsendmerino/goinfer → sh4869221b/goinfer | 994cbf5ee38dd8dcc612aad6e6803ac79f772f3b | MIT, [retained](licenses/upstream/goinfer-plamo3-994cbf5/LICENSE) | CPU/CUDA inference engines and research tools; source-only PLaMo reference fixtures have separate terms |
-| github.com/townsendmerino/goinfer/backend/cuda → sh4869221b/goinfer/backend/cuda | 994cbf5ee38dd8dcc612aad6e6803ac79f772f3b | MIT, [retained](licenses/upstream/goinfer-cuda-plamo3-994cbf5/LICENSE) | CUDA inference backend (`cuda && linux && amd64`) |
-| github.com/townsendmerino/goinfer/backend/webgpu → sh4869221b/goinfer/backend/webgpu | 994cbf5ee38dd8dcc612aad6e6803ac79f772f3b | MIT, [fork notice](https://github.com/sh4869221b/goinfer/blob/994cbf5ee38dd8dcc612aad6e6803ac79f772f3b/LICENSE) | AMD WebGPU/Vulkan inference (`gpu && cgo && linux && amd64`) |
-| github.com/oliverbestmann/webgpu | v1.37.1 | Apache-2.0, [upstream text](https://github.com/oliverbestmann/webgpu/blob/v1.37.1/LICENSE) | Go cgo bindings for the AMD build |
-| github.com/oliverbestmann/webgpu/libs-linux | v0.0.0-20260628152803-421b8a341d08 | Bundles wgpu-native; [binding's build source](https://github.com/oliverbestmann/webgpu/blob/v1.37.1/update-wgpu.sh) | Linux static library selected by the Go bindings |
+| github.com/townsendmerino/goinfer → sh4869221b/goinfer | 688d8d9a1d13efda8356277f7e7f78e03807d9b3 | MIT, [retained](licenses/upstream/goinfer-plamo3-994cbf5/LICENSE) | CPU inference engine and research tools. Source-only PLaMo reference fixtures carry separate terms. |
+| github.com/townsendmerino/goinfer/backend/cuda → sh4869221b/goinfer/backend/cuda | 688d8d9a1d13efda8356277f7e7f78e03807d9b3 | MIT, [retained](licenses/upstream/goinfer-cuda-plamo3-994cbf5/LICENSE) | CUDA inference backend (`cuda && linux && amd64`) |
+| github.com/townsendmerino/goinfer/backend/webgpu → sh4869221b/goinfer/backend/webgpu | 688d8d9a1d13efda8356277f7e7f78e03807d9b3 | MIT, [retained](licenses/upstream/goinfer-plamo3-994cbf5/LICENSE) | AMD WebGPU/Vulkan inference (`gpu && cgo && linux && amd64`) |
+| github.com/oliverbestmann/webgpu | v1.38.0 | Apache-2.0, [upstream text](https://github.com/oliverbestmann/webgpu/blob/v1.38.0/LICENSE) | Go cgo bindings for the AMD build |
+| github.com/oliverbestmann/webgpu/libs-linux | v0.0.0-20261112101129-823eab7d2391 | Bundles wgpu-native ([binding build source](https://github.com/oliverbestmann/webgpu/blob/v1.38.0/update-wgpu.sh)) | Linux static library selected by the Go bindings |
 | wgpu-native | v29.0.1.1 | MIT OR Apache-2.0, [upstream package declarations](https://github.com/gfx-rs/wgpu-native/blob/v29.0.1.1/Cargo.toml) | Native WebGPU library in the AMD build |
-| github.com/townsendmerino/aikit | v1.76.0 | MIT, [retained](licenses/upstream/aikit-v1.76.0/LICENSE) | Inference transitive dependency |
+| github.com/townsendmerino/aikit | v1.78.0 | MIT, [retained text](licenses/upstream/aikit-v1.76.0/LICENSE) | Inference transitive dependency |
 | [github.com/eitamring/gocudrv](https://github.com/eitamring/gocudrv/blob/v0.3.2/LICENSE) | v0.3.2 | MIT, [retained](licenses/upstream/gocudrv-v0.3.2/LICENSE) | CUDA driver API binding |
 | [github.com/ebitengine/purego](https://github.com/ebitengine/purego/blob/v0.11.2/LICENSE) | v0.11.2 | Apache-2.0, [retained](licenses/upstream/purego-v0.11.2/LICENSE) | CUDA driver loading |
 | golang.org/x/text | v0.43.0 | BSD-3-Clause, retained | Context Pack language tags and inference |
@@ -49,7 +48,7 @@ listed below.
 At the 2026-10-16 update, `go list -m all` and linux/amd64 and linux/arm64 CLI package
 selections were inspected again, including linux/amd64 with `-tags cuda`.
 The CLI selected goinfer/aikit/x/text and SQLite in addition to x/sys;
-the CUDA build also selected the CUDA rows above. The module graph included
+the CUDA build also selected its driver dependencies. The module graph included
 `aikit/gpu/visioncuda v0.1.0`, but no package from that module is imported by these
 builds, and it was not among the 17 go.mod-selected modules inventoried there.
 The goinfer and aikit GitHub trees include separate nested modules. Running CUDA
@@ -151,12 +150,15 @@ in `licenses/upstream-index.json`. These materials are not relicensed as MIT.
 The test template fixture is not embedded in the CLI binary. No released weights
 or PFN Python model implementation are tracked here.
 
-The fork's root LICENSE, NOTICE and THIRD_PARTY_LICENSES.md are retained in
-`licenses/upstream/goinfer-plamo3-994cbf5/`. Its source-only PLaMo fixtures and
-reference outputs carry separate terms described in that NOTICE. The current
-nested CUDA module incorporates code formerly in aikit/gpu, although that module
-is no longer selected separately. The historical copied-code/provenance findings
-above remain open; this pin update is not a complete distribution audit.
+The fork's three selected modules carry the MIT text retained in
+`licenses/upstream/goinfer-plamo3-994cbf5/LICENSE`. The source-only PLaMo
+fixtures and reference outputs carry separate terms. The fork records these
+terms and those of its other third-party materials.
+[NOTICE](https://github.com/sh4869221b/goinfer/blob/688d8d9a1d13efda8356277f7e7f78e03807d9b3/NOTICE)
+and [THIRD_PARTY_LICENSES.md](https://github.com/sh4869221b/goinfer/blob/688d8d9a1d13efda8356277f7e7f78e03807d9b3/THIRD_PARTY_LICENSES.md).
+
+The nested CUDA module incorporates code formerly in aikit/gpu. The historical
+copied-code and provenance findings above remain open.
 
 ## Models and images
 

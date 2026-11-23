@@ -79,11 +79,10 @@ to stdout and commits SQLite TM successfully on this environment.
 
 ## Model identity and storage
 
-The GoInfer root and `backend/cuda` modules are replaced by
-`sh4869221b/goinfer` at immutable commit
-`994cbf5ee38dd8dcc612aad6e6803ac79f772f3b`
-(`v0.0.0-20261106011512-994cbf5ee38d`). CUDA moved from the old nested `/cuda`
-module to `/backend/cuda` at this pin.
+The GoInfer root, `backend/cuda`, and `backend/webgpu` modules use upstream
+v0.25.0 with replacements from one immutable commit in `sh4869221b/goinfer`,
+`688d8d9a1d13efda8356277f7e7f78e03807d9b3`
+(`v0.0.0-20261123005238-688d8d9a1d13`).
 
 A directory import makes a deterministic `YAKPLM3\n` + uncompressed USTAR artifact
 containing only the seven required files, in fixed order. The registry SHA-256
