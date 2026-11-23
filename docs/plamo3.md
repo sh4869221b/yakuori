@@ -9,6 +9,30 @@ The model is quantized to int4 by the GoInfer loader at load time. CPU inference
 has been exercised on linux/amd64. GPU inference and real game translation quality
 have not been validated by this integration.
 
+## Real model runs
+
+Use PLaMo 3 Translate 0.8B (`pfnet/plamo-3-translate-0.8b`, registered as
+`plamo3-08b` in the commands below) for new real-model translation and
+verification. The verified inference path is Linux/amd64 with `--backend cpu`
+and int4 compute. For the real-model CLI and SQLite TM smoke test, see the
+[validation record](#validation-record).
+
+If the checkpoint, its license terms, missing runtime requirements or an
+unsupported feature prevent execution, record the affected check as not run
+with the reason. Record a failed attempt as a failure. Continue applicable
+model-free checks. Keep the original model and
+settings when reproducing a historical result or running a test for a specific
+model's compatibility. Results from those runs apply to the recorded model and
+conditions.
+
+PLaMo inference on CUDA and WebGPU/Vulkan, W3 file publication, performance and
+human translation quality remain unverified. Verify GPU acceptance on the
+required GPU backend with PLaMo when its prerequisites are available. The
+native PFML template is for translation and glossary fields.
+`context build --infer` and translation with non-empty resolved Context
+currently require ChatML. Model-free Context Pack extraction remains available.
+See the [Context Pack commands](context-pack-v1.md#下書きの生成).
+
 ## Get and select the model
 
 Read the [full PLaMo Community License Agreement](../licenses/plamo-community/LICENSE)

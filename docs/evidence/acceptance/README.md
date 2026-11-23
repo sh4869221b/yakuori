@@ -295,9 +295,19 @@ A pending or otherwise unready selection records `not_run` and does not start a
 translation. The runner does not approve
 criteria, download a model or retry a failed generation.
 
-Register and select
-the intended local GGUF with the normal `yakuori models` commands. Build the
-runner with Go 1.27.3 and the selected GPU build tag. The oracle build needs
+Use PLaMo 3 Translate 0.8B (`plamo3-08b`) for new real-model verification.
+Linux/amd64 CPU int4 inference and TM reuse have been verified. GPU inference
+on CUDA and WebGPU, W3 publication and measured acceptance with this bundle
+remain unverified. If model availability, the required environment or a
+missing capability prevents a required GPU run, record it as `not_run` with
+the reason. Record a failed attempt as `fail`. The fixture checker and
+model-free runner checks can still run. The published GPU results apply to
+the fixed Index model and the conditions of each run.
+See the [PLaMo registration and CPU reproduction steps](../../plamo3.md).
+
+To reproduce a recorded GGUF run, register and select its pinned GGUF with
+the normal `yakuori models` commands. Build the runner with Go 1.27.3 and the
+recorded GPU build tag. The oracle build needs
 Rust/Cargo and its locked dependencies already available locally. The runner uses
 `cargo build --locked --offline` in a fresh private target directory; the GPL
 oracle remains a separate process. Build time is outside the fixture run.
@@ -357,8 +367,8 @@ not a real MOD or GPU acceptance result.
 
 The `--measure` option runs the same acceptance workflow with its translation
 worker directly supervised. Formal fixture runs still require confirmed
-criteria. The following is a template for a future confirmed run, not an
-approval or a measurement of this candidate set:
+criteria. The following template reproduces the fixed GGUF CUDA workflow.
+Use the fixture and criteria versions recorded for the run.
 
 ```sh
 CGO_ENABLED=0 GOTOOLCHAIN=local go build -tags cuda -o /tmp/yakuori-acceptance ./tools/acceptance/cmd/run
@@ -389,7 +399,8 @@ warm resident model. Neither mode flushes the OS page cache.
 The [2026-11-22 RX 9070 XT run](amd-webgpu-run-2026-11-22.md) records the
 results for the pinned Index model and three approved fixtures.
 
-Build the Linux/amd64 runner with cgo and WebGPU. Use the AMD criteria and the
+To reproduce that measurement, build the Linux/amd64 runner with cgo and WebGPU
+and select the pinned Index GGUF. Use the AMD criteria and the
 Vulkan device's PCI address, including the domain. Use the same Vulkan ICD
 selection when checking the model and running acceptance. On the RX 9070 XT
 host, the PCI address is `0000:03:00.0`. The selected GPU must be the single
