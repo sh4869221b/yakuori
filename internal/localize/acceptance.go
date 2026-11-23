@@ -23,8 +23,8 @@ type AcceptanceObservation struct {
 	TMVerifiedUnits      int
 }
 
-// ValidationCounts counts actual Validate calls, independently of final unit
-// acceptance. A rejected TM candidate may still be replaced by a valid generation.
+// ValidationCounts counts candidate checks that run validation, independently
+// of final unit acceptance.
 type ValidationCounts struct {
 	Attempted int `json:"attempted"`
 	Passed    int `json:"passed"`

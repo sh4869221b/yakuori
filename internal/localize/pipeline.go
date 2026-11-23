@@ -9,6 +9,7 @@ import (
 	"github.com/sh4869221b/yakuori/internal/artifact"
 	"github.com/sh4869221b/yakuori/internal/config"
 	"github.com/sh4869221b/yakuori/internal/contextresolve"
+	"github.com/sh4869221b/yakuori/internal/dictionary"
 	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/identity"
 	"github.com/sh4869221b/yakuori/internal/inference"
@@ -134,7 +135,7 @@ func (c Core) generateWithContext(ctx context.Context, session unit.Session, pro
 	if profile.Digest() == ([32]byte{}) {
 		return nil, &Error{Phase: "input", Err: validate.ErrInvalidProfile}
 	}
-	termsDefinition, err := profile.Glossary()
+	baseValidation, err := profile.WithAdditionalTerms(nil)
 	if err != nil {
 		return nil, &Error{Phase: "input", Err: err}
 	}
@@ -150,8 +151,9 @@ func (c Core) generateWithContext(ctx context.Context, session unit.Session, pro
 		return nil, &Error{Phase: "input", Err: err}
 	}
 	hasContext := false
-	if memory != nil && memory.contextPack.Pack != nil {
-		resolved, err = memory.resolveContext(ctx, session, units)
+	var dictionarySelections map[unit.UnitID]dictionary.Selection
+	if memory != nil && (memory.contextPack.Pack != nil || memory.contextPack.Dictionary != nil) {
+		resolved, dictionarySelections, err = memory.resolveInputs(ctx, session, units)
 		if err != nil {
 			return nil, err
 		}
@@ -209,12 +211,26 @@ func (c Core) generateWithContext(ctx context.Context, session unit.Session, pro
 	preparedUnits := make([]protect.Prepared, 0, len(units))
 	plans := make([]segment.Plan, 0, len(units))
 	inferencePlans := make([]inferencePlan, len(units))
+	unitValidations := make(map[unit.UnitID]validate.UnitValidation)
 	segments := 0
 	for _, u := range units {
 		id := u.ID()
 		if err := ctx.Err(); err != nil {
 			return nil, &Error{Phase: "plan", UnitID: id, Err: err}
 		}
+		validation := baseValidation
+		selected, hasDictionary := dictionarySelections[id]
+		if hasDictionary {
+			if len(selected.Terms) != 0 {
+				validation, err = profile.WithAdditionalTerms(selected.Terms)
+				if err != nil {
+					return nil, &Error{Phase: "protect", UnitID: id, Err: err}
+				}
+				unitValidations[id] = validation
+			}
+			memory.recordDictionary(id, selected.Target, validation.AdditionalTerms())
+		}
+		termsDefinition := validation.Glossary()
 		prepared, err := protect.PrepareWithGlossary(session, id, termsDefinition)
 		if err != nil {
 			return nil, &Error{Phase: "protect", UnitID: id, Err: err}
@@ -297,8 +313,13 @@ func (c Core) generateWithContext(ctx context.Context, session unit.Session, pro
 		if err := ctx.Err(); err != nil {
 			return nil, &Error{Phase: "generate", UnitID: id, Err: err}
 		}
+		validation, found := unitValidations[id]
+		if !found {
+			validation = baseValidation
+		}
+		dictionaryTarget := dictionarySelections[id].Target
 		if memory != nil {
-			translation, found, err := memory.lookup(ctx, session, id, profile)
+			translation, found, err := memory.lookup(ctx, session, id, validation, dictionaryTarget)
 			if err != nil {
 				return nil, &Error{Phase: "tm_lookup", UnitID: id, Err: err}
 			}
@@ -308,40 +329,45 @@ func (c Core) generateWithContext(ctx context.Context, session unit.Session, pro
 				continue
 			}
 		}
-		candidate := prepared.Text()
-		if prepared.GenerationRequired() {
-			var generated Generation
-			var err error
-			if c.segmented != nil {
-				generated, err = c.segmented.generate(ctx, plans[i])
-			} else {
-				requestCtx, cancelRequest := context.WithTimeout(ctx, c.limits.RequestTimeout)
-				if err = requestCtx.Err(); err == nil {
-					if c.inference != nil {
-						generated, err = c.inference.generate(requestCtx, inferencePlans[i])
-					} else {
-						generated, err = c.engine.Generate(requestCtx, id, candidate)
+		restored, kind := dictionaryTarget, "dictionary"
+		if dictionaryTarget == "" {
+			candidate := prepared.Text()
+			kind = "unchanged"
+			if prepared.GenerationRequired() {
+				var generated Generation
+				var err error
+				if c.segmented != nil {
+					generated, err = c.segmented.generate(ctx, plans[i])
+				} else {
+					requestCtx, cancelRequest := context.WithTimeout(ctx, c.limits.RequestTimeout)
+					if err = requestCtx.Err(); err == nil {
+						if c.inference != nil {
+							generated, err = c.inference.generate(requestCtx, inferencePlans[i])
+						} else {
+							generated, err = c.engine.Generate(requestCtx, id, candidate)
+						}
 					}
+					err = errors.Join(err, requestCtx.Err())
+					cancelRequest()
 				}
-				err = errors.Join(err, requestCtx.Err())
-				cancelRequest()
+				if err != nil {
+					return nil, &Error{Phase: "generate", UnitID: id, Err: err}
+				}
+				if err := ctx.Err(); err != nil {
+					return nil, &Error{Phase: "generate", UnitID: id, Err: err}
+				}
+				if generated.Finish != Stop {
+					return nil, &Error{Phase: "generate", UnitID: id, Err: ErrIncompleteGeneration}
+				}
+				candidate = generated.Text
+				kind = "generated"
 			}
+			restored, err = prepared.Restore(session, id, candidate)
 			if err != nil {
-				return nil, &Error{Phase: "generate", UnitID: id, Err: err}
+				return nil, &Error{Phase: "restore", UnitID: id, Err: err}
 			}
-			if err := ctx.Err(); err != nil {
-				return nil, &Error{Phase: "generate", UnitID: id, Err: err}
-			}
-			if generated.Finish != Stop {
-				return nil, &Error{Phase: "generate", UnitID: id, Err: ErrIncompleteGeneration}
-			}
-			candidate = generated.Text
 		}
-		restored, err := prepared.Restore(session, id, candidate)
-		if err != nil {
-			return nil, &Error{Phase: "restore", UnitID: id, Err: err}
-		}
-		translation, err := validate.Validate(session, id, profile, restored)
+		translation, err := validation.Validate(session, id, restored)
 		if c.observation != nil {
 			c.observation.Validation.record(err)
 		}
@@ -349,10 +375,6 @@ func (c Core) generateWithContext(ctx context.Context, session unit.Session, pro
 			return nil, &Error{Phase: "validate", UnitID: id, Err: err}
 		}
 		accepted = append(accepted, translation)
-		kind := "unchanged"
-		if prepared.GenerationRequired() {
-			kind = "generated"
-		}
 		c.observeAccepted(translation, kind)
 	}
 	if err := ctx.Err(); err != nil {

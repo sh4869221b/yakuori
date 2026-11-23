@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "inn-welcome",
+      "kind": "translation",
+      "source_language": "en",
+      "target_language": "ja",
+      "source": "Welcome cat TOKEN",
+      "target": "宿へようこそ 猫 TOKEN",
+      "provenance": "Hand-authored dictionary fixture",
+      "license": {"name": "CC0-1.0", "permission": "allowed"},
+      "confirmation": "confirmed",
+      "scope": {"game": "fixture-game", "artifact": "fixture-artifact"},
+      "unit": {"adapter": "witcher3-w3strings", "format_schema": "w3strings-v162-en-jp-v1", "stable_id": "1"},
+      "context": {"scene": "inn", "speaker": "keeper"}
+    },
+    {
+      "id": "inn-welcome",
+      "kind": "translation",
+      "source_language": "en",
+      "target_language": "ja",
+      "source": "Welcome cat TOKEN",
+      "target": "宿へようこそ 猫 TOKEN",
+      "provenance": "Hand-authored dictionary fixture",
+      "license": {"name": "CC0-1.0", "permission": "allowed"},
+      "confirmation": "confirmed",
+      "scope": {"game": "fixture-game", "artifact": "fixture-artifact"},
+      "unit": {"adapter": "witcher3-w3strings", "format_schema": "w3strings-v162-en-jp-v1", "stable_id": "1"},
+      "context": {"scene": "inn", "speaker": "keeper"}
+    },
+    {
+      "id": "gate-welcome",
+      "kind": "translation",
+      "source_language": "en",
+      "target_language": "ja",
+      "source": "Welcome cat TOKEN",
+      "target": "門へようこそ 猫 TOKEN",
+      "provenance": "Hand-authored dictionary fixture",
+      "license": {"name": "CC0-1.0", "permission": "allowed"},
+      "confirmation": "confirmed",
+      "scope": {"game": "fixture-game", "artifact": "fixture-artifact"},
+      "unit": {"adapter": "witcher3-w3strings", "format_schema": "w3strings-v162-en-jp-v1", "stable_id": "2"},
+      "context": {"scene": "gate", "speaker": "guard"}
+    },
+    {
+      "id": "unkeyed-welcome",
+      "kind": "translation",
+      "source_language": "en",
+      "target_language": "ja",
+      "source": "Welcome cat TOKEN",
+      "target": "ようこそ 猫 TOKEN",
+      "provenance": "Hand-authored dictionary fixture",
+      "license": {"name": "CC0-1.0", "permission": "allowed"},
+      "confirmation": "confirmed",
+      "scope": {"game": "fixture-game", "artifact": "fixture-artifact"},
+      "context": {"scene": "inn", "speaker": "keeper"}
+    },
+    {
+      "id": "blank-target",
+      "kind": "translation",
+      "source_language": "en",
+      "target_language": "ja",
+      "source": "Welcome cat TOKEN",
+      "target": "",
+      "provenance": "Hand-authored dictionary fixture",
+      "license": {"name": "CC0-1.0", "permission": "allowed"},
+      "confirmation": "confirmed",
+      "scope": {"game": "fixture-game", "artifact": "fixture-artifact"},
+      "unit": {"adapter": "witcher3-w3strings", "format_schema": "w3strings-v162-en-jp-v1", "stable_id": "1"},
+      "context": {"scene": "inn", "speaker": "keeper"}
+    },
+    {
+      "id": "inn-cat",
+      "kind": "term",
+      "source_language": "en",
+      "target_language": "ja",
+      "source": "cat",
+      "target": "猫",
+      "provenance": "Hand-authored dictionary fixture",
+      "license": {"name": "CC0-1.0", "permission": "allowed"},
+      "confirmation": "confirmed",
+      "scope": {"game": "fixture-game", "artifact": "fixture-artifact"},
+      "context": {"scene": "inn", "speaker": "keeper"}
+    },
+    {
+      "id": "gate-cat",
+      "kind": "term",
+      "source_language": "en",
+      "target_language": "ja",
+      "source": "cat",
+      "target": "野良猫",
+      "provenance": "Hand-authored dictionary fixture",
+      "license": {"name": "CC0-1.0", "permission": "allowed"},
+      "confirmation": "confirmed",
+      "scope": {"game": "fixture-game", "artifact": "fixture-artifact"},
+      "context": {"scene": "gate", "speaker": "guard"}
+    },
+    {
+      "id": "token",
+      "kind": "term",
+      "source_language": "en",
+      "target_language": "ja",
+      "source": "TOKEN",
+      "provenance": "Hand-authored dictionary fixture",
+      "license": {"name": "CC0-1.0", "permission": "allowed"},
+      "confirmation": "confirmed"
+    }
+  ]
+}

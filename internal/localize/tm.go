@@ -10,6 +10,8 @@ import (
 	"github.com/sh4869221b/yakuori/internal/artifact"
 	"github.com/sh4869221b/yakuori/internal/contextpack"
 	"github.com/sh4869221b/yakuori/internal/contextresolve"
+	"github.com/sh4869221b/yakuori/internal/dictionary"
+	"github.com/sh4869221b/yakuori/internal/glossary"
 	"github.com/sh4869221b/yakuori/internal/identity"
 	"github.com/sh4869221b/yakuori/internal/inference"
 	"github.com/sh4869221b/yakuori/internal/tm"
@@ -19,14 +21,15 @@ import (
 
 var ErrNilTMStore = errors.New("translation memory store is nil")
 
-// ContextPackOptions opts into confirmed context from a document read by
-// contextpack.Read. Categories remain explicit and a nil Pack disables context.
-// The document must remain unchanged while the run is active.
+// ContextPackOptions opts into a confirmed context pack and an approved
+// dictionary. Both inputs must remain unchanged while the run is active.
 type ContextPackOptions struct {
-	Pack        *contextpack.Document
-	Categories  contextresolve.Categories
-	Budget      contextresolve.Budget
-	CountTokens contextresolve.CountTokens
+	Pack                   *contextpack.Document
+	Categories             contextresolve.Categories
+	Budget                 contextresolve.Budget
+	CountTokens            contextresolve.CountTokens
+	Dictionary             *dictionary.Catalog
+	OnDictionaryDiagnostic func(unit.UnitID, dictionary.Diagnostic)
 }
 
 type tmExecution struct {
@@ -38,29 +41,66 @@ type tmExecution struct {
 	unitContexts map[unit.UnitID]identity.UnitContext
 }
 
-func (m *tmExecution) resolveContext(ctx context.Context, session unit.Session, units []unit.TranslationUnit) (map[unit.UnitID]contextresolve.ResolvedContext, error) {
+func (m *tmExecution) resolveInputs(ctx context.Context, session unit.Session, units []unit.TranslationUnit) (map[unit.UnitID]contextresolve.ResolvedContext, map[unit.UnitID]dictionary.Selection, error) {
 	if m.scope.GameNamespace == "" || m.scope.ArtifactNamespace == "" {
-		return nil, &Error{Phase: "tm_begin", Err: tm.ErrInvalidScope}
+		return nil, nil, &Error{Phase: "tm_begin", Err: tm.ErrInvalidScope}
 	}
 	resolved := make(map[unit.UnitID]contextresolve.ResolvedContext)
+	dictionaries := make(map[unit.UnitID]dictionary.Selection)
 	request := contextresolve.Request{
 		Pack: m.contextPack.Pack, Session: session, GameNamespace: m.scope.GameNamespace, ArtifactNamespace: m.scope.ArtifactNamespace,
 		Categories: m.contextPack.Categories, Budget: m.contextPack.Budget,
 	}
 	for _, u := range units {
-		request.UnitID = u.ID()
-		if err := ctx.Err(); err != nil {
-			return nil, &Error{Phase: "context", UnitID: u.ID(), Err: err}
+		id := u.ID()
+		var scene, speaker string
+		if m.contextPack.Pack != nil {
+			if err := ctx.Err(); err != nil {
+				return nil, nil, &Error{Phase: "context", UnitID: id, Err: err}
+			}
+			request.UnitID = id
+			selection, diagnostics, err := contextresolve.Resolve(ctx, request, m.contextPack.CountTokens)
+			if err != nil {
+				return nil, nil, &Error{Phase: "context", UnitID: id, Err: err}
+			}
+			if !selection.Empty() {
+				resolved[id] = selection
+			}
+			if m.contextPack.Dictionary != nil {
+				for i, item := range selection.Items() {
+					switch item.Category {
+					case contextresolve.Scene:
+						scene = diagnostics.Matched[i].ID
+					case contextresolve.Speaker:
+						speaker = diagnostics.Matched[i].ID
+					}
+				}
+			}
 		}
-		selection, _, err := contextresolve.Resolve(ctx, request, m.contextPack.CountTokens)
-		if err != nil {
-			return nil, &Error{Phase: "context", UnitID: u.ID(), Err: err}
-		}
-		if !selection.Empty() {
-			resolved[u.ID()] = selection
+		if m.contextPack.Dictionary != nil {
+			if err := ctx.Err(); err != nil {
+				return nil, nil, &Error{Phase: "dictionary", UnitID: id, Err: err}
+			}
+			selected, err := m.contextPack.Dictionary.Select(dictionary.Query{
+				Game: m.scope.GameNamespace, Artifact: m.scope.ArtifactNamespace,
+				SourceLanguage: u.SourceLanguage(), TargetLanguage: u.TargetLanguage(),
+				Adapter: id.Adapter(), FormatSchema: id.FormatSchema(), StableID: id.StableID(),
+				Source: string(u.Source()), Scene: scene, Speaker: speaker,
+			})
+			if err != nil {
+				return nil, nil, &Error{Phase: "dictionary", UnitID: id, Err: err}
+			}
+			if report := m.contextPack.OnDictionaryDiagnostic; report != nil {
+				for _, diagnostic := range selected.Diagnostics {
+					report(id, diagnostic)
+				}
+			}
+			if selected.Target != "" || len(selected.Terms) != 0 {
+				dictionaries[id] = dictionary.Selection{Target: selected.Target, Terms: selected.Terms}
+			}
 		}
 	}
-	return resolved, nil
+	return resolved, dictionaries, nil
 }
 
 // Segments of the same parent share the same checked selection and prompt.
@@ -71,13 +111,28 @@ func (m *tmExecution) recordContextRequest(id unit.UnitID, request inference.Gen
 	if m.unitContexts == nil {
 		m.unitContexts = make(map[unit.UnitID]identity.UnitContext)
 	}
-	if _, exists := m.unitContexts[id]; !exists {
+	conditions := m.unitContexts[id]
+	if len(conditions.Selection) == 0 {
 		requestID := request.Identity()
-		m.unitContexts[id] = identity.UnitContext{
-			Prompt:    identityPrompt(requestID.Prompt, requestID.DisabledThinkingPrefix),
-			Selection: request.ResolvedContext().Canonical(),
-		}
+		conditions.Prompt = identityPrompt(requestID.Prompt, requestID.DisabledThinkingPrefix)
+		conditions.Selection = request.ResolvedContext().Canonical()
+		m.unitContexts[id] = conditions
 	}
+}
+
+func (m *tmExecution) recordDictionary(id unit.UnitID, target string, terms glossary.Glossary) {
+	if target == "" && terms.Empty() {
+		return
+	}
+	if m.unitContexts == nil {
+		m.unitContexts = make(map[unit.UnitID]identity.UnitContext)
+	}
+	conditions := m.unitContexts[id]
+	conditions.Dictionary.Translation = target
+	if !terms.Empty() {
+		conditions.Dictionary.Terms = terms.CanonicalBytes()
+	}
+	m.unitContexts[id] = conditions
 }
 
 // keyRelationProvider is implemented by adapters that can report the keys of
@@ -124,12 +179,15 @@ func (m *tmExecution) begin(session unit.Session, profile validate.Profile) erro
 	return err
 }
 
-func (m *tmExecution) lookup(ctx context.Context, session unit.Session, id unit.UnitID, profile validate.Profile) (validate.AcceptedTranslation, bool, error) {
+func (m *tmExecution) lookup(ctx context.Context, session unit.Session, id unit.UnitID, validation validate.UnitValidation, dictionaryTarget string) (validate.AcceptedTranslation, bool, error) {
 	text, found, err := m.run.Lookup(ctx, id)
 	if err != nil || !found {
 		return validate.AcceptedTranslation{}, false, err
 	}
-	accepted, err := validate.Validate(session, id, profile, text)
+	accepted, err := validation.Validate(session, id, text)
+	if err == nil && dictionaryTarget != "" && text != dictionaryTarget {
+		err = validate.ErrInvalidCandidate
+	}
 	if m.observation != nil {
 		m.observation.TMValidation.record(err)
 	}

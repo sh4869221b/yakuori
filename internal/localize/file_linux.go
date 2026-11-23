@@ -38,8 +38,8 @@ func (c Core) FileWithTM(ctx context.Context, options publication.Options, adapt
 	return c.FileWithTMContext(ctx, options, adapter, profile, store, scope, ContextPackOptions{})
 }
 
-// FileWithTMContext resolves the supplied pack against the same imported
-// source snapshot and scope used for exact TM lookup and publication.
+// FileWithTMContext selects context and approved dictionary entries against the
+// same imported source snapshot and scope used for TM lookup and publication.
 func (c Core) FileWithTMContext(ctx context.Context, options publication.Options, adapter Adapter, profile validate.Profile, store *tm.Store, scope tm.Scope, selection ContextPackOptions) (Result, error) {
 	if store == nil {
 		return Result{}, &Error{Phase: "tm_begin", Err: ErrNilTMStore}

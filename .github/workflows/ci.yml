@@ -524,6 +524,16 @@ jobs:
               run_required native-context-tm /evidence/names/native-context-tm \
                 sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestNativeContextTM(PrecommitFailure|Recovery)?$"
 
+              printf "%s\n" TestNativeDictionary TestNativeDictionary/exact-and-reference \
+                TestNativeDictionary/reimport-and-dictionaryless TestNativeDictionary/scoped-prefer \
+                TestNativeDictionary/conflicting-terms TestNativeDictionaryRevalidation \
+                TestNativeDictionaryRevalidation/missing-protected-placeholder \
+                TestNativeDictionaryRevalidation/missing-dictionary-protect \
+                TestNativeDictionaryRevalidation/missing-dictionary-mandatory \
+                TestNativeDictionaryRevalidation/changed-profile > /evidence/names/native-dictionary
+              run_required native-dictionary /evidence/names/native-dictionary \
+                sh ci/run-test-binary.sh /evidence/test-binaries/localize.test internal/localize 10m "^TestNativeDictionary(Revalidation)?$"
+
               printf "%s\n" TestGenericJSONContextTM/exact-reuse TestGenericJSONContextTM/unused-context \
                 TestGenericJSONContextTM/speaker TestGenericJSONContextTM/scene TestGenericJSONContextTM/source-and-selection-identity \
                 TestGenericJSONContextTM/source-and-selection-identity/game-namespace \
