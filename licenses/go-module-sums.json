@@ -88,9 +88,9 @@
     "Version": "v0.25.0",
     "Replace": {
       "Path": "github.com/sh4869221b/goinfer",
-      "Version": "v0.0.0-20261123005238-688d8d9a1d13"
+      "Version": "v0.0.0-20261123011237-8ab7d3f2ae8c"
     },
-    "Sum": "h1:8bliSXg+XSPy8OnlZWgKbpxV160gnmjtQM7uo9tRMKE=",
+    "Sum": "h1:RT/FLja/JsDlkQY6DfI2SDoZYJkdoRb8p+DAyQTh4e4=",
     "GoModSum": "h1:WP9sM4Ne5yJKFDM8bxbW9SUtpP+4lyZi6fpqymk8GsY="
   },
   {
@@ -98,9 +98,9 @@
     "Version": "v0.25.0",
     "Replace": {
       "Path": "github.com/sh4869221b/goinfer/backend/cuda",
-      "Version": "v0.0.0-20261123005238-688d8d9a1d13"
+      "Version": "v0.0.0-20261123011237-8ab7d3f2ae8c"
     },
-    "Sum": "h1:Qsn1+iGeX0lLtBiPkyUmqmbHVlNby0Qd7rg5jY+CXA8=",
+    "Sum": "h1:/meVgkNi01UVpUctM8NUDYd+OF6n74ejHraHNQm70S0=",
     "GoModSum": "h1:sMUNyvhqRH0Mxrb2duT5LYcuJ/rEYQnLtbLrm9OuBbQ="
   },
   {
@@ -108,9 +108,9 @@
     "Version": "v0.25.0",
     "Replace": {
       "Path": "github.com/sh4869221b/goinfer/backend/webgpu",
-      "Version": "v0.0.0-20261123005238-688d8d9a1d13"
+      "Version": "v0.0.0-20261123011237-8ab7d3f2ae8c"
     },
-    "Sum": "h1:FGzzOpVegTdFAjerv+mDIHA+A2vGi0Vg2fhc0K2oRHo=",
+    "Sum": "h1:pOiHozt+RqdMB2h99v5CKi1i2nvaEyJ064stsorxdBE=",
     "GoModSum": "h1:YZv1IMdJhx2sqidzrDMtyPmoh02laCeP6b79RQLW2Xk="
   },
   {

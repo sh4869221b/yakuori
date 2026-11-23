@@ -81,8 +81,8 @@ to stdout and commits SQLite TM successfully on this environment.
 
 The GoInfer root, `backend/cuda`, and `backend/webgpu` modules use upstream
 v0.25.0 with replacements from one immutable commit in `sh4869221b/goinfer`,
-`688d8d9a1d13efda8356277f7e7f78e03807d9b3`
-(`v0.0.0-20261123005238-688d8d9a1d13`).
+`8ab7d3f2ae8c1487fb0ff0af41946fb070e29199`
+(`v0.0.0-20261123011237-8ab7d3f2ae8c`).
 
 A directory import makes a deterministic `YAKPLM3\n` + uncompressed USTAR artifact
 containing only the seven required files, in fixed order. The registry SHA-256

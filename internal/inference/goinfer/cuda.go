@@ -10,7 +10,7 @@ import (
 	"github.com/townsendmerino/goinfer/decoder"
 )
 
-const cudaBackendPin = "github.com/sh4869221b/goinfer/backend/cuda@688d8d9a1d13efda8356277f7e7f78e03807d9b3"
+const cudaBackendPin = "github.com/sh4869221b/goinfer/backend/cuda@8ab7d3f2ae8c1487fb0ff0af41946fb070e29199"
 
 func loadDecoder(path string, options decoder.Options) (*decoder.Model, error) {
 	if options.Backend == "cuda" {

@@ -31,8 +31,8 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 )
 
-replace github.com/townsendmerino/goinfer => github.com/sh4869221b/goinfer v0.0.0-20261123005238-688d8d9a1d13
+replace github.com/townsendmerino/goinfer => github.com/sh4869221b/goinfer v0.0.0-20261123011237-8ab7d3f2ae8c
 
-replace github.com/townsendmerino/goinfer/backend/cuda => github.com/sh4869221b/goinfer/backend/cuda v0.0.0-20261123005238-688d8d9a1d13
+replace github.com/townsendmerino/goinfer/backend/cuda => github.com/sh4869221b/goinfer/backend/cuda v0.0.0-20261123011237-8ab7d3f2ae8c
 
-replace github.com/townsendmerino/goinfer/backend/webgpu => github.com/sh4869221b/goinfer/backend/webgpu v0.0.0-20261123005238-688d8d9a1d13
+replace github.com/townsendmerino/goinfer/backend/webgpu => github.com/sh4869221b/goinfer/backend/webgpu v0.0.0-20261123011237-8ab7d3f2ae8c
